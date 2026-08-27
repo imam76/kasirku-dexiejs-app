@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -8,9 +9,9 @@ pub struct MarketplaceAccountDto {
     pub shop_id: String,
     pub shop_name: String,
     pub status: String,
-    pub last_synced_at: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub last_synced_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -18,9 +19,9 @@ pub struct MarketplaceAccountSecretDto {
     pub shop_id: i64,
     pub access_token_encrypted: String,
     pub refresh_token_encrypted: String,
-    pub token_expires_at: String,
+    pub token_expires_at: DateTime<Utc>,
     pub status: String,
-    pub last_synced_at: Option<String>,
+    pub last_synced_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -35,10 +36,10 @@ pub struct MarketplaceOrderDto {
     pub internal_status: String,
     pub total_amount: Option<String>,
     pub currency: String,
-    pub order_created_at: String,
-    pub order_updated_at: String,
-    pub created_at: String,
-    pub updated_at: String,
+    pub order_created_at: DateTime<Utc>,
+    pub order_updated_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -69,7 +70,7 @@ pub struct MarketplaceIntegrationLogDto {
     pub request_payload: Option<Value>,
     pub response_payload: Option<Value>,
     pub error_message: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

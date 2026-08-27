@@ -10,6 +10,7 @@ import {
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { AccountType, JournalEntry, JournalEntryLine, JournalEntryStatus, JournalSourceType } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface JournalEntryReadSyncResult {
   fetched: number;
@@ -91,20 +92,20 @@ const mapRemoteJournalEntryToLocal = (
   description: remoteEntry.description,
   total_debit: optionalNumber(remoteEntry.total_debit),
   total_credit: optionalNumber(remoteEntry.total_credit),
-  posted_at: optionalString(remoteEntry.posted_at),
-  voided_at: optionalString(remoteEntry.voided_at),
+  posted_at: toCanonicalOptionalIsoTimestamp(remoteEntry.posted_at),
+  voided_at: toCanonicalOptionalIsoTimestamp(remoteEntry.voided_at),
   reversed_entry_id: optionalString(remoteEntry.reversed_entry_id),
   version: toPositiveVersion(remoteEntry.version),
   created_by: optionalString(remoteEntry.created_by),
   created_by_name: optionalString(remoteEntry.created_by_name),
   updated_by: optionalString(remoteEntry.updated_by),
   updated_by_name: optionalString(remoteEntry.updated_by_name),
-  created_at: remoteEntry.created_at,
-  updated_at: remoteEntry.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteEntry.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteEntry.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteEntry.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteEntry.updated_at),
 });
 
 const mapRemoteJournalEntryLineToLocal = (
@@ -121,7 +122,7 @@ const mapRemoteJournalEntryLineToLocal = (
   description: optionalString(remoteLine.description),
   department_id: optionalString(remoteLine.department_id),
   project_id: optionalString(remoteLine.project_id),
-  created_at: remoteLine.created_at,
+  created_at: toCanonicalIsoTimestamp(remoteLine.created_at),
 });
 
 const hasLocalUnsyncedChanges = (entry: JournalEntry) => (

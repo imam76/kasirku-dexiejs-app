@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::models::{
@@ -12,8 +13,8 @@ pub struct OpeningBalanceBatchDto {
     pub company_id: Option<String>,
     pub company_name: Option<String>,
     pub module: String,
-    pub cutoff_date: String,
-    pub accounting_start_date: Option<String>,
+    pub cutoff_date: DateTime<Utc>,
+    pub accounting_start_date: Option<DateTime<Utc>>,
     pub status: String,
     pub revision_number: Option<i32>,
     pub previous_batch_id: Option<String>,
@@ -21,16 +22,16 @@ pub struct OpeningBalanceBatchDto {
     pub total_credit: f64,
     pub journal_entry_id: Option<String>,
     pub posting_idempotency_key: Option<String>,
-    pub posted_at: Option<String>,
+    pub posted_at: Option<DateTime<Utc>>,
     pub posted_by: Option<String>,
     pub posted_by_name: Option<String>,
-    pub locked_at: Option<String>,
-    pub reversed_at: Option<String>,
+    pub locked_at: Option<DateTime<Utc>>,
+    pub reversed_at: Option<DateTime<Utc>>,
     pub reversed_by: Option<String>,
     pub reversed_by_name: Option<String>,
     pub reversal_journal_entry_id: Option<String>,
-    pub skipped_at: Option<String>,
-    pub validated_at: Option<String>,
+    pub skipped_at: Option<DateTime<Utc>>,
+    pub validated_at: Option<DateTime<Utc>>,
     pub validated_by: Option<String>,
     pub validated_by_name: Option<String>,
     pub notes: Option<String>,
@@ -39,9 +40,9 @@ pub struct OpeningBalanceBatchDto {
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
     pub updated_by_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -60,8 +61,8 @@ pub struct OpeningBalanceLineDto {
     pub contact_id: Option<String>,
     pub party_name: Option<String>,
     pub document_number: Option<String>,
-    pub document_date: Option<String>,
-    pub due_date: Option<String>,
+    pub document_date: Option<DateTime<Utc>>,
+    pub due_date: Option<DateTime<Utc>>,
     pub currency_code: Option<String>,
     pub currency_name: Option<String>,
     pub currency_symbol: Option<String>,
@@ -72,7 +73,7 @@ pub struct OpeningBalanceLineDto {
     pub paid_amount: Option<f64>,
     pub remaining_amount: Option<f64>,
     pub settlement_status: Option<String>,
-    pub last_paid_at: Option<String>,
+    pub last_paid_at: Option<DateTime<Utc>>,
     pub account_id: Option<String>,
     pub account_code: Option<String>,
     pub account_name: Option<String>,
@@ -82,8 +83,8 @@ pub struct OpeningBalanceLineDto {
     pub debit: f64,
     pub credit: f64,
     pub notes: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

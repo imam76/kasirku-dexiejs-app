@@ -26,6 +26,7 @@ import type {
   IndustryExtensionCode,
   InventoryAccountingPolicy,
 } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface AccountingSettingReadSyncResult {
   fetched: number;
@@ -110,12 +111,12 @@ const mapRemoteFinanceAccountMappingToLocal = (
   account_name: remote.account_name,
   account_type: remote.account_type as AccountType,
   is_system: remote.is_system,
-  created_at: remote.created_at,
-  updated_at: remote.updated_at,
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 export const mergeRemoteFinanceAccountMappingsIntoDexie = async (
@@ -187,12 +188,12 @@ const mapRemoteAccountingProfileSettingToLocal = (
   industry_extension: remote.industry_extension as IndustryExtensionCode,
   template_id: optionalString(remote.template_id),
   locked_after_transaction: remote.locked_after_transaction ?? undefined,
-  created_at: remote.created_at,
-  updated_at: remote.updated_at,
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 export const mergeRemoteAccountingProfileSettingIntoDexie = async (
@@ -237,12 +238,12 @@ const mapRemoteEnabledModuleToLocal = (
   requires_extension: remote.requires_extension
     ? (remote.requires_extension as IndustryExtensionCode)
     : undefined,
-  created_at: remote.created_at,
-  updated_at: remote.updated_at,
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 export const mergeRemoteEnabledModulesIntoDexie = async (
@@ -287,12 +288,12 @@ const mapRemoteGeneralLedgerSettingToLocal = (
   inventory_policy: remote.inventory_policy as InventoryAccountingPolicy,
   opening_balance_journal_id: optionalString(remote.opening_balance_journal_id),
   activated_at: optionalString(remote.activated_at),
-  created_at: remote.created_at,
-  updated_at: remote.updated_at,
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 export const mergeRemoteGeneralLedgerSettingIntoDexie = async (
@@ -342,16 +343,16 @@ const mapRemoteAccountingInitialSetupSettingToLocal = (
   current_period_id: optionalString(remote.current_period_id),
   base_currency_code: remote.base_currency_code,
   inventory_policy: remote.inventory_policy as InventoryAccountingPolicy,
-  setup_completed_at: optionalString(remote.setup_completed_at),
+  setup_completed_at: toCanonicalOptionalIsoTimestamp(remote.setup_completed_at),
   setup_completed_by: optionalString(remote.setup_completed_by),
   setup_completed_by_name: optionalString(remote.setup_completed_by_name),
   version: toPositiveVersion(remote.version),
-  created_at: remote.created_at,
-  updated_at: remote.updated_at,
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 export const mergeRemoteAccountingInitialSetupSettingIntoDexie = async (

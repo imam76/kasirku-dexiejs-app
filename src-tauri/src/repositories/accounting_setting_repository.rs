@@ -1,4 +1,4 @@
-use crate::models::accounting_setting::{
+﻿use crate::models::accounting_setting::{
     AccountingInitialSetupSettingDto, AccountingProfileSettingDto, EnabledModuleDto,
     FinanceAccountMappingDto, GeneralLedgerSettingDto,
 };
@@ -35,8 +35,8 @@ pub async fn list_finance_account_mappings(
             account_name,
             account_type,
             is_system,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM finance_account_mappings
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -75,8 +75,8 @@ pub async fn upsert_finance_account_mapping(
         RETURNING
             id, key, category, account_id, account_code, account_name,
             account_type, is_system,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)
@@ -101,8 +101,8 @@ pub async fn upsert_finance_account_mapping(
         SELECT
             id, key, category, account_id, account_code, account_name,
             account_type, is_system,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM finance_account_mappings
         WHERE id = $1
         "#,
@@ -126,8 +126,8 @@ pub async fn get_accounting_profile_setting(
             industry_extension,
             template_id,
             locked_after_transaction,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM accounting_profile_setting
         WHERE id = $1
         "#,
@@ -158,8 +158,8 @@ pub async fn upsert_accounting_profile_setting(
         RETURNING
             id, accounting_profile, industry_extension, template_id,
             locked_after_transaction,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)
@@ -193,8 +193,8 @@ pub async fn list_enabled_modules(pool: &PgPool) -> Result<Vec<EnabledModuleDto>
             source,
             requires_profile,
             requires_extension,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM enabled_modules
         ORDER BY code ASC
         "#,
@@ -225,8 +225,8 @@ pub async fn upsert_enabled_module(
         WHERE EXCLUDED.updated_at >= enabled_modules.updated_at
         RETURNING
             id, code, is_enabled, source, requires_profile, requires_extension,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)
@@ -248,8 +248,8 @@ pub async fn upsert_enabled_module(
         r#"
         SELECT
             id, code, is_enabled, source, requires_profile, requires_extension,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM enabled_modules
         WHERE id = $1
         "#,
@@ -274,8 +274,8 @@ pub async fn get_general_ledger_setting(
             inventory_policy,
             opening_balance_journal_id,
             activated_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM general_ledger_setting
         WHERE id = $1
         "#,
@@ -370,8 +370,8 @@ pub(crate) async fn upsert_general_ledger_setting_in_tx(
             inventory_policy,
             opening_balance_journal_id,
             activated_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM general_ledger_setting
         WHERE id = $1
         FOR UPDATE
@@ -447,8 +447,8 @@ pub(crate) async fn upsert_general_ledger_setting_in_tx(
         RETURNING
             id, is_ready, cutoff_date, inventory_policy,
             opening_balance_journal_id, activated_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)
@@ -475,8 +475,8 @@ pub(crate) async fn upsert_general_ledger_setting_in_tx(
             inventory_policy,
             opening_balance_journal_id,
             activated_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM general_ledger_setting
         WHERE id = $1
         "#,
@@ -508,12 +508,12 @@ pub async fn get_accounting_initial_setup_setting(
             current_period_id,
             base_currency_code,
             inventory_policy,
-            setup_completed_at::TEXT AS setup_completed_at,
+            setup_completed_at,
             setup_completed_by,
             setup_completed_by_name,
             version,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM accounting_initial_setup_setting
         WHERE id = $1
         "#,
@@ -604,12 +604,12 @@ pub async fn upsert_accounting_initial_setup_setting(
             current_period_id,
             base_currency_code,
             inventory_policy,
-            setup_completed_at::TEXT AS setup_completed_at,
+            setup_completed_at,
             setup_completed_by,
             setup_completed_by_name,
             version,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)

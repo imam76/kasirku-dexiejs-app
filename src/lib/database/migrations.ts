@@ -29,6 +29,7 @@ import { registerMigrationV121 } from './migrations/versions/v121';
 import { registerMigrationV122 } from './migrations/versions/v122';
 import { registerMigrationV123 } from './migrations/versions/v123';
 import { registerMigrationV124 } from './migrations/versions/v124';
+import { registerMigrationV125 } from './migrations/versions/v125';
 
 export function registerDatabaseMigrations(this: KasirkuDB) {
   registerMigrationsV001ToV020(this);
@@ -61,4 +62,5 @@ export function registerDatabaseMigrations(this: KasirkuDB) {
   registerMigrationV122(this);
   registerMigrationV123(this);
   registerMigrationV124(this);
+  registerMigrationV125(this);
 }

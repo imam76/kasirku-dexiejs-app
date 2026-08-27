@@ -11,6 +11,7 @@ import {
   type RemoteRolePermissionDto,
 } from '@/services/postgresAdapter';
 import type { ActivityLog, AuthUser, Permission, Role, RolePermission, UserRole } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface AuthUserReadSyncResult {
   fetched: number;
@@ -81,12 +82,12 @@ const mapRemoteAuthUserToLocal = (
   pin_hash: remoteUser.pin_hash,
   pin_salt: remoteUser.pin_salt,
   is_active: remoteUser.deleted_at ? false : remoteUser.is_active,
-  created_at: remoteUser.created_at,
-  updated_at: remoteUser.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteUser.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteUser.updated_at),
   sync_status: remoteUser.email || !localUser?.email ? 'synced' : 'pending',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteUser.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteUser.updated_at),
 });
 
 const mapRemoteRoleToLocal = (
@@ -100,12 +101,12 @@ const mapRemoteRoleToLocal = (
   is_system: remoteRole.is_system,
   is_owner: remoteRole.is_owner,
   is_active: remoteRole.deleted_at ? false : remoteRole.is_active,
-  created_at: remoteRole.created_at,
-  updated_at: remoteRole.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteRole.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteRole.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteRole.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteRole.updated_at),
 });
 
 const mapRemoteRolePermissionToLocal = (
@@ -115,12 +116,12 @@ const mapRemoteRolePermissionToLocal = (
   id: remotePermission.id,
   role_id: remotePermission.role_id,
   permission_code: remotePermission.permission_code as Permission,
-  created_at: remotePermission.created_at,
-  updated_at: remotePermission.updated_at,
+  created_at: toCanonicalIsoTimestamp(remotePermission.created_at),
+  updated_at: toCanonicalIsoTimestamp(remotePermission.updated_at),
   sync_status: remotePermission.deleted_at ? 'synced' : 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remotePermission.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remotePermission.updated_at),
 });
 
 const mapRemoteActivityLogToLocal = (remoteLog: RemoteActivityLogDto): ActivityLog => ({
@@ -133,7 +134,7 @@ const mapRemoteActivityLogToLocal = (remoteLog: RemoteActivityLogDto): ActivityL
   entity_id: remoteLog.entity_id ?? undefined,
   description: remoteLog.description,
   changes: remoteLog.changes ?? undefined,
-  created_at: remoteLog.created_at,
+  created_at: toCanonicalIsoTimestamp(remoteLog.created_at),
 });
 
 const hasLocalUnsyncedChanges = (user: AuthUser) => (

@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -10,8 +11,8 @@ pub struct FinanceAccountMappingDto {
     pub account_name: String,
     pub account_type: String,
     pub is_system: bool,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -21,8 +22,8 @@ pub struct AccountingProfileSettingDto {
     pub industry_extension: String,
     pub template_id: Option<String>,
     pub locked_after_transaction: Option<bool>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -33,8 +34,8 @@ pub struct EnabledModuleDto {
     pub source: String,
     pub requires_profile: Option<String>,
     pub requires_extension: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -45,8 +46,8 @@ pub struct GeneralLedgerSettingDto {
     pub inventory_policy: String,
     pub opening_balance_journal_id: Option<String>,
     pub activated_at: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -64,10 +65,10 @@ pub struct AccountingInitialSetupSettingDto {
     pub current_period_id: Option<String>,
     pub base_currency_code: String,
     pub inventory_policy: String,
-    pub setup_completed_at: Option<String>,
+    pub setup_completed_at: Option<DateTime<Utc>>,
     pub setup_completed_by: Option<String>,
     pub setup_completed_by_name: Option<String>,
     pub version: i32,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

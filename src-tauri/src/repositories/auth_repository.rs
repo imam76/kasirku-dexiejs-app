@@ -1,7 +1,7 @@
-use crate::models::auth::{
+﻿use crate::models::auth::{
     ActivityLogDto, AuthUserDto, RoleDto, RolePermissionDto, ServerAuthSessionDto,
 };
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use sha2::{Digest, Sha256};
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
@@ -24,9 +24,9 @@ struct EmployeeLoginCandidate {
     pin_hash: Option<String>,
     pin_salt: Option<String>,
     is_active: bool,
-    created_at: String,
-    updated_at: String,
-    deleted_at: Option<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
 }
 
 async fn create_server_session(
@@ -86,9 +86,9 @@ pub async fn authenticate_server_session(
             pin_hash,
             pin_salt,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM auth_users
         WHERE deleted_at IS NULL
           AND is_active = TRUE
@@ -149,9 +149,9 @@ pub async fn authenticate_server_session(
             employee.pin_hash,
             employee.pin_salt,
             employee.is_active,
-            employee.created_at::TEXT AS created_at,
-            employee.updated_at::TEXT AS updated_at,
-            employee.deleted_at::TEXT AS deleted_at
+            employee.created_at,
+            employee.updated_at,
+            employee.deleted_at
         FROM employees AS employee
         LEFT JOIN roles AS role
           ON role.id = employee.login_role_id
@@ -237,9 +237,9 @@ pub async fn list_auth_users(pool: &PgPool) -> Result<Vec<AuthUserDto>, sqlx::Er
             pin_hash,
             pin_salt,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM auth_users
         WHERE deleted_at IS NULL
         ORDER BY created_at DESC
@@ -263,9 +263,9 @@ pub async fn get_auth_user(pool: &PgPool, id: String) -> Result<Option<AuthUserD
             pin_hash,
             pin_salt,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM auth_users
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -292,9 +292,9 @@ async fn get_auth_user_including_deleted(
             pin_hash,
             pin_salt,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM auth_users
         WHERE id = $1
         "#,
@@ -351,9 +351,9 @@ pub async fn upsert_auth_user(
             pin_hash,
             pin_salt,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -392,9 +392,9 @@ pub async fn list_roles(pool: &PgPool) -> Result<Vec<RoleDto>, sqlx::Error> {
             is_system,
             is_owner,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM roles
         WHERE deleted_at IS NULL
         ORDER BY name ASC
@@ -415,9 +415,9 @@ pub async fn get_role(pool: &PgPool, id: String) -> Result<Option<RoleDto>, sqlx
             is_system,
             is_owner,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM roles
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -441,9 +441,9 @@ async fn get_role_including_deleted(
             is_system,
             is_owner,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM roles
         WHERE id = $1
         "#,
@@ -488,9 +488,9 @@ pub async fn upsert_role(pool: &PgPool, input: RoleDto) -> Result<RoleDto, sqlx:
             is_system,
             is_owner,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -522,9 +522,9 @@ pub async fn list_role_permissions(pool: &PgPool) -> Result<Vec<RolePermissionDt
             id,
             role_id,
             permission_code,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM role_permissions
         WHERE deleted_at IS NULL
         ORDER BY role_id ASC, permission_code ASC
@@ -544,9 +544,9 @@ pub async fn get_role_permission(
             id,
             role_id,
             permission_code,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM role_permissions
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -566,9 +566,9 @@ async fn get_role_permission_including_deleted(
             id,
             role_id,
             permission_code,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM role_permissions
         WHERE id = $1
         "#,
@@ -604,9 +604,9 @@ pub async fn upsert_role_permission(
             id,
             role_id,
             permission_code,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -643,7 +643,7 @@ pub async fn list_activity_logs(
             entity_id,
             description,
             changes,
-            created_at::TEXT AS created_at
+            created_at
         FROM activity_logs
         ORDER BY created_at DESC
         LIMIT $1
@@ -685,7 +685,7 @@ pub async fn upsert_activity_log(
             entity_id,
             description,
             changes,
-            created_at::TEXT AS created_at
+            created_at
         "#,
     )
     .bind(input.id)
@@ -717,7 +717,7 @@ pub async fn upsert_activity_log(
             entity_id,
             description,
             changes,
-            created_at::TEXT AS created_at
+            created_at
         FROM activity_logs
         WHERE id = $1
         "#,

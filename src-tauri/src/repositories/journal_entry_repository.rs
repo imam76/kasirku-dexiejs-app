@@ -1,4 +1,4 @@
-use crate::models::journal_entry::{JournalEntryBundleDto, JournalEntryDto, JournalEntryLineDto};
+﻿use crate::models::journal_entry::{JournalEntryBundleDto, JournalEntryDto, JournalEntryLineDto};
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashMap;
 
@@ -50,17 +50,17 @@ macro_rules! journal_entry_select {
             description,
             total_debit,
             total_credit,
-            posted_at::TEXT AS posted_at,
-            voided_at::TEXT AS voided_at,
+            posted_at,
+            voided_at,
             reversed_entry_id,
             version,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM journal_entries
         "#
     };
@@ -81,7 +81,7 @@ macro_rules! journal_entry_line_select {
             description,
             department_id,
             project_id,
-            created_at::TEXT AS created_at
+            created_at
         FROM journal_entry_lines
         "#
     };
@@ -402,17 +402,17 @@ async fn upsert_journal_entry(
             description,
             total_debit,
             total_credit,
-            posted_at::TEXT AS posted_at,
-            voided_at::TEXT AS voided_at,
+            posted_at,
+            voided_at,
             reversed_entry_id,
             version,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)

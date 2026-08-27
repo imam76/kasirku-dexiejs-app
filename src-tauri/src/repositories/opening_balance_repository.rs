@@ -1,4 +1,4 @@
-use crate::models::opening_balance::{
+﻿use crate::models::opening_balance::{
     OpeningBalanceBatchDto, OpeningBalanceBundleDto, OpeningBalanceLineDto,
 };
 use sqlx::{PgPool, Postgres, Transaction};
@@ -77,8 +77,8 @@ macro_rules! opening_balance_batch_select {
             company_id,
             company_name,
             module,
-            cutoff_date::TEXT AS cutoff_date,
-            accounting_start_date::TEXT AS accounting_start_date,
+            cutoff_date,
+            accounting_start_date,
             status,
             revision_number,
             previous_batch_id,
@@ -86,16 +86,16 @@ macro_rules! opening_balance_batch_select {
             total_credit,
             journal_entry_id,
             posting_idempotency_key,
-            posted_at::TEXT AS posted_at,
+            posted_at,
             posted_by,
             posted_by_name,
-            locked_at::TEXT AS locked_at,
-            reversed_at::TEXT AS reversed_at,
+            locked_at,
+            reversed_at,
             reversed_by,
             reversed_by_name,
             reversal_journal_entry_id,
-            skipped_at::TEXT AS skipped_at,
-            validated_at::TEXT AS validated_at,
+            skipped_at,
+            validated_at,
             validated_by,
             validated_by_name,
             notes,
@@ -104,9 +104,9 @@ macro_rules! opening_balance_batch_select {
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM opening_balance_batches
         "#
     };
@@ -130,8 +130,8 @@ macro_rules! opening_balance_line_select {
             contact_id,
             party_name,
             document_number,
-            document_date::TEXT AS document_date,
-            due_date::TEXT AS due_date,
+            document_date,
+            due_date,
             currency_code,
             currency_name,
             currency_symbol,
@@ -142,7 +142,7 @@ macro_rules! opening_balance_line_select {
             paid_amount,
             remaining_amount,
             settlement_status,
-            last_paid_at::TEXT AS last_paid_at,
+            last_paid_at,
             account_id,
             account_code,
             account_name,
@@ -152,8 +152,8 @@ macro_rules! opening_balance_line_select {
             debit,
             credit,
             notes,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM opening_balance_lines
         "#
     };
@@ -507,8 +507,8 @@ async fn upsert_opening_balance_batch(
             company_id,
             company_name,
             module,
-            cutoff_date::TEXT AS cutoff_date,
-            accounting_start_date::TEXT AS accounting_start_date,
+            cutoff_date,
+            accounting_start_date,
             status,
             revision_number,
             previous_batch_id,
@@ -516,16 +516,16 @@ async fn upsert_opening_balance_batch(
             total_credit,
             journal_entry_id,
             posting_idempotency_key,
-            posted_at::TEXT AS posted_at,
+            posted_at,
             posted_by,
             posted_by_name,
-            locked_at::TEXT AS locked_at,
-            reversed_at::TEXT AS reversed_at,
+            locked_at,
+            reversed_at,
             reversed_by,
             reversed_by_name,
             reversal_journal_entry_id,
-            skipped_at::TEXT AS skipped_at,
-            validated_at::TEXT AS validated_at,
+            skipped_at,
+            validated_at,
             validated_by,
             validated_by_name,
             notes,
@@ -534,9 +534,9 @@ async fn upsert_opening_balance_batch(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)

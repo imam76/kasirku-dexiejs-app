@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -13,17 +14,17 @@ pub struct JournalEntryDto {
     pub description: String,
     pub total_debit: f64,
     pub total_credit: f64,
-    pub posted_at: Option<String>,
-    pub voided_at: Option<String>,
+    pub posted_at: Option<DateTime<Utc>>,
+    pub voided_at: Option<DateTime<Utc>>,
     pub reversed_entry_id: Option<String>,
     pub version: i32,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
     pub updated_by_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -39,7 +40,7 @@ pub struct JournalEntryLineDto {
     pub description: Option<String>,
     pub department_id: Option<String>,
     pub project_id: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

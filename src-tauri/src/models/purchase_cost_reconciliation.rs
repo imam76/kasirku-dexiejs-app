@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -19,14 +20,17 @@ pub struct PurchaseCostReconciliationDto {
     pub notes: Option<String>,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
+    /// Client-supplied business creation time. Genuinely stored as TEXT (not TIMESTAMPTZ) - see
+    /// migration 0018 - so it deliberately stays a `String` rather than `DateTime<Utc>`; it is
+    /// never used for delta-fetch cursoring (see `server_created_at` below).
     pub created_at: String,
     /// Server-assigned ingestion timestamp used for delta-fetch cursoring, distinct from
     /// `created_at` (client-supplied business creation time). See migration 0081. Always present
-    /// on rows read back from Postgres (SELECT casts it to TEXT); absent on push payloads built
-    /// client-side, since the server assigns it at INSERT time via DEFAULT NOW() - `#[serde(default)]`
-    /// lets those payloads deserialize without the field.
+    /// on rows read back from Postgres; absent on push payloads built client-side, since the
+    /// server assigns it at INSERT time via DEFAULT NOW() - `#[serde(default)]` lets those
+    /// payloads deserialize without the field.
     #[serde(default)]
-    pub server_created_at: Option<String>,
+    pub server_created_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -50,6 +54,8 @@ pub struct PurchaseCostReconciliationItemDto {
     pub variance_per_unit: f64,
     pub sold_cost_variance_amount: f64,
     pub remaining_stock_variance_amount: f64,
+    /// Client-supplied business creation time, genuinely stored as TEXT - see the note on
+    /// `PurchaseCostReconciliationDto::created_at`.
     pub created_at: String,
 }
 

@@ -24,6 +24,7 @@ import { resolveLegacyRoleId, resolveLegacyRoleName, seedSystemRoles } from './r
 import { canBypassSetupModuleLockForUser } from '@/services/setupKeyService';
 import { refreshEmployeesFromPostgres } from '@/services/employeeReadService';
 import { AUTH_PIN_VALIDATION_MESSAGE, isValidAuthPin } from './pinPolicy';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 const SESSION_STORAGE_KEY = 'frayukti-auth-session-id';
 const PIN_HASH_ALGORITHM = 'SHA-256';
@@ -684,12 +685,12 @@ const mapRemoteAuthUserForLogin = (remoteUser: RemoteAuthUserDto): AuthUser => (
   pin_hash: remoteUser.pin_hash,
   pin_salt: remoteUser.pin_salt,
   is_active: remoteUser.deleted_at ? false : remoteUser.is_active,
-  created_at: remoteUser.created_at,
-  updated_at: remoteUser.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteUser.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteUser.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: new Date().toISOString(),
-  remote_updated_at: remoteUser.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteUser.updated_at),
 });
 
 const ensureEmployeeLoginDataAvailable = async (remoteUser: RemoteAuthUserDto) => {
@@ -712,8 +713,8 @@ const ensureEmployeeLoginDataAvailable = async (remoteUser: RemoteAuthUserDto) =
     pin_hash: remoteUser.pin_hash,
     pin_salt: remoteUser.pin_salt,
     is_active: remoteUser.is_active,
-    created_at: remoteUser.created_at,
-    updated_at: remoteUser.updated_at,
+    created_at: toCanonicalIsoTimestamp(remoteUser.created_at),
+    updated_at: toCanonicalIsoTimestamp(remoteUser.updated_at),
   };
   await db.employees.put(fallbackEmployee);
 };

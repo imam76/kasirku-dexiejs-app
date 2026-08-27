@@ -1,4 +1,4 @@
-use crate::models::employee::{EmployeeAreaDto, EmployeeCollectionScheduleDto, EmployeeDto};
+﻿use crate::models::employee::{EmployeeAreaDto, EmployeeCollectionScheduleDto, EmployeeDto};
 use sqlx::PgPool;
 
 pub async fn list_employees(
@@ -74,9 +74,9 @@ pub async fn list_employees(
             COALESCE(access_profile.access_pin_salt, pin_salt) AS pin_salt,
             notes,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM employees
         LEFT JOIN (
             SELECT
@@ -169,9 +169,9 @@ pub async fn get_employee(pool: &PgPool, id: String) -> Result<Option<EmployeeDt
             COALESCE(access_profile.access_pin_salt, pin_salt) AS pin_salt,
             notes,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM employees
         LEFT JOIN (
             SELECT
@@ -357,9 +357,9 @@ pub async fn list_employee_areas(
             effective_from::TEXT AS effective_from,
             effective_until::TEXT AS effective_until,
             is_primary,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM employee_areas
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -413,9 +413,9 @@ pub async fn upsert_employee_area(
             effective_from::TEXT AS effective_from,
             effective_until::TEXT AS effective_until,
             is_primary,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(&input.id)
@@ -454,9 +454,9 @@ pub async fn list_employee_collection_schedules(
             effective_until::TEXT AS effective_until,
             is_default_for_new_members,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM employee_collection_schedules
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -522,9 +522,9 @@ pub async fn upsert_employee_collection_schedule(
             effective_until::TEXT AS effective_until,
             is_default_for_new_members,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(&input.id)

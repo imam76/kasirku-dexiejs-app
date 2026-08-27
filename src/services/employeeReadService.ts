@@ -11,6 +11,7 @@ import {
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { ChartOfAccount, Employee, EmployeeArea, EmployeeCollectionSchedule } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface EmployeeReadSyncResult {
   fetched: number;
@@ -130,12 +131,12 @@ const mapRemoteEmployeeToLocal = (remoteEmployee: RemoteEmployeeDto, syncedAt: s
   pin_salt: optionalString(remoteEmployee.pin_salt),
   notes: optionalString(remoteEmployee.notes),
   is_active: remoteEmployee.deleted_at ? false : remoteEmployee.is_active,
-  created_at: remoteEmployee.created_at,
-  updated_at: remoteEmployee.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteEmployee.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteEmployee.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteEmployee.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteEmployee.updated_at),
 });
 
 const mapRemoteEmployeeAreaToLocal = (remoteArea: RemoteEmployeeAreaDto, syncedAt: string): EmployeeArea => ({
@@ -147,12 +148,12 @@ const mapRemoteEmployeeAreaToLocal = (remoteArea: RemoteEmployeeAreaDto, syncedA
   effective_from: optionalString(remoteArea.effective_from),
   effective_until: optionalString(remoteArea.effective_until),
   is_primary: remoteArea.is_primary ?? false,
-  created_at: remoteArea.created_at,
-  updated_at: remoteArea.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteArea.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteArea.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteArea.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteArea.updated_at),
 });
 
 const mapRemoteCollectionScheduleToLocal = (
@@ -171,12 +172,12 @@ const mapRemoteCollectionScheduleToLocal = (
   effective_until: optionalString(remoteSchedule.effective_until),
   is_default_for_new_members: remoteSchedule.is_default_for_new_members ?? false,
   is_active: remoteSchedule.deleted_at ? false : remoteSchedule.is_active,
-  created_at: remoteSchedule.created_at,
-  updated_at: remoteSchedule.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteSchedule.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteSchedule.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteSchedule.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteSchedule.updated_at),
 });
 
 const getFieldCashParentAccount = async () => (
@@ -212,8 +213,8 @@ const buildFieldCashAccountFromEmployeeSnapshot = async (
     is_system: false,
     is_active: true,
     description: `Akun kas petugas dari snapshot karyawan ${remoteEmployee.name}.`,
-    created_at: remoteEmployee.created_at,
-    updated_at: remoteEmployee.updated_at,
+    created_at: toCanonicalIsoTimestamp(remoteEmployee.created_at),
+    updated_at: toCanonicalIsoTimestamp(remoteEmployee.updated_at),
   };
 };
 

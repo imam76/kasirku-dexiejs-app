@@ -1,4 +1,4 @@
-use crate::models::marketplace::{
+﻿use crate::models::marketplace::{
     MarketplaceAccountDto, MarketplaceAccountSecretDto, MarketplaceIntegrationLogDto,
     MarketplaceOrderBundleDto, MarketplaceOrderDto, MarketplaceOrderItemDto,
     MarketplaceOrderListInput, MarketplaceOrderListResult, MarketplaceOrderUpsert,
@@ -81,9 +81,9 @@ pub async fn list_accounts(pool: &PgPool) -> Result<Vec<MarketplaceAccountDto>, 
           shop_id::TEXT AS shop_id,
           shop_name,
           status,
-          last_synced_at::TEXT AS last_synced_at,
-          created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at
+          last_synced_at,
+          created_at,
+          updated_at
         FROM marketplace_accounts
         WHERE marketplace = $1
         ORDER BY shop_name ASC, created_at ASC
@@ -104,9 +104,9 @@ pub async fn get_account_secret(
           shop_id,
           access_token_encrypted,
           refresh_token_encrypted,
-          token_expires_at::TEXT AS token_expires_at,
+          token_expires_at,
           status,
-          last_synced_at::TEXT AS last_synced_at
+          last_synced_at
         FROM marketplace_accounts
         WHERE id = $1 AND marketplace = $2
         "#,
@@ -127,9 +127,9 @@ pub async fn lock_account_secret(
           shop_id,
           access_token_encrypted,
           refresh_token_encrypted,
-          token_expires_at::TEXT AS token_expires_at,
+          token_expires_at,
           status,
-          last_synced_at::TEXT AS last_synced_at
+          last_synced_at
         FROM marketplace_accounts
         WHERE id = $1 AND marketplace = $2
         FOR UPDATE
@@ -178,9 +178,9 @@ pub async fn upsert_account(
           shop_id::TEXT AS shop_id,
           shop_name,
           status,
-          last_synced_at::TEXT AS last_synced_at,
-          created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at
+          last_synced_at,
+          created_at,
+          updated_at
         "#,
     )
     .bind(Uuid::new_v4().to_string())
@@ -286,10 +286,10 @@ pub async fn list_orders(
           marketplace_order.internal_status,
           marketplace_order.total_amount::TEXT AS total_amount,
           marketplace_order.currency,
-          marketplace_order.order_created_at::TEXT AS order_created_at,
-          marketplace_order.order_updated_at::TEXT AS order_updated_at,
-          marketplace_order.created_at::TEXT AS created_at,
-          marketplace_order.updated_at::TEXT AS updated_at
+          marketplace_order.order_created_at,
+          marketplace_order.order_updated_at,
+          marketplace_order.created_at,
+          marketplace_order.updated_at
         FROM marketplace_orders marketplace_order
         INNER JOIN marketplace_accounts account
           ON account.id = marketplace_order.marketplace_account_id
@@ -334,10 +334,10 @@ pub async fn get_order_bundle(
           marketplace_order.internal_status,
           marketplace_order.total_amount::TEXT AS total_amount,
           marketplace_order.currency,
-          marketplace_order.order_created_at::TEXT AS order_created_at,
-          marketplace_order.order_updated_at::TEXT AS order_updated_at,
-          marketplace_order.created_at::TEXT AS created_at,
-          marketplace_order.updated_at::TEXT AS updated_at
+          marketplace_order.order_created_at,
+          marketplace_order.order_updated_at,
+          marketplace_order.created_at,
+          marketplace_order.updated_at
         FROM marketplace_orders marketplace_order
         INNER JOIN marketplace_accounts account
           ON account.id = marketplace_order.marketplace_account_id
@@ -392,7 +392,7 @@ pub async fn list_logs(
           request_payload,
           response_payload,
           error_message,
-          created_at::TEXT AS created_at
+          created_at
         FROM marketplace_integration_logs
         WHERE ($1::TEXT IS NULL OR marketplace_account_id = $1)
         ORDER BY created_at DESC

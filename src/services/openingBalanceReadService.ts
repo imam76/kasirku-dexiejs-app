@@ -17,6 +17,7 @@ import type {
   OpeningBalanceLineSettlementStatus,
   OpeningBalanceModule,
 } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface OpeningBalanceReadSyncResult {
   fetched: number;
@@ -92,8 +93,8 @@ const mapRemoteOpeningBalanceBatchToLocal = (
   company_id: optionalString(remoteBatch.company_id),
   company_name: optionalString(remoteBatch.company_name),
   module: isOpeningBalanceModule(remoteBatch.module) ? remoteBatch.module : 'ACCOUNT',
-  cutoff_date: remoteBatch.cutoff_date,
-  accounting_start_date: optionalString(remoteBatch.accounting_start_date),
+  cutoff_date: toCanonicalIsoTimestamp(remoteBatch.cutoff_date),
+  accounting_start_date: toCanonicalOptionalIsoTimestamp(remoteBatch.accounting_start_date),
   status: isOpeningBalanceBatchStatus(remoteBatch.status) ? remoteBatch.status : 'DRAFT',
   revision_number: toPositiveVersion(remoteBatch.revision_number),
   previous_batch_id: optionalString(remoteBatch.previous_batch_id),
@@ -101,16 +102,16 @@ const mapRemoteOpeningBalanceBatchToLocal = (
   total_credit: numberOrZero(remoteBatch.total_credit),
   journal_entry_id: optionalString(remoteBatch.journal_entry_id),
   posting_idempotency_key: optionalString(remoteBatch.posting_idempotency_key),
-  posted_at: optionalString(remoteBatch.posted_at),
+  posted_at: toCanonicalOptionalIsoTimestamp(remoteBatch.posted_at),
   posted_by: optionalString(remoteBatch.posted_by),
   posted_by_name: optionalString(remoteBatch.posted_by_name),
-  locked_at: optionalString(remoteBatch.locked_at),
-  reversed_at: optionalString(remoteBatch.reversed_at),
+  locked_at: toCanonicalOptionalIsoTimestamp(remoteBatch.locked_at),
+  reversed_at: toCanonicalOptionalIsoTimestamp(remoteBatch.reversed_at),
   reversed_by: optionalString(remoteBatch.reversed_by),
   reversed_by_name: optionalString(remoteBatch.reversed_by_name),
   reversal_journal_entry_id: optionalString(remoteBatch.reversal_journal_entry_id),
-  skipped_at: optionalString(remoteBatch.skipped_at),
-  validated_at: optionalString(remoteBatch.validated_at),
+  skipped_at: toCanonicalOptionalIsoTimestamp(remoteBatch.skipped_at),
+  validated_at: toCanonicalOptionalIsoTimestamp(remoteBatch.validated_at),
   validated_by: optionalString(remoteBatch.validated_by),
   validated_by_name: optionalString(remoteBatch.validated_by_name),
   notes: optionalString(remoteBatch.notes),
@@ -119,13 +120,13 @@ const mapRemoteOpeningBalanceBatchToLocal = (
   created_by_name: optionalString(remoteBatch.created_by_name),
   updated_by: optionalString(remoteBatch.updated_by),
   updated_by_name: optionalString(remoteBatch.updated_by_name),
-  created_at: remoteBatch.created_at,
-  updated_at: remoteBatch.updated_at,
-  deleted_at: optionalString(remoteBatch.deleted_at),
+  created_at: toCanonicalIsoTimestamp(remoteBatch.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteBatch.updated_at),
+  deleted_at: toCanonicalOptionalIsoTimestamp(remoteBatch.deleted_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteBatch.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteBatch.updated_at),
 });
 
 const mapRemoteOpeningBalanceLineToLocal = (
@@ -146,8 +147,8 @@ const mapRemoteOpeningBalanceLineToLocal = (
   contact_id: optionalString(remoteLine.contact_id),
   party_name: optionalString(remoteLine.party_name),
   document_number: optionalString(remoteLine.document_number),
-  document_date: optionalString(remoteLine.document_date),
-  due_date: optionalString(remoteLine.due_date),
+  document_date: toCanonicalOptionalIsoTimestamp(remoteLine.document_date),
+  due_date: toCanonicalOptionalIsoTimestamp(remoteLine.due_date),
   currency_code: optionalString(remoteLine.currency_code),
   currency_name: optionalString(remoteLine.currency_name),
   currency_symbol: optionalString(remoteLine.currency_symbol),
@@ -160,7 +161,7 @@ const mapRemoteOpeningBalanceLineToLocal = (
   settlement_status: isOpeningBalanceLineSettlementStatus(remoteLine.settlement_status)
     ? remoteLine.settlement_status
     : undefined,
-  last_paid_at: optionalString(remoteLine.last_paid_at),
+  last_paid_at: toCanonicalOptionalIsoTimestamp(remoteLine.last_paid_at),
   account_id: optionalString(remoteLine.account_id),
   account_code: optionalString(remoteLine.account_code),
   account_name: optionalString(remoteLine.account_name),
@@ -170,12 +171,12 @@ const mapRemoteOpeningBalanceLineToLocal = (
   debit: numberOrZero(remoteLine.debit),
   credit: numberOrZero(remoteLine.credit),
   notes: optionalString(remoteLine.notes),
-  created_at: remoteLine.created_at,
-  updated_at: remoteLine.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteLine.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteLine.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteLine.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteLine.updated_at),
 });
 
 const hasLocalUnsyncedBatchChanges = (batch: OpeningBalanceBatch | undefined) => (

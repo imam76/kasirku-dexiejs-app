@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -13,15 +14,15 @@ pub struct ProductionOrderDto {
     pub additional_cost: f64,
     pub total_cost: f64,
     pub unit_cost: f64,
-    pub produced_at: String,
-    pub posted_at: Option<String>,
-    pub voided_at: Option<String>,
+    pub produced_at: DateTime<Utc>,
+    pub posted_at: Option<DateTime<Utc>>,
+    pub voided_at: Option<DateTime<Utc>>,
     pub void_reason: Option<String>,
     pub notes: Option<String>,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -37,8 +38,8 @@ pub struct ProductionOrderItemDto {
     pub stock_unit: String,
     pub cost_per_unit: f64,
     pub total_cost: f64,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -50,8 +51,8 @@ pub struct ProductionOrderCostDto {
     pub account_id: Option<String>,
     pub account_code: Option<String>,
     pub account_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

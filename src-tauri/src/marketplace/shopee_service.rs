@@ -13,7 +13,7 @@ use crate::{
     repositories::marketplace_repository,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{Duration, TimeZone, Utc};
 use rand::RngCore;
 use serde_json::{json, Value};
 use sqlx::PgPool;
@@ -521,17 +521,14 @@ async fn sync_orders_inner(
 
     let cutoff = Utc::now();
     let initial_floor = cutoff - Duration::days(INITIAL_SYNC_DAYS);
-    let (time_range_field, time_from) = match account.last_synced_at.as_deref() {
-        Some(last_synced_at) => {
-            let last = parse_datetime(last_synced_at, "waktu sinkronisasi terakhir")?;
-            (
-                "update_time",
-                std::cmp::max(
-                    last - Duration::minutes(SYNC_OVERLAP_MINUTES),
-                    initial_floor,
-                ),
-            )
-        }
+    let (time_range_field, time_from) = match account.last_synced_at {
+        Some(last) => (
+            "update_time",
+            std::cmp::max(
+                last - Duration::minutes(SYNC_OVERLAP_MINUTES),
+                initial_floor,
+            ),
+        ),
         None => ("create_time", initial_floor),
     };
     let request_summary = json!({
@@ -707,7 +704,7 @@ async fn ensure_access_token(
         ));
     }
 
-    let expires_at = parse_datetime(&account.token_expires_at, "masa berlaku token")?;
+    let expires_at = account.token_expires_at;
     if !force_refresh && expires_at > Utc::now() + Duration::minutes(REFRESH_THRESHOLD_MINUTES) {
         let access_token = cipher.decrypt(
             &account.access_token_encrypted,
@@ -897,17 +894,6 @@ fn is_decimal(value: &str) -> bool {
             .map(|digits| !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()))
             .unwrap_or(true)
         && parts.next().is_none()
-}
-
-fn parse_datetime(value: &str, label: &str) -> MarketplaceResult<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(value)
-        .map(|value| value.with_timezone(&Utc))
-        .map_err(|_| {
-            MarketplaceError::new(
-                "MARKETPLACE_INVALID_TIMESTAMP",
-                format!("Format {label} tidak valid."),
-            )
-        })
 }
 
 fn timestamp_to_rfc3339(timestamp: i64, field: &str) -> MarketplaceResult<String> {

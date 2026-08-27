@@ -1,4 +1,4 @@
-use crate::models::production_order::{
+﻿use crate::models::production_order::{
     ProductionOrderBundleDto, ProductionOrderCostDto, ProductionOrderDto, ProductionOrderItemDto,
 };
 use sqlx::{PgPool, Postgres, Transaction};
@@ -19,15 +19,15 @@ macro_rules! production_order_select {
             additional_cost,
             total_cost,
             unit_cost,
-            produced_at::TEXT AS produced_at,
-            posted_at::TEXT AS posted_at,
-            voided_at::TEXT AS voided_at,
+            produced_at,
+            posted_at,
+            voided_at,
             void_reason,
             notes,
             created_by,
             created_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM production_orders
         "#
     };
@@ -48,8 +48,8 @@ macro_rules! production_order_item_select {
             stock_unit,
             cost_per_unit,
             total_cost,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM production_order_items
         "#
     };
@@ -66,8 +66,8 @@ macro_rules! production_order_cost_select {
             account_id,
             account_code,
             account_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM production_order_costs
         "#
     };
@@ -369,15 +369,15 @@ async fn upsert_production_order(
             additional_cost,
             total_cost,
             unit_cost,
-            produced_at::TEXT AS produced_at,
-            posted_at::TEXT AS posted_at,
-            voided_at::TEXT AS voided_at,
+            produced_at,
+            posted_at,
+            voided_at,
             void_reason,
             notes,
             created_by,
             created_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)

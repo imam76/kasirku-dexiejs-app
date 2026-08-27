@@ -26,8 +26,8 @@ macro_rules! reconciliation_select {
             notes,
             created_by,
             created_by_name,
-            created_at::TEXT AS created_at,
-            server_created_at::TEXT AS server_created_at
+            created_at,
+            server_created_at
         FROM purchase_cost_reconciliations
         "#
     };
@@ -56,7 +56,7 @@ macro_rules! reconciliation_item_select {
             variance_per_unit,
             sold_cost_variance_amount,
             remaining_stock_variance_amount,
-            created_at::TEXT AS created_at
+            created_at
         FROM purchase_cost_reconciliation_items
         "#
     };
@@ -505,7 +505,7 @@ mod tests {
 
             let last = page.last().unwrap();
             cursor = (
-                last.reconciliation.server_created_at.clone(),
+                last.reconciliation.server_created_at.map(|value| value.to_rfc3339()),
                 Some(last.reconciliation.id.clone()),
             );
             let returned_full_page = page.len() as i64 == page_limit;

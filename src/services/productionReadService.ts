@@ -15,6 +15,7 @@ import type {
   ProductionOrderItem,
   ProductionOrderStatus,
 } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface ProductionOrderReadSyncResult {
   fetched: number;
@@ -100,19 +101,19 @@ const mapRemoteProductionOrderToLocal = (
   additional_cost: remoteOrder.additional_cost,
   total_cost: remoteOrder.total_cost,
   unit_cost: remoteOrder.unit_cost,
-  produced_at: remoteOrder.produced_at,
-  posted_at: optionalString(remoteOrder.posted_at),
-  voided_at: optionalString(remoteOrder.voided_at),
+  produced_at: toCanonicalIsoTimestamp(remoteOrder.produced_at),
+  posted_at: toCanonicalOptionalIsoTimestamp(remoteOrder.posted_at),
+  voided_at: toCanonicalOptionalIsoTimestamp(remoteOrder.voided_at),
   void_reason: optionalString(remoteOrder.void_reason),
   notes: optionalString(remoteOrder.notes),
   created_by: optionalString(remoteOrder.created_by),
   created_by_name: optionalString(remoteOrder.created_by_name),
-  created_at: remoteOrder.created_at,
-  updated_at: remoteOrder.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteOrder.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteOrder.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteOrder.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteOrder.updated_at),
 });
 
 const mapRemoteProductionOrderItemToLocal = (
@@ -129,8 +130,8 @@ const mapRemoteProductionOrderItemToLocal = (
   stock_unit: remoteItem.stock_unit,
   cost_per_unit: remoteItem.cost_per_unit,
   total_cost: remoteItem.total_cost,
-  created_at: remoteItem.created_at,
-  updated_at: remoteItem.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteItem.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteItem.updated_at),
 });
 
 const mapRemoteProductionOrderCostToLocal = (
@@ -143,8 +144,8 @@ const mapRemoteProductionOrderCostToLocal = (
   account_id: optionalString(remoteCost.account_id),
   account_code: optionalString(remoteCost.account_code),
   account_name: optionalString(remoteCost.account_name),
-  created_at: remoteCost.created_at,
-  updated_at: remoteCost.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteCost.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteCost.updated_at),
 });
 
 const addProductionOrderReadSyncResult = (

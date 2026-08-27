@@ -5,6 +5,7 @@ use crate::{
         stock_mutation_repository,
     },
 };
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::{HashMap, HashSet};
 
@@ -211,10 +212,7 @@ fn validate_inventory_opening_posting_bundle(
         ));
     }
 
-    let cutoff_date = batch
-        .cutoff_date
-        .get(0..10)
-        .ok_or_else(|| protocol_error("Tanggal cutoff saldo awal persediaan tidak valid."))?;
+    let cutoff_date = batch.cutoff_date.format("%Y-%m-%d").to_string();
     let mut snapshot_line_ids = HashSet::new();
     for snapshot in &input.stock_snapshots {
         let line = opening_lines_by_id
@@ -255,7 +253,7 @@ fn validate_inventory_opening_posting_bundle(
                 .cutoff_date
                 .as_deref()
                 .and_then(|value| value.get(0..10))
-                != Some(cutoff_date)
+                != Some(cutoff_date.as_str())
         {
             return Err(protocol_error(
                 "Setting General Ledger tidak konsisten dengan posting persediaan.",
@@ -268,7 +266,7 @@ fn validate_inventory_opening_posting_bundle(
 
 async fn lock_terminal_account_opening_balance_in_tx(
     tx: &mut Transaction<'_, Postgres>,
-    cutoff_date: &str,
+    cutoff_date: DateTime<Utc>,
 ) -> Result<(), sqlx::Error> {
     let account_batch_id = sqlx::query_scalar::<_, String>(
         r#"
@@ -309,7 +307,8 @@ pub async fn post_inventory_opening_balance_bundle(
         general_ledger_setting,
     } = input;
     let batch_id = opening_balance.batch.id.clone();
-    let cutoff_date = opening_balance.batch.cutoff_date.clone();
+    let cutoff_date = opening_balance.batch.cutoff_date;
+    let cutoff_date_key = cutoff_date.format("%Y-%m-%d").to_string();
     let mut tx = pool.begin().await?;
 
     // The batch lock serializes the whole composite across devices. The regular
@@ -324,7 +323,7 @@ pub async fn post_inventory_opening_balance_bundle(
         // ACCOUNT only needs to be terminal when this composite also activates
         // the ledger. Inventory may be posted first and GL activated later by
         // its standalone queue after both remote modules are terminal.
-        lock_terminal_account_opening_balance_in_tx(&mut tx, &cutoff_date).await?;
+        lock_terminal_account_opening_balance_in_tx(&mut tx, cutoff_date).await?;
     }
 
     let opening_balance =
@@ -366,7 +365,7 @@ pub async fn post_inventory_opening_balance_bundle(
                     .cutoff_date
                     .as_deref()
                     .and_then(|value| value.get(0..10))
-                    != cutoff_date.get(0..10)
+                    != Some(cutoff_date_key.as_str())
             {
                 return Err(protocol_error(
                     "Aktivasi General Ledger server tidak konvergen dengan cutoff dan kebijakan persediaan.",
