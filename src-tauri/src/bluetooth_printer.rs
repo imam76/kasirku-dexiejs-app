@@ -111,6 +111,7 @@ pub struct ReceiptPayload {
     items: Vec<ReceiptLineItem>,
     subtotal_amount: Option<f64>,
     discount_amount: Option<f64>,
+    lottery_number: Option<String>,
     membership_points_earned: Option<f64>,
     membership_points_redeemed: Option<f64>,
     membership_point_discount_amount: Option<f64>,

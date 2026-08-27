@@ -6,6 +6,7 @@ import {
 } from '@/auth/authReadService';
 import { mergeRemoteContactsIntoDexie } from '@/services/contactReadService';
 import { mergeRemotePromosIntoDexie } from '@/services/promoReadService';
+import { mergeRemoteLotteriesIntoDexie } from '@/services/lotteryReadService';
 import { mergeRemoteTransactionBundlesIntoDexie } from '@/services/transactionReadService';
 import {
   mergeRemoteCooperativeAreasIntoDexie,
@@ -106,6 +107,7 @@ import {
   productPostgresAdapter,
   productionOrderPostgresAdapter,
   promoPostgresAdapter,
+  lotteryPostgresAdapter,
   purchaseDocumentPostgresAdapter,
   purchaseCostReconciliationPostgresAdapter,
   projectPostgresAdapter,
@@ -184,6 +186,7 @@ import {
   type RemotePurchaseCostReconciliationItemDto,
   type RemoteProjectDto,
   type RemotePromoDto,
+  type RemoteLotteryDto,
   type RemoteFixedAssetDto,
   type RemoteFixedAssetDepreciationRunBundleDto,
   type RemoteRoleDto,
@@ -211,7 +214,7 @@ import {
   mergeRemoteAccountingFiscalYearsIntoDexie,
   mergeRemoteFiscalYearClosingRunsIntoDexie,
 } from '@/services/fiscalYearReadService';
-import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, PosStockDiscrepancy, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, Promo, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Transaction, TransactionItem, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
+import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, PosStockDiscrepancy, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, Promo, Lottery, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Transaction, TransactionItem, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
 import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryComponent } from '@/types';
 import type { InventoryLot, InventoryLotConsumption, PurchaseCostReconciliation, PurchaseCostReconciliationItem } from '@/types';
 import type { LeaveRequest } from '@/types';
@@ -266,6 +269,7 @@ const PRODUCT_ENTITY = 'products';
 const PRODUCTION_ORDER_ENTITY = 'productionOrders';
 const PROJECT_ENTITY = 'projects';
 const PROMO_ENTITY = 'promos';
+const LOTTERY_ENTITY = 'lotteries';
 const TRANSACTION_ENTITY = 'transactions';
 const FIXED_ASSET_ENTITY = 'fixedAssets';
 const FIXED_ASSET_DEPRECIATION_RUN_ENTITY = 'fixedAssetDepreciationRuns';
@@ -447,6 +451,19 @@ const mapPromoToRemoteDto = (promo: Promo): RemotePromoDto => ({
   created_by: promo.created_by,
   created_at: promo.created_at,
   updated_at: promo.updated_at,
+});
+
+const mapLotteryToRemoteDto = (lottery: Lottery): RemoteLotteryDto => ({
+  id: lottery.id,
+  name: lottery.name,
+  min_total: lottery.min_total,
+  max_total: lottery.max_total,
+  start_at: lottery.start_at,
+  end_at: lottery.end_at,
+  active: lottery.active,
+  created_by: lottery.created_by,
+  created_at: lottery.created_at,
+  updated_at: lottery.updated_at,
 });
 
 const mapCooperativeAreaToRemoteDto = (area: CooperativeArea): RemoteCooperativeAreaDto => ({
@@ -2238,6 +2255,20 @@ const isRemotePromoDto = (payload: unknown): payload is RemotePromoDto => {
   );
 };
 
+const isRemoteLotteryDto = (payload: unknown): payload is RemoteLotteryDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteLotteryDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.min_total === 'number' &&
+    typeof candidate.active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteCooperativeMemberDto = (payload: unknown): payload is RemoteCooperativeMemberDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -3553,6 +3584,17 @@ const updatePromoSyncMetadata = async (
   await db.promos.update(promoId, syncMetadata);
 };
 
+const updateLotterySyncMetadata = async (
+  lotteryId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<Lottery, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentLottery = await db.lotteries.get(lotteryId);
+  if (!currentLottery || currentLottery.updated_at !== sourceUpdatedAt) return;
+
+  await db.lotteries.update(lotteryId, syncMetadata);
+};
+
 const updateCooperativeMemberSyncMetadata = async (
   memberId: string,
   sourceUpdatedAt: string,
@@ -4176,6 +4218,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (queueItem.entity === LOTTERY_ENTITY && isRemoteLotteryDto(queueItem.payload)) {
+    await updateLotterySyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === COOPERATIVE_AREA_ENTITY && isRemoteCooperativeAreaDto(queueItem.payload)) {
     await updateCooperativeAreaSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -4672,6 +4721,18 @@ const processPromoQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return promoPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processLotteryQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    return lotteryPostgresAdapter.delete(queueItem.entity_id);
+  }
+
+  if (!isRemoteLotteryDto(queueItem.payload)) {
+    throw new Error('Payload undian sync queue tidak valid.');
+  }
+
+  return lotteryPostgresAdapter.upsert(queueItem.payload);
 };
 
 const processCooperativeAreaQueueItem = async (queueItem: SyncQueueItem) => {
@@ -5357,6 +5418,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteProductionOrderBundle: RemoteProductionOrderBundleDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
     let remotePromo: RemotePromoDto | null = null;
+    let remoteLottery: RemoteLotteryDto | null = null;
     let remoteFixedAsset: RemoteFixedAssetDto | null = null;
     let remoteFixedAssetRunBundle: RemoteFixedAssetDepreciationRunBundleDto | null = null;
     let remoteInventoryLot: RemoteInventoryLotDto | null = null;
@@ -5462,6 +5524,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteProject = await processProjectQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROMO_ENTITY) {
       remotePromo = await processPromoQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === LOTTERY_ENTITY) {
+      remoteLottery = await processLotteryQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === FIXED_ASSET_ENTITY) {
       remoteFixedAsset = await processFixedAssetQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === FIXED_ASSET_DEPRECIATION_RUN_ENTITY) {
@@ -5574,6 +5638,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       // Local promo delete is a hard delete (no local deleted_at/soft-delete row), so unlike
       // contacts, do not merge the returned (soft-deleted) remote DTO back into Dexie here - that
       // would resurrect the row this device just removed. Just mark the queue item synced.
+      const syncedAt = new Date().toISOString();
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      return;
+    }
+
+    if (
+      currentQueueItem.entity === LOTTERY_ENTITY &&
+      currentQueueItem.operation === 'delete' &&
+      isRemoteLotteryDto(currentQueueItem.payload)
+    ) {
+      // Same reasoning as promo delete above: local lottery delete is a hard delete, so don't
+      // resurrect the row by merging the soft-deleted remote DTO back into Dexie.
       const syncedAt = new Date().toISOString();
       await markQueueItemSynced(currentQueueItem.id, syncedAt);
       return;
@@ -5778,6 +5854,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remotePromo.updated_at,
       });
       await mergeRemotePromosIntoDexie([remotePromo], syncedAt);
+      return;
+    }
+
+    if (remoteLottery && isRemoteLotteryDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateLotterySyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteLottery.updated_at,
+      });
+      await mergeRemoteLotteriesIntoDexie([remoteLottery], syncedAt);
       return;
     }
 
@@ -6788,6 +6876,52 @@ export const enqueuePendingPromosForSync = async () => {
 
     if (!existingQueueItem) {
       await enqueuePromoSync(promo, 'update');
+    }
+  }
+};
+
+export const enqueueLotterySync = async (
+  lottery: Lottery,
+  operation: SyncQueueOperation,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: LOTTERY_ENTITY,
+    entity_id: lottery.id,
+    operation,
+    payload: mapLotteryToRemoteDto(lottery),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueuePendingLotteriesForSync = async () => {
+  const lotteries = (await db.lotteries.toArray())
+    .filter((lottery) => lottery.sync_status === 'pending' || lottery.sync_status === 'failed');
+
+  const lotteryQueueItems = await db.syncQueue
+    .where('entity')
+    .equals(LOTTERY_ENTITY)
+    .toArray();
+
+  for (const lottery of lotteries) {
+    const existingQueueItem = lotteryQueueItems.find((queueItem) => (
+      queueItem.entity_id === lottery.id &&
+      queueItem.status !== 'synced' &&
+      isRemoteLotteryDto(queueItem.payload) &&
+      queueItem.payload.updated_at === lottery.updated_at
+    ));
+
+    if (!existingQueueItem) {
+      await enqueueLotterySync(lottery, 'update');
     }
   }
 };

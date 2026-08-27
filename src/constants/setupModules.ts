@@ -56,6 +56,7 @@ export const SETUP_MODULE_GROUPS: SetupModuleGroup[] = [
       { code: 'PRODUCTION', label: 'Produksi', description: 'Resep dan proses produksi barang' },
       { code: 'STOCK_OPNAME', label: 'Stock Opname', description: 'Perhitungan dan penyesuaian stok fisik' },
       { code: 'PROMO', label: 'Promo', description: 'Diskon & promosi' },
+      { code: 'LOTTERY', label: 'Undian', description: 'Pengaturan minimal/maksimal pembelian untuk undian' },
       { code: 'CONTACT', label: 'Contact', description: 'Pelanggan & supplier' },
       { code: 'WAREHOUSE', label: 'Warehouse', description: 'Gudang & lokasi stok' },
       { code: 'PAYMENT_METHOD', label: 'Metode Pembayaran', description: 'Master metode pembayaran dan mapping akun penerimaan' },

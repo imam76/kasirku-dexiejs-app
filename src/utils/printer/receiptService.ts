@@ -95,6 +95,7 @@ export const buildReceiptPayload = (
     subtotalAmount: transaction.subtotal_amount,
     discountAmount: transaction.discount_amount,
     discountBreakdown: transaction.discount_breakdown,
+    lotteryNumber: transaction.lottery_number,
     membershipPointsEarned: transaction.membership_points_earned,
     membershipPointsRedeemed: transaction.membership_points_redeemed,
     membershipPointDiscountAmount: transaction.membership_point_discount_amount,

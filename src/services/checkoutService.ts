@@ -6,6 +6,7 @@ import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
+import { evaluateLotteryForTransaction, getActiveLotteries } from '@/services/lotteryService';
 import { postPosExpenseJournal, postPosSaleJournal } from '@/services/generalLedgerService';
 import {
   buildPosPaymentSnapshot,
@@ -600,6 +601,7 @@ export const checkout = async ({
   const transactionNumber = `TRX-${Date.now()}`;
   const createdAt = now.toISOString();
   const activePromos = await getActivePromos(now);
+  const activeLotteries = await getActiveLotteries(now);
   let stockMutations: StockMutation[] = [];
   let touchedProductIds = new Set<string>();
   let financeTransactions: FinanceTransaction[] = [];
@@ -656,6 +658,12 @@ export const checkout = async ({
         setting: membershipSetting,
       });
       const finalTotal = membershipEvaluation.total_after_redeem;
+      const lotteryResult = evaluateLotteryForTransaction({
+        totalAmount: finalTotal,
+        lotteries: activeLotteries,
+        now,
+        cashierName: currentUser?.name,
+      });
       const resolvedPayments = await resolveCheckoutPayments(paymentInputs, finalTotal);
       const paymentRecords = buildPosTransactionPaymentRecords(transactionId, createdAt, resolvedPayments);
       const finalPayment = paymentRecords.reduce((sum, payment) => sum + payment.tendered_amount, 0);
@@ -703,6 +711,9 @@ export const checkout = async ({
         discount_amount: promoEvaluation.discount_amount + membershipEvaluation.redeem_amount,
         discount_breakdown: membershipEvaluation.discount_breakdown,
         applied_promos_snapshot: promoEvaluation.applied_promos_snapshot,
+        lottery_number: lotteryResult.lottery_number,
+        lottery_id: lotteryResult.lottery_id,
+        lottery_name: lotteryResult.lottery_name,
         total_amount: finalTotal,
         payment_amount: finalPayment,
         change_amount: change,

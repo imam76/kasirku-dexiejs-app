@@ -26,6 +26,7 @@ pub mod payment_method_commands;
 pub mod payroll_commands;
 pub mod pos_stock_discrepancy_commands;
 pub mod postgres_health;
+pub mod lottery_commands;
 pub mod product_commands;
 pub mod production_order_commands;
 pub mod project_commands;

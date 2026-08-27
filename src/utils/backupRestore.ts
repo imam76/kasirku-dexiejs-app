@@ -50,6 +50,7 @@ export const backupDatabase = async () => {
       profitLogs: await db.profitLogs.toArray(),
       profitBalance: await db.profitBalance.toArray(),
       promos: await db.promos.toArray(),
+      lotteries: await db.lotteries.toArray(),
       contacts: await db.contacts.toArray(),
       departments: await db.departments.toArray(),
       projects: await db.projects.toArray(),
@@ -171,6 +172,7 @@ export const restoreDatabase = async (file: File) => {
           db.profitLogs,
           db.profitBalance,
           db.promos,
+          db.lotteries,
           db.contacts,
           db.departments,
           db.projects,
@@ -248,6 +250,7 @@ export const restoreDatabase = async (file: File) => {
           await db.profitLogs.clear();
           await db.profitBalance.clear();
           await db.promos.clear();
+          await db.lotteries.clear();
           await db.contacts.clear();
           await db.departments.clear();
           await db.projects.clear();
@@ -331,6 +334,7 @@ export const restoreDatabase = async (file: File) => {
           if (data.profitLogs?.length) await db.profitLogs.bulkAdd(data.profitLogs);
           if (data.profitBalance?.length) await db.profitBalance.bulkAdd(data.profitBalance);
           if (data.promos?.length) await db.promos.bulkAdd(data.promos);
+          if (data.lotteries?.length) await db.lotteries.bulkAdd(data.lotteries);
           if (data.contacts?.length) await db.contacts.bulkAdd(data.contacts);
           if (data.departments?.length) await db.departments.bulkAdd(data.departments);
           if (data.projects?.length) await db.projects.bulkAdd(data.projects);

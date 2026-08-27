@@ -337,6 +337,11 @@ export const buildEscPosReceipt = (receipt: ReceiptPayload): Uint8Array => {
     push(...qrCode(transactionNumber, receipt.paperSize === '80mm' ? 6 : 5));
     push(new Uint8Array([LF]), text(`#${transactionNumber}`), text(''));
   }
+  if (receipt.lotteryNumber) {
+    push(line('-', paperWidth));
+    push(BOLD_ON, text('NOMOR UNDIAN'), BOLD_OFF);
+    push(text(receipt.lotteryNumber));
+  }
   push(text(receipt.footer ?? 'Terima kasih'), ALIGN_LEFT);
   push(new Uint8Array([LF, LF, LF]));
   push(CUT);

@@ -49,6 +49,7 @@ import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProductionOrdersFromPostgres } from '@/services/productionReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshPromosFromPostgres } from '@/services/promoReadService';
+import { refreshLotteriesFromPostgres } from '@/services/lotteryReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshPurchaseCostReconciliationsFromPostgres } from '@/services/purchaseCostReconciliationReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
@@ -317,6 +318,7 @@ export const REALTIME_TABLE_TO_ENTITY: Record<string, RealtimeEntityMapping> = {
   // Master data
   contacts: { refreshFns: [refreshContactsFromPostgres], queryKeys: ['contacts'] },
   promos: { refreshFns: [refreshPromosFromPostgres], queryKeys: noQueryKeys },
+  lotteries: { refreshFns: [refreshLotteriesFromPostgres], queryKeys: noQueryKeys },
   currencies: { refreshFns: [refreshCurrenciesFromPostgres], queryKeys: ['currencies'] },
   currency_rates: { refreshFns: [refreshCurrencyRatesFromPostgres], queryKeys: ['currencyRates'] },
   departments: { refreshFns: [refreshDepartmentsFromPostgres], queryKeys: ['departments'] },

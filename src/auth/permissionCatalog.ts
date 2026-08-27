@@ -97,6 +97,13 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     isSensitive: true,
   },
   {
+    code: 'LOTTERY_MANAGE',
+    label: 'Kelola Undian',
+    group: 'Data Master',
+    moduleCodes: ['LOTTERY'],
+    isSensitive: true,
+  },
+  {
     code: 'CONTACT_MANAGE',
     label: 'Kelola Contact',
     group: 'Data Master',

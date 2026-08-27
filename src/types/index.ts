@@ -238,6 +238,7 @@ export type Permission =
   | 'STOCK_OPNAME_MANAGE'
   | 'POS_STOCK_DISCREPANCY_REVIEW'
   | 'PROMO_MANAGE'
+  | 'LOTTERY_MANAGE'
   | 'CONTACT_MANAGE'
   | 'WAREHOUSE_MANAGE'
   | 'PAYMENT_METHOD_MANAGE'
@@ -484,6 +485,25 @@ export interface Promo {
   created_at: string;
   updated_at: string;
   sync_status?: PromoSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type LotterySyncStatus = EntitySyncStatus;
+
+export interface Lottery {
+  id: string;
+  name: string;
+  min_total: number;
+  max_total?: number | null;
+  start_at?: string | null;
+  end_at?: string | null;
+  active: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: LotterySyncStatus;
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;
@@ -2092,6 +2112,9 @@ export interface Transaction {
   discount_amount?: number;
   discount_breakdown?: Array<{ label: string; amount: number }>;
   applied_promos_snapshot?: AppliedPromoSnapshot[];
+  lottery_number?: string;
+  lottery_id?: string;
+  lottery_name?: string;
   total_amount: number;
   payment_amount: number;
   change_amount: number;
@@ -2658,6 +2681,7 @@ export interface ReceiptPayload {
   subtotalAmount?: number;
   discountAmount?: number;
   discountBreakdown?: Array<{ label: string; amount: number }>;
+  lotteryNumber?: string;
   membershipPointsEarned?: number;
   membershipPointsRedeemed?: number;
   membershipPointDiscountAmount?: number;

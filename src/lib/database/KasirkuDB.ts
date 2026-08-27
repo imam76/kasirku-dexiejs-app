@@ -20,6 +20,7 @@ import type {
   SyncQueueItem,
   SyncCursor,
   Promo,
+  Lottery,
   Contact,
   Department,
   Project,
@@ -141,6 +142,7 @@ export class KasirkuDB extends Dexie {
   syncQueue!: Table<SyncQueueItem>;
   syncCursors!: Table<SyncCursor>;
   promos!: Table<Promo>;
+  lotteries!: Table<Lottery>;
   contacts!: Table<Contact>;
   departments!: Table<Department>;
   projects!: Table<Project>;

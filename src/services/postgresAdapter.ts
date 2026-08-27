@@ -659,6 +659,20 @@ export interface RemotePromoDto {
   deleted_at?: string | null;
 }
 
+export interface RemoteLotteryDto {
+  id: string;
+  name: string;
+  min_total: number;
+  max_total?: number | null;
+  start_at?: string | null;
+  end_at?: string | null;
+  active: boolean;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
 export interface RemoteTransactionDto {
   id: string;
   transaction_number: string;
@@ -2743,6 +2757,32 @@ export const promoPostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemotePromoDto | null>('postgres_delete_promo', { id });
+  },
+};
+
+export const lotteryPostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteLotteryDto[]>('postgres_list_lotteries', {
+      updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
+      limit: options.limit,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteLotteryDto | null>('postgres_get_lottery', { id });
+  },
+
+  async upsert(input: RemoteLotteryDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteLotteryDto>('postgres_upsert_lottery', { input });
+  },
+
+  async delete(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteLotteryDto | null>('postgres_delete_lottery', { id });
   },
 };
 
