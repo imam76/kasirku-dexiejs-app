@@ -23,11 +23,11 @@ pub async fn list_contacts(
             is_member,
             membership_number,
             membership_status,
-            membership_joined_at::TEXT AS membership_joined_at,
+            membership_joined_at,
             membership_points_balance,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM contacts
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -58,11 +58,11 @@ pub async fn get_contact(pool: &PgPool, id: String) -> Result<Option<ContactDto>
             is_member,
             membership_number,
             membership_status,
-            membership_joined_at::TEXT AS membership_joined_at,
+            membership_joined_at,
             membership_points_balance,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM contacts
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -92,11 +92,11 @@ async fn get_contact_including_deleted(
             is_member,
             membership_number,
             membership_status,
-            membership_joined_at::TEXT AS membership_joined_at,
+            membership_joined_at,
             membership_points_balance,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM contacts
         WHERE id = $1
         "#,
@@ -163,11 +163,11 @@ pub async fn upsert_contact(pool: &PgPool, input: ContactDto) -> Result<ContactD
             is_member,
             membership_number,
             membership_status,
-            membership_joined_at::TEXT AS membership_joined_at,
+            membership_joined_at,
             membership_points_balance,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -223,11 +223,11 @@ pub async fn delete_contact(pool: &PgPool, id: String) -> Result<Option<ContactD
             is_member,
             membership_number,
             membership_status,
-            membership_joined_at::TEXT AS membership_joined_at,
+            membership_joined_at,
             membership_points_balance,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(id.clone())

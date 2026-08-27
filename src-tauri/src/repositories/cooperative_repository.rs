@@ -3,6 +3,7 @@ use crate::models::cooperative::{
     CooperativeLoanPaymentDto, CooperativeMemberCodeDto, CooperativeMemberDto,
     CooperativeMemberSavingBalanceDto, CooperativeSavingTransactionDto,
 };
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
 macro_rules! cooperative_area_select {
@@ -14,9 +15,9 @@ macro_rules! cooperative_area_select {
             code,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM cooperative_areas
         "#
     };
@@ -44,8 +45,8 @@ macro_rules! cooperative_member_select {
             join_date,
             status,
             notes,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
+            created_at,
+            updated_at,
             created_by,
             created_by_name,
             updated_by,
@@ -61,8 +62,8 @@ macro_rules! cooperative_member_code_select {
         SELECT
             id,
             code,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM cooperative_member_codes
         "#
     };
@@ -99,8 +100,8 @@ macro_rules! cooperative_saving_transaction_select {
             reversed_at,
             reversal_reason,
             notes,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
+            created_at,
+            updated_at,
             created_by,
             created_by_name,
             updated_by,
@@ -120,7 +121,7 @@ macro_rules! cooperative_member_saving_balance_select {
             member_name,
             saving_type,
             balance,
-            updated_at::TEXT AS updated_at
+            updated_at
         FROM cooperative_member_saving_balances
         "#
     };
@@ -188,13 +189,13 @@ macro_rules! cooperative_loan_select {
             disbursement_notes,
             notes,
             is_migration,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
+            created_at,
+            updated_at,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            deleted_at::TEXT AS deleted_at
+            deleted_at
         FROM cooperative_loans
         "#
     };
@@ -224,9 +225,9 @@ macro_rules! cooperative_loan_installment_select {
             follow_up_date,
             collection_notes,
             last_contacted_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM cooperative_loan_installments
         "#
     };
@@ -265,7 +266,7 @@ macro_rules! cooperative_loan_payment_select {
             collector_position,
             received_by,
             received_by_name,
-            posted_at::TEXT AS posted_at,
+            posted_at,
             finance_transaction_id,
             journal_entry_id,
             reversal_of_payment_id,
@@ -275,8 +276,8 @@ macro_rules! cooperative_loan_payment_select {
             reversed_at,
             reversal_reason,
             notes,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
+            created_at,
+            updated_at,
             created_by,
             created_by_name,
             updated_by,
@@ -317,8 +318,8 @@ fn cooperative_member_code_id(value: &str) -> String {
 
 fn build_cooperative_member_code(
     code: &str,
-    created_at: &str,
-    updated_at: &str,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
 ) -> Option<CooperativeMemberCodeDto> {
     let normalized_code = normalize_cooperative_member_code(code);
     if normalized_code.is_empty() {
@@ -328,8 +329,8 @@ fn build_cooperative_member_code(
     Some(CooperativeMemberCodeDto {
         id: cooperative_member_code_id(&normalized_code),
         code: normalized_code,
-        created_at: created_at.to_string(),
-        updated_at: updated_at.to_string(),
+        created_at,
+        updated_at,
     })
 }
 
@@ -385,8 +386,8 @@ pub async fn upsert_cooperative_member_code(
         RETURNING
             id,
             code,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(id)
@@ -460,9 +461,9 @@ pub async fn upsert_cooperative_area(
             code,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(&input.id)
@@ -592,8 +593,8 @@ pub async fn upsert_cooperative_member(
             join_date,
             status,
             notes,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
+            created_at,
+            updated_at,
             created_by,
             created_by_name,
             updated_by,
@@ -636,8 +637,8 @@ pub async fn upsert_cooperative_member(
 
     if let Some(member_code) = build_cooperative_member_code(
         &member.member_number,
-        &member.created_at,
-        &member.updated_at,
+        member.created_at,
+        member.updated_at,
     ) {
         let _ = upsert_cooperative_member_code(pool, member_code).await?;
     }
@@ -815,8 +816,8 @@ pub async fn upsert_cooperative_saving_transaction(
             reversed_at,
             reversal_reason,
             notes,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
+            created_at,
+            updated_at,
             created_by,
             created_by_name,
             updated_by,
@@ -940,7 +941,7 @@ pub async fn upsert_cooperative_member_saving_balance(
             member_name,
             saving_type,
             balance,
-            updated_at::TEXT AS updated_at
+            updated_at
         "#,
     )
     .bind(input.id)
@@ -1372,13 +1373,13 @@ pub async fn upsert_cooperative_loan(
             disbursement_notes,
             notes,
             is_migration,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
+            created_at,
+            updated_at,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            deleted_at::TEXT AS deleted_at
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -1593,9 +1594,9 @@ pub async fn upsert_cooperative_loan_installment(
             follow_up_date,
             collection_notes,
             last_contacted_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -1843,7 +1844,7 @@ pub async fn upsert_cooperative_loan_payment(
             collector_position,
             received_by,
             received_by_name,
-            posted_at::TEXT AS posted_at,
+            posted_at,
             finance_transaction_id,
             journal_entry_id,
             reversal_of_payment_id,
@@ -1853,8 +1854,8 @@ pub async fn upsert_cooperative_loan_payment(
             reversed_at,
             reversal_reason,
             notes,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
+            created_at,
+            updated_at,
             created_by,
             created_by_name,
             updated_by,

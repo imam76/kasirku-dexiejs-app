@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -16,10 +17,10 @@ pub struct ContactDto {
     pub is_member: bool,
     pub membership_number: Option<String>,
     pub membership_status: Option<String>,
-    pub membership_joined_at: Option<String>,
+    pub membership_joined_at: Option<DateTime<Utc>>,
     #[serde(default)]
     pub membership_points_balance: f64,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }

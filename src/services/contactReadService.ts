@@ -8,6 +8,7 @@ import {
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { Contact, ContactType, RetailMembershipStatus } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface ContactReadSyncResult {
   fetched: number;
@@ -97,14 +98,14 @@ const mapRemoteContactToLocal = (
       : isRetailMembershipStatus(remoteContact.membership_status)
         ? remoteContact.membership_status
         : undefined,
-    membership_joined_at: keepLocalMembership ? localContact?.membership_joined_at : remoteContact.membership_joined_at ?? undefined,
+    membership_joined_at: keepLocalMembership ? localContact?.membership_joined_at : toCanonicalOptionalIsoTimestamp(remoteContact.membership_joined_at),
     membership_points_balance: keepLocalMembership ? localContact?.membership_points_balance : Number(remoteContact.membership_points_balance ?? 0),
-    created_at: remoteContact.created_at,
-    updated_at: remoteContact.updated_at,
+    created_at: toCanonicalIsoTimestamp(remoteContact.created_at),
+    updated_at: toCanonicalIsoTimestamp(remoteContact.updated_at),
     sync_status: keepLocalMembership ? 'pending' : 'synced',
     sync_error: undefined,
     last_synced_at: syncedAt,
-    remote_updated_at: remoteContact.updated_at,
+    remote_updated_at: toCanonicalIsoTimestamp(remoteContact.updated_at),
   };
 };
 

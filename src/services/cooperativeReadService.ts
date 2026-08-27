@@ -19,6 +19,7 @@ import {
 } from '@/services/postgresAdapter';
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 import type {
   CooperativeLoan,
   CooperativeLoanInstallment,
@@ -134,8 +135,8 @@ const mapRemoteCooperativeMemberToLocal = (
   join_date: remoteMember.join_date,
   status: remoteMember.status,
   notes: optionalString(remoteMember.notes),
-  created_at: remoteMember.created_at,
-  updated_at: remoteMember.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteMember.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteMember.updated_at),
   created_by: optionalString(remoteMember.created_by),
   created_by_name: optionalString(remoteMember.created_by_name),
   updated_by: optionalString(remoteMember.updated_by),
@@ -143,7 +144,7 @@ const mapRemoteCooperativeMemberToLocal = (
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteMember.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteMember.updated_at),
 });
 
 const mapRemoteCooperativeMemberCodeToLocal = (
@@ -151,8 +152,8 @@ const mapRemoteCooperativeMemberCodeToLocal = (
 ): CooperativeMemberCode => ({
   id: getMemberCodeId(remoteMemberCode.code),
   code: normalizeMemberCode(remoteMemberCode.code),
-  created_at: remoteMemberCode.created_at,
-  updated_at: remoteMemberCode.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteMemberCode.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteMemberCode.updated_at),
 });
 
 const buildMemberCodeFromMember = (
@@ -200,8 +201,8 @@ const mapRemoteCooperativeSavingTransactionToLocal = (
   reversed_at: optionalString(remoteTransaction.reversed_at),
   reversal_reason: optionalString(remoteTransaction.reversal_reason),
   notes: optionalString(remoteTransaction.notes),
-  created_at: remoteTransaction.created_at,
-  updated_at: remoteTransaction.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteTransaction.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteTransaction.updated_at),
   created_by: optionalString(remoteTransaction.created_by),
   created_by_name: optionalString(remoteTransaction.created_by_name),
   updated_by: optionalString(remoteTransaction.updated_by),
@@ -209,7 +210,7 @@ const mapRemoteCooperativeSavingTransactionToLocal = (
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteTransaction.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteTransaction.updated_at),
 });
 
 const mapRemoteCooperativeMemberSavingBalanceToLocal = (
@@ -222,11 +223,11 @@ const mapRemoteCooperativeMemberSavingBalanceToLocal = (
   member_name: remoteBalance.member_name,
   saving_type: remoteBalance.saving_type,
   balance: remoteBalance.balance,
-  updated_at: remoteBalance.updated_at,
+  updated_at: toCanonicalIsoTimestamp(remoteBalance.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteBalance.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteBalance.updated_at),
 });
 
 const mapRemoteCooperativeLoanToLocal = (
@@ -292,8 +293,8 @@ const mapRemoteCooperativeLoanToLocal = (
   disbursement_notes: optionalString(remoteLoan.disbursement_notes),
   notes: optionalString(remoteLoan.notes),
   is_migration: remoteLoan.is_migration ? true : undefined,
-  created_at: remoteLoan.created_at,
-  updated_at: remoteLoan.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteLoan.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteLoan.updated_at),
   created_by: optionalString(remoteLoan.created_by),
   created_by_name: optionalString(remoteLoan.created_by_name),
   updated_by: optionalString(remoteLoan.updated_by),
@@ -301,7 +302,7 @@ const mapRemoteCooperativeLoanToLocal = (
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteLoan.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteLoan.updated_at),
 });
 
 const mapRemoteCooperativeLoanInstallmentToLocal = (
@@ -328,12 +329,12 @@ const mapRemoteCooperativeLoanInstallmentToLocal = (
   follow_up_date: optionalString(remoteInstallment.follow_up_date),
   collection_notes: optionalString(remoteInstallment.collection_notes),
   last_contacted_at: optionalString(remoteInstallment.last_contacted_at),
-  created_at: remoteInstallment.created_at,
-  updated_at: remoteInstallment.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteInstallment.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteInstallment.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteInstallment.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteInstallment.updated_at),
 });
 
 const mapRemoteCooperativeLoanPaymentToLocal = (
@@ -369,7 +370,7 @@ const mapRemoteCooperativeLoanPaymentToLocal = (
   collector_position: optionalString(remotePayment.collector_position),
   received_by: optionalString(remotePayment.received_by),
   received_by_name: optionalString(remotePayment.received_by_name),
-  posted_at: optionalString(remotePayment.posted_at),
+  posted_at: toCanonicalOptionalIsoTimestamp(remotePayment.posted_at),
   finance_transaction_id: optionalString(remotePayment.finance_transaction_id),
   journal_entry_id: optionalString(remotePayment.journal_entry_id),
   reversal_of_payment_id: optionalString(remotePayment.reversal_of_payment_id),
@@ -379,8 +380,8 @@ const mapRemoteCooperativeLoanPaymentToLocal = (
   reversed_at: optionalString(remotePayment.reversed_at),
   reversal_reason: optionalString(remotePayment.reversal_reason),
   notes: optionalString(remotePayment.notes),
-  created_at: remotePayment.created_at,
-  updated_at: remotePayment.updated_at,
+  created_at: toCanonicalIsoTimestamp(remotePayment.created_at),
+  updated_at: toCanonicalIsoTimestamp(remotePayment.updated_at),
   created_by: optionalString(remotePayment.created_by),
   created_by_name: optionalString(remotePayment.created_by_name),
   updated_by: optionalString(remotePayment.updated_by),
@@ -389,7 +390,7 @@ const mapRemoteCooperativeLoanPaymentToLocal = (
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remotePayment.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remotePayment.updated_at),
 });
 
 export const mergeRemoteCooperativeMembersIntoDexie = async (

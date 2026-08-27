@@ -8,6 +8,7 @@ import {
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { CooperativeArea } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 const COOPERATIVE_AREA_REFRESH_LIMIT = 500;
 
@@ -80,12 +81,12 @@ const mapRemoteAreaToLocal = (
   code: optionalString(remoteArea.code),
   description: optionalString(remoteArea.description),
   is_active: remoteArea.deleted_at ? false : remoteArea.is_active,
-  created_at: remoteArea.created_at,
-  updated_at: remoteArea.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteArea.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteArea.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteArea.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteArea.updated_at),
 });
 
 const mapLocalAreaToRemote = (area: CooperativeArea): RemoteCooperativeAreaDto => ({

@@ -1,6 +1,7 @@
 use crate::models::{
     finance_transaction::FinanceTransactionDto, journal_entry::JournalEntryBundleDto,
 };
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -10,9 +11,9 @@ pub struct CooperativeAreaDto {
     pub code: Option<String>,
     pub description: Option<String>,
     pub is_active: bool,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -41,8 +42,8 @@ pub struct CooperativeMemberDto {
     pub join_date: String,
     pub status: String,
     pub notes: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
@@ -53,8 +54,8 @@ pub struct CooperativeMemberDto {
 pub struct CooperativeMemberCodeDto {
     pub id: String,
     pub code: String,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -86,8 +87,8 @@ pub struct CooperativeSavingTransactionDto {
     pub reversed_at: Option<String>,
     pub reversal_reason: Option<String>,
     pub notes: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
@@ -102,7 +103,7 @@ pub struct CooperativeMemberSavingBalanceDto {
     pub member_name: String,
     pub saving_type: String,
     pub balance: f64,
-    pub updated_at: String,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -165,13 +166,13 @@ pub struct CooperativeLoanDto {
     pub disbursement_notes: Option<String>,
     pub notes: Option<String>,
     pub is_migration: Option<bool>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
     pub updated_by_name: Option<String>,
-    pub deleted_at: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -196,9 +197,9 @@ pub struct CooperativeLoanInstallmentDto {
     pub follow_up_date: Option<String>,
     pub collection_notes: Option<String>,
     pub last_contacted_at: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -232,7 +233,7 @@ pub struct CooperativeLoanPaymentDto {
     pub collector_position: Option<String>,
     pub received_by: Option<String>,
     pub received_by_name: Option<String>,
-    pub posted_at: Option<String>,
+    pub posted_at: Option<DateTime<Utc>>,
     pub finance_transaction_id: Option<String>,
     pub journal_entry_id: Option<String>,
     pub reversal_of_payment_id: Option<String>,
@@ -242,8 +243,8 @@ pub struct CooperativeLoanPaymentDto {
     pub reversed_at: Option<String>,
     pub reversal_reason: Option<String>,
     pub notes: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,

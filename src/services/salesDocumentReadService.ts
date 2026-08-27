@@ -9,6 +9,7 @@ import {
 } from '@/services/postgresAdapter';
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 import type {
   AccountType,
   PaymentMethod,
@@ -179,20 +180,20 @@ const mapRemoteSalesDocumentToLocal = (
   cash_account_name: optionalString(remoteDocument.cash_account_name),
   finance_transaction_id: optionalString(remoteDocument.finance_transaction_id),
   notes: optionalString(remoteDocument.notes),
-  issued_at: optionalString(remoteDocument.issued_at),
-  voided_at: optionalString(remoteDocument.voided_at),
+  issued_at: toCanonicalOptionalIsoTimestamp(remoteDocument.issued_at),
+  voided_at: toCanonicalOptionalIsoTimestamp(remoteDocument.voided_at),
   void_reason: optionalString(remoteDocument.void_reason),
   version: toPositiveVersion(remoteDocument.version),
   created_by: optionalString(remoteDocument.created_by),
   created_by_name: optionalString(remoteDocument.created_by_name),
   updated_by: optionalString(remoteDocument.updated_by),
   updated_by_name: optionalString(remoteDocument.updated_by_name),
-  created_at: remoteDocument.created_at,
-  updated_at: remoteDocument.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteDocument.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteDocument.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteDocument.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteDocument.updated_at),
 });
 
 const mapRemoteSalesDocumentItemToLocal = (
@@ -242,9 +243,9 @@ const mapRemoteSalesDocumentItemToLocal = (
   original_price: optionalNumber(remoteItem.original_price),
   is_price_edited: optionalBoolean(remoteItem.is_price_edited),
   price_edited_by: optionalString(remoteItem.price_edited_by),
-  price_edited_at: optionalString(remoteItem.price_edited_at),
+  price_edited_at: toCanonicalOptionalIsoTimestamp(remoteItem.price_edited_at),
   sort_order: optionalNumber(remoteItem.sort_order),
-  created_at: remoteItem.created_at,
+  created_at: toCanonicalIsoTimestamp(remoteItem.created_at),
 });
 
 const hasLocalUnsyncedChanges = (document: SalesDocument) => (

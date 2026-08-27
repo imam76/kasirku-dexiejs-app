@@ -86,16 +86,16 @@ macro_rules! purchase_document_select {
             cost_finalized_at,
             cost_finalized_by,
             cost_finalized_by_name,
-            issued_at::TEXT AS issued_at,
-            voided_at::TEXT AS voided_at,
+            issued_at,
+            voided_at,
             void_reason,
             version,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM purchase_documents
         "#
     };
@@ -156,7 +156,7 @@ macro_rules! purchase_document_item_select {
             cost_finalized_at,
             cost_variance_amount,
             sort_order,
-            created_at::TEXT AS created_at
+            created_at
         FROM purchase_document_items
         "#
     };
@@ -594,16 +594,16 @@ async fn upsert_purchase_document(
             cost_finalized_at,
             cost_finalized_by,
             cost_finalized_by_name,
-            issued_at::TEXT AS issued_at,
-            voided_at::TEXT AS voided_at,
+            issued_at,
+            voided_at,
             void_reason,
             version,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
+            created_at,
+            updated_at,
             currency_code,
             currency_name,
             currency_symbol,

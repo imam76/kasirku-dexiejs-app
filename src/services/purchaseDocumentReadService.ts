@@ -8,6 +8,7 @@ import {
 } from '@/services/postgresAdapter';
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 import type {
   AccountType,
   PaymentMethod,
@@ -191,20 +192,20 @@ const mapRemotePurchaseDocumentToLocal = (
   cost_finalized_at: optionalString(remoteDocument.cost_finalized_at),
   cost_finalized_by: optionalString(remoteDocument.cost_finalized_by),
   cost_finalized_by_name: optionalString(remoteDocument.cost_finalized_by_name),
-  issued_at: optionalString(remoteDocument.issued_at),
-  voided_at: optionalString(remoteDocument.voided_at),
+  issued_at: toCanonicalOptionalIsoTimestamp(remoteDocument.issued_at),
+  voided_at: toCanonicalOptionalIsoTimestamp(remoteDocument.voided_at),
   void_reason: optionalString(remoteDocument.void_reason),
   version: toPositiveVersion(remoteDocument.version),
   created_by: optionalString(remoteDocument.created_by),
   created_by_name: optionalString(remoteDocument.created_by_name),
   updated_by: optionalString(remoteDocument.updated_by),
   updated_by_name: optionalString(remoteDocument.updated_by_name),
-  created_at: remoteDocument.created_at,
-  updated_at: remoteDocument.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteDocument.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteDocument.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteDocument.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteDocument.updated_at),
 });
 
 const mapRemotePurchaseDocumentItemToLocal = (
@@ -263,7 +264,7 @@ const mapRemotePurchaseDocumentItemToLocal = (
   cost_finalized_at: optionalString(remoteItem.cost_finalized_at),
   cost_variance_amount: optionalNumber(remoteItem.cost_variance_amount),
   sort_order: optionalNumber(remoteItem.sort_order),
-  created_at: remoteItem.created_at,
+  created_at: toCanonicalIsoTimestamp(remoteItem.created_at),
 });
 
 const hasLocalUnsyncedChanges = (document: PurchaseDocument) => (
