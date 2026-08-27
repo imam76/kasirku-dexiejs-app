@@ -4,6 +4,7 @@ import {
   type RemoteCooperativeLoanCollectionEventDto,
 } from '@/services/postgresAdapter';
 import type { CooperativeLoanCollectionEvent } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 const optionalString = (value: string | null | undefined) => value ?? undefined;
 
@@ -19,17 +20,17 @@ export const mapRemoteCooperativeCollectionEventToLocal = (
   member_number: remoteEvent.member_number,
   member_name: remoteEvent.member_name,
   collection_status: remoteEvent.collection_status,
-  follow_up_date: optionalString(remoteEvent.follow_up_date),
+  follow_up_date: toCanonicalOptionalIsoTimestamp(remoteEvent.follow_up_date),
   collection_notes: remoteEvent.collection_notes,
-  contacted_at: remoteEvent.contacted_at,
+  contacted_at: toCanonicalIsoTimestamp(remoteEvent.contacted_at),
   actor_user_id: optionalString(remoteEvent.actor_user_id),
   actor_user_name: optionalString(remoteEvent.actor_user_name),
   actor_employee_id: optionalString(remoteEvent.actor_employee_id),
-  created_at: remoteEvent.created_at,
+  created_at: toCanonicalIsoTimestamp(remoteEvent.created_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteEvent.created_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteEvent.created_at),
 });
 
 export const mergeRemoteCooperativeCollectionEventsIntoDexie = async (

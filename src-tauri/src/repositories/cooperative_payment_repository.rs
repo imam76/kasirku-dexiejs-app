@@ -121,7 +121,7 @@ macro_rules! cooperative_payment_approval_select {
           installment_id,
           idempotency_key,
           amount,
-          payment_date::TEXT AS payment_date,
+          payment_date,
           payment_method,
           cash_account_id,
           payment_channel,
@@ -129,14 +129,14 @@ macro_rules! cooperative_payment_approval_select {
           maker_reason,
           maker_user_id,
           maker_user_name,
-          requested_at::TEXT AS requested_at,
+          requested_at,
           checker_user_id,
           checker_user_name,
           checker_notes,
-          decided_at::TEXT AS decided_at,
+          decided_at,
           result_payment_id,
-          created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at
+          created_at,
+          updated_at
         FROM cooperative_payment_approval_requests
         "#
     };
@@ -575,9 +575,9 @@ async fn get_locked_installment(
           follow_up_date,
           collection_notes,
           last_contacted_at,
-          created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at,
-          deleted_at::TEXT AS deleted_at
+          created_at,
+          updated_at,
+          deleted_at
         FROM cooperative_loan_installments
         WHERE id = $1
           AND deleted_at IS NULL
@@ -619,9 +619,9 @@ async fn get_locked_payable_installments_for_loan(
           follow_up_date,
           collection_notes,
           last_contacted_at,
-          created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at,
-          deleted_at::TEXT AS deleted_at
+          created_at,
+          updated_at,
+          deleted_at
         FROM cooperative_loan_installments
         WHERE loan_id = $1
           AND status <> 'PAID'
@@ -682,11 +682,11 @@ async fn get_locked_payment(
           interest_amount, penalty_amount, payment_date, status, cash_account_id,
           cash_account_code, cash_account_name, payment_method, payment_channel,
           collector_id, collector_name, collector_position, received_by,
-          received_by_name, posted_at::TEXT AS posted_at, finance_transaction_id,
+          received_by_name, posted_at, finance_transaction_id,
           journal_entry_id, reversal_of_payment_id, reversal_payment_id,
           reversal_finance_transaction_id, reversal_journal_entry_id, reversed_at,
-          reversal_reason, notes, created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at, created_by, created_by_name, updated_by,
+          reversal_reason, notes, created_at,
+          updated_at, created_by, created_by_name, updated_by,
           updated_by_name, idempotency_key
         FROM cooperative_loan_payments
         WHERE id = $1
@@ -716,7 +716,7 @@ async fn get_posting_account_by_id(
           is_postable,
           is_active,
           is_cash_or_bank,
-          updated_at::TEXT AS updated_at
+          updated_at
         FROM cooperative_posting_accounts
         WHERE id = $1
         FOR SHARE
@@ -760,7 +760,7 @@ async fn get_posting_account_by_key(
           is_postable,
           is_active,
           is_cash_or_bank,
-          updated_at::TEXT AS updated_at
+          updated_at
         FROM cooperative_posting_accounts
         WHERE account_key = $1
         FOR SHARE
@@ -1205,11 +1205,11 @@ async fn post_loan_payment_batch_internal(
           interest_amount, penalty_amount, payment_date, status, cash_account_id,
           cash_account_code, cash_account_name, payment_method, payment_channel,
           collector_id, collector_name, collector_position, received_by,
-          received_by_name, posted_at::TEXT AS posted_at, finance_transaction_id,
+          received_by_name, posted_at, finance_transaction_id,
           journal_entry_id, reversal_of_payment_id, reversal_payment_id,
           reversal_finance_transaction_id, reversal_journal_entry_id, reversed_at,
-          reversal_reason, notes, created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at, created_by, created_by_name, updated_by,
+          reversal_reason, notes, created_at,
+          updated_at, created_by, created_by_name, updated_by,
           updated_by_name, idempotency_key
         FROM cooperative_loan_payments
         WHERE payment_group_id = $1
@@ -1275,11 +1275,11 @@ async fn post_loan_payment_batch_internal(
           interest_amount, penalty_amount, payment_date, status, cash_account_id,
           cash_account_code, cash_account_name, payment_method, payment_channel,
           collector_id, collector_name, collector_position, received_by,
-          received_by_name, posted_at::TEXT AS posted_at, finance_transaction_id,
+          received_by_name, posted_at, finance_transaction_id,
           journal_entry_id, reversal_of_payment_id, reversal_payment_id,
           reversal_finance_transaction_id, reversal_journal_entry_id, reversed_at,
-          reversal_reason, notes, created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at, created_by, created_by_name, updated_by,
+          reversal_reason, notes, created_at,
+          updated_at, created_by, created_by_name, updated_by,
           updated_by_name, idempotency_key
         FROM cooperative_loan_payments
         WHERE idempotency_key = $1
@@ -1974,11 +1974,11 @@ async fn post_loan_payment_internal(
           interest_amount, penalty_amount, payment_date, status, cash_account_id,
           cash_account_code, cash_account_name, payment_method, payment_channel,
           collector_id, collector_name, collector_position, received_by,
-          received_by_name, posted_at::TEXT AS posted_at, finance_transaction_id,
+          received_by_name, posted_at, finance_transaction_id,
           journal_entry_id, reversal_of_payment_id, reversal_payment_id,
           reversal_finance_transaction_id, reversal_journal_entry_id, reversed_at,
-          reversal_reason, notes, created_at::TEXT AS created_at,
-          updated_at::TEXT AS updated_at, created_by, created_by_name, updated_by,
+          reversal_reason, notes, created_at,
+          updated_at, created_by, created_by_name, updated_by,
           updated_by_name, idempotency_key
         FROM cooperative_loan_payments
         WHERE idempotency_key = $1
@@ -2853,11 +2853,14 @@ pub async fn approve_payment_request(
                     "Request backdate tidak memiliki nominal.".to_string(),
                 )
             })?,
-            payment_date: request.payment_date.clone().ok_or_else(|| {
-                CooperativeMutationError::Invalid(
-                    "Request backdate tidak memiliki tanggal.".to_string(),
-                )
-            })?,
+            payment_date: request
+                .payment_date
+                .map(|payment_date| payment_date.to_rfc3339())
+                .ok_or_else(|| {
+                    CooperativeMutationError::Invalid(
+                        "Request backdate tidak memiliki tanggal.".to_string(),
+                    )
+                })?,
             payment_method: request.payment_method.clone().ok_or_else(|| {
                 CooperativeMutationError::Invalid(
                     "Request backdate tidak memiliki metode pembayaran.".to_string(),
@@ -3574,13 +3577,13 @@ pub async fn list_collection_events(
           member_number,
           member_name,
           collection_status,
-          follow_up_date::TEXT AS follow_up_date,
+          follow_up_date,
           collection_notes,
-          contacted_at::TEXT AS contacted_at,
+          contacted_at,
           actor_user_id,
           actor_user_name,
           actor_employee_id,
-          created_at::TEXT AS created_at
+          created_at
         FROM cooperative_loan_collection_events
         ORDER BY contacted_at DESC, created_at DESC
         "#,
@@ -3635,9 +3638,9 @@ pub async fn record_collection_event(
         r#"
         SELECT
           id, installment_id, loan_id, loan_number, member_id, member_number,
-          member_name, collection_status, follow_up_date::TEXT AS follow_up_date,
-          collection_notes, contacted_at::TEXT AS contacted_at, actor_user_id,
-          actor_user_name, actor_employee_id, created_at::TEXT AS created_at
+          member_name, collection_status, follow_up_date,
+          collection_notes, contacted_at, actor_user_id,
+          actor_user_name, actor_employee_id, created_at
         FROM cooperative_loan_collection_events
         WHERE id = $1
         "#,
@@ -3776,9 +3779,9 @@ pub async fn record_collection_event(
         r#"
         SELECT
           id, installment_id, loan_id, loan_number, member_id, member_number,
-          member_name, collection_status, follow_up_date::TEXT AS follow_up_date,
-          collection_notes, contacted_at::TEXT AS contacted_at, actor_user_id,
-          actor_user_name, actor_employee_id, created_at::TEXT AS created_at
+          member_name, collection_status, follow_up_date,
+          collection_notes, contacted_at, actor_user_id,
+          actor_user_name, actor_employee_id, created_at
         FROM cooperative_loan_collection_events
         WHERE id = $1
         "#,

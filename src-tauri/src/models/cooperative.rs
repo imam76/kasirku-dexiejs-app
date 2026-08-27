@@ -262,7 +262,7 @@ pub struct CooperativePostingAccountDto {
     pub is_postable: bool,
     pub is_active: bool,
     pub is_cash_or_bank: bool,
-    pub updated_at: String,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -314,7 +314,7 @@ pub struct CooperativePaymentApprovalRequestDto {
     pub installment_id: Option<String>,
     pub idempotency_key: Option<String>,
     pub amount: Option<f64>,
-    pub payment_date: Option<String>,
+    pub payment_date: Option<DateTime<Utc>>,
     pub payment_method: Option<String>,
     pub cash_account_id: Option<String>,
     pub payment_channel: Option<String>,
@@ -322,14 +322,14 @@ pub struct CooperativePaymentApprovalRequestDto {
     pub maker_reason: String,
     pub maker_user_id: String,
     pub maker_user_name: String,
-    pub requested_at: String,
+    pub requested_at: DateTime<Utc>,
     pub checker_user_id: Option<String>,
     pub checker_user_name: Option<String>,
     pub checker_notes: Option<String>,
-    pub decided_at: Option<String>,
+    pub decided_at: Option<DateTime<Utc>>,
     pub result_payment_id: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -393,13 +393,13 @@ pub struct CooperativeLoanCollectionEventDto {
     pub member_number: String,
     pub member_name: String,
     pub collection_status: String,
-    pub follow_up_date: Option<String>,
+    pub follow_up_date: Option<DateTime<Utc>>,
     pub collection_notes: String,
-    pub contacted_at: String,
+    pub contacted_at: DateTime<Utc>,
     pub actor_user_id: Option<String>,
     pub actor_user_name: Option<String>,
     pub actor_employee_id: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
