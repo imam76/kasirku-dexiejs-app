@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -9,8 +10,8 @@ pub struct LeaveTypeWriteDto {
     pub requires_balance: bool,
     pub annual_quota_days: f64,
     pub is_active: bool,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -20,8 +21,8 @@ pub struct WorkScheduleTemplateWriteDto {
     pub name: String,
     pub timezone: String,
     pub is_active: bool,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -32,8 +33,8 @@ pub struct WorkScheduleDayWriteDto {
     pub is_working_day: bool,
     pub start_time: Option<String>,
     pub end_time: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -44,8 +45,8 @@ pub struct EmployeeWorkScheduleAssignmentWriteDto {
     pub template_name: String,
     pub effective_from: String,
     pub effective_until: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -54,8 +55,8 @@ pub struct CompanyCalendarDayWriteDto {
     pub date: String,
     pub kind: String,
     pub name: String,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,14 +104,14 @@ pub struct LeaveRequestWriteDto {
     pub status: String,
     pub supervisor_id: Option<String>,
     pub supervisor_name: Option<String>,
-    pub submitted_at: Option<String>,
-    pub supervisor_decided_at: Option<String>,
-    pub hr_decided_at: Option<String>,
+    pub submitted_at: Option<DateTime<Utc>>,
+    pub supervisor_decided_at: Option<DateTime<Utc>>,
+    pub hr_decided_at: Option<DateTime<Utc>>,
     pub decided_by: Option<String>,
     pub decided_by_name: Option<String>,
     pub decision_notes: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -121,7 +122,7 @@ pub struct LeaveRequestActionWriteDto {
     pub actor_user_id: Option<String>,
     pub actor_name: Option<String>,
     pub notes: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -136,7 +137,7 @@ pub struct LeaveBalanceLedgerWriteDto {
     pub used_delta: f64,
     pub leave_request_id: Option<String>,
     pub notes: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
 }
@@ -149,8 +150,8 @@ pub struct EmployeeAvailabilityWriteDto {
     pub source_type: String,
     pub source_id: String,
     pub reason: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -169,11 +170,11 @@ pub struct CollectionCoverageWriteDto {
     pub replacement_employee_name: Option<String>,
     pub rescheduled_date: Option<String>,
     pub reason: Option<String>,
-    pub resolved_at: Option<String>,
+    pub resolved_at: Option<DateTime<Utc>>,
     pub resolved_by: Option<String>,
     pub resolved_by_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

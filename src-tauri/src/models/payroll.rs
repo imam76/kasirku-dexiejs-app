@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 fn default_payroll_period() -> String {
@@ -34,15 +35,15 @@ pub struct PayrollRunDto {
     pub cash_account_name: Option<String>,
     pub finance_transaction_id: Option<String>,
     pub notes: Option<String>,
-    pub approved_at: Option<String>,
-    pub paid_at: Option<String>,
-    pub voided_at: Option<String>,
+    pub approved_at: Option<DateTime<Utc>>,
+    pub paid_at: Option<DateTime<Utc>>,
+    pub voided_at: Option<DateTime<Utc>>,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
     pub updated_by_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -68,8 +69,8 @@ pub struct PayrollRunItemDto {
     pub gross_amount: f64,
     pub net_amount: f64,
     pub notes: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -82,7 +83,7 @@ pub struct EmployeeCashAdvanceDto {
     pub amount: f64,
     pub outstanding_amount: f64,
     pub status: String,
-    pub disbursed_at: String,
+    pub disbursed_at: DateTime<Utc>,
     pub payment_method: Option<String>,
     pub payment_channel: Option<String>,
     pub cash_account_id: Option<String>,
@@ -90,14 +91,14 @@ pub struct EmployeeCashAdvanceDto {
     pub cash_account_name: Option<String>,
     pub finance_transaction_id: Option<String>,
     pub notes: Option<String>,
-    pub voided_at: Option<String>,
+    pub voided_at: Option<DateTime<Utc>>,
     pub void_reason: Option<String>,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
     pub updated_by_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -112,11 +113,11 @@ pub struct EmployeeCashAdvanceRepaymentDto {
     pub employee_name: String,
     pub amount: f64,
     pub status: String,
-    pub allocated_at: String,
-    pub posted_at: Option<String>,
-    pub voided_at: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub allocated_at: DateTime<Utc>,
+    pub posted_at: Option<DateTime<Utc>>,
+    pub voided_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

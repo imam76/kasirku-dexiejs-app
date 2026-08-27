@@ -31,15 +31,15 @@ macro_rules! payroll_run_select {
             cash_account_name,
             finance_transaction_id,
             notes,
-            approved_at::TEXT AS approved_at,
-            paid_at::TEXT AS paid_at,
-            voided_at::TEXT AS voided_at,
+            approved_at,
+            paid_at,
+            voided_at,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM payroll_runs
         "#
     };
@@ -68,8 +68,8 @@ macro_rules! payroll_run_item_select {
             gross_amount,
             net_amount,
             notes,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM payroll_run_items
         "#
     };
@@ -87,7 +87,7 @@ macro_rules! employee_cash_advance_select {
             amount,
             outstanding_amount,
             status,
-            disbursed_at::TEXT AS disbursed_at,
+            disbursed_at,
             payment_method,
             payment_channel,
             cash_account_id,
@@ -95,14 +95,14 @@ macro_rules! employee_cash_advance_select {
             cash_account_name,
             finance_transaction_id,
             notes,
-            voided_at::TEXT AS voided_at,
+            voided_at,
             void_reason,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM employee_cash_advances
         "#
     };
@@ -122,11 +122,11 @@ macro_rules! employee_cash_advance_repayment_select {
             employee_name,
             amount,
             status,
-            allocated_at::TEXT AS allocated_at,
-            posted_at::TEXT AS posted_at,
-            voided_at::TEXT AS voided_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            allocated_at,
+            posted_at,
+            voided_at,
+            created_at,
+            updated_at
         FROM employee_cash_advance_repayments
         "#
     };
@@ -537,15 +537,15 @@ async fn upsert_payroll_run(
             cash_account_name,
             finance_transaction_id,
             notes,
-            approved_at::TEXT AS approved_at,
-            paid_at::TEXT AS paid_at,
-            voided_at::TEXT AS voided_at,
+            approved_at,
+            paid_at,
+            voided_at,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)
@@ -796,7 +796,7 @@ async fn upsert_employee_cash_advance(
             amount,
             outstanding_amount,
             status,
-            disbursed_at::TEXT AS disbursed_at,
+            disbursed_at,
             payment_method,
             payment_channel,
             cash_account_id,
@@ -804,14 +804,14 @@ async fn upsert_employee_cash_advance(
             cash_account_name,
             finance_transaction_id,
             notes,
-            voided_at::TEXT AS voided_at,
+            voided_at,
             void_reason,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#
     )
     .bind(input.id)

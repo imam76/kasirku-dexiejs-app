@@ -21,6 +21,7 @@ import type {
   PayrollRunItem,
   PayrollRunStatus,
 } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface PayrollReadSyncResult {
   fetched: number;
@@ -132,19 +133,19 @@ const mapRemotePayrollRunToLocal = (
   cash_account_name: optionalString(remoteRun.cash_account_name),
   finance_transaction_id: optionalString(remoteRun.finance_transaction_id),
   notes: optionalString(remoteRun.notes),
-  approved_at: optionalString(remoteRun.approved_at),
-  paid_at: optionalString(remoteRun.paid_at),
-  voided_at: optionalString(remoteRun.voided_at),
+  approved_at: toCanonicalOptionalIsoTimestamp(remoteRun.approved_at),
+  paid_at: toCanonicalOptionalIsoTimestamp(remoteRun.paid_at),
+  voided_at: toCanonicalOptionalIsoTimestamp(remoteRun.voided_at),
   created_by: optionalString(remoteRun.created_by),
   created_by_name: optionalString(remoteRun.created_by_name),
   updated_by: optionalString(remoteRun.updated_by),
   updated_by_name: optionalString(remoteRun.updated_by_name),
-  created_at: remoteRun.created_at,
-  updated_at: remoteRun.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteRun.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteRun.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteRun.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteRun.updated_at),
 });
 
 const mapRemotePayrollRunItemToLocal = (
@@ -169,8 +170,8 @@ const mapRemotePayrollRunItemToLocal = (
   gross_amount: optionalNumber(remoteItem.gross_amount),
   net_amount: optionalNumber(remoteItem.net_amount),
   notes: optionalString(remoteItem.notes),
-  created_at: remoteItem.created_at,
-  updated_at: remoteItem.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteItem.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteItem.updated_at),
 });
 
 const mapRemoteCashAdvanceToLocal = (
@@ -185,7 +186,7 @@ const mapRemoteCashAdvanceToLocal = (
   amount: optionalNumber(remoteCashAdvance.amount),
   outstanding_amount: optionalNumber(remoteCashAdvance.outstanding_amount),
   status: isCashAdvanceStatus(remoteCashAdvance.status) ? remoteCashAdvance.status : 'ACTIVE',
-  disbursed_at: remoteCashAdvance.disbursed_at,
+  disbursed_at: toCanonicalIsoTimestamp(remoteCashAdvance.disbursed_at),
   payment_method: remoteCashAdvance.payment_method ?? undefined,
   payment_channel: optionalString(remoteCashAdvance.payment_channel),
   cash_account_id: optionalString(remoteCashAdvance.cash_account_id),
@@ -193,18 +194,18 @@ const mapRemoteCashAdvanceToLocal = (
   cash_account_name: optionalString(remoteCashAdvance.cash_account_name),
   finance_transaction_id: optionalString(remoteCashAdvance.finance_transaction_id),
   notes: optionalString(remoteCashAdvance.notes),
-  voided_at: optionalString(remoteCashAdvance.voided_at),
+  voided_at: toCanonicalOptionalIsoTimestamp(remoteCashAdvance.voided_at),
   void_reason: optionalString(remoteCashAdvance.void_reason),
   created_by: optionalString(remoteCashAdvance.created_by),
   created_by_name: optionalString(remoteCashAdvance.created_by_name),
   updated_by: optionalString(remoteCashAdvance.updated_by),
   updated_by_name: optionalString(remoteCashAdvance.updated_by_name),
-  created_at: remoteCashAdvance.created_at,
-  updated_at: remoteCashAdvance.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteCashAdvance.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteCashAdvance.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteCashAdvance.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteCashAdvance.updated_at),
 });
 
 const mapRemoteCashAdvanceRepaymentToLocal = (
@@ -220,11 +221,11 @@ const mapRemoteCashAdvanceRepaymentToLocal = (
   employee_name: remoteRepayment.employee_name,
   amount: optionalNumber(remoteRepayment.amount),
   status: isCashAdvanceRepaymentStatus(remoteRepayment.status) ? remoteRepayment.status : 'DRAFT',
-  allocated_at: remoteRepayment.allocated_at,
-  posted_at: optionalString(remoteRepayment.posted_at),
-  voided_at: optionalString(remoteRepayment.voided_at),
-  created_at: remoteRepayment.created_at,
-  updated_at: remoteRepayment.updated_at,
+  allocated_at: toCanonicalIsoTimestamp(remoteRepayment.allocated_at),
+  posted_at: toCanonicalOptionalIsoTimestamp(remoteRepayment.posted_at),
+  voided_at: toCanonicalOptionalIsoTimestamp(remoteRepayment.voided_at),
+  created_at: toCanonicalIsoTimestamp(remoteRepayment.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteRepayment.updated_at),
 });
 
 const addPayrollReadSyncResult = (

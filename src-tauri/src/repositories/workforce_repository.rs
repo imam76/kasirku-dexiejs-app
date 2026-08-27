@@ -179,7 +179,7 @@ pub async fn list_workforce_state(pool: &PgPool) -> Result<WorkforceStateDto, sq
     let work_schedule_templates = sqlx::query_as::<_, WorkScheduleTemplateWriteDto>(
         r#"
         SELECT id, code, name, timezone, is_active,
-               created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
+               created_at, updated_at
         FROM work_schedule_templates
         WHERE deleted_at IS NULL
         ORDER BY code
@@ -191,7 +191,7 @@ pub async fn list_workforce_state(pool: &PgPool) -> Result<WorkforceStateDto, sq
         r#"
         SELECT id, template_id, weekday, is_working_day,
                start_time::TEXT AS start_time, end_time::TEXT AS end_time,
-               created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
+               created_at, updated_at
         FROM work_schedule_days
         WHERE deleted_at IS NULL
         ORDER BY template_id, weekday
@@ -205,7 +205,7 @@ pub async fn list_workforce_state(pool: &PgPool) -> Result<WorkforceStateDto, sq
             SELECT id, employee_id, template_id, template_name,
                    effective_from::TEXT AS effective_from,
                    effective_until::TEXT AS effective_until,
-                   created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
+                   created_at, updated_at
             FROM employee_work_schedule_assignments
             WHERE deleted_at IS NULL
             ORDER BY employee_id, effective_from
@@ -216,7 +216,7 @@ pub async fn list_workforce_state(pool: &PgPool) -> Result<WorkforceStateDto, sq
     let company_calendar_days = sqlx::query_as::<_, CompanyCalendarDayWriteDto>(
         r#"
         SELECT id, date::TEXT AS date, kind, name,
-               created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
+               created_at, updated_at
         FROM company_calendar_days
         WHERE deleted_at IS NULL
         ORDER BY date
@@ -227,7 +227,7 @@ pub async fn list_workforce_state(pool: &PgPool) -> Result<WorkforceStateDto, sq
     let leave_types = sqlx::query_as::<_, LeaveTypeWriteDto>(
         r#"
         SELECT id, code, name, is_paid, requires_balance, annual_quota_days,
-               is_active, created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
+               is_active, created_at, updated_at
         FROM leave_types
         WHERE deleted_at IS NULL
         ORDER BY code
@@ -240,11 +240,11 @@ pub async fn list_workforce_state(pool: &PgPool) -> Result<WorkforceStateDto, sq
         SELECT id, employee_id, employee_name, leave_type_id, leave_type_name,
                start_date::TEXT AS start_date, end_date::TEXT AS end_date,
                day_count, reason, status, supervisor_id, supervisor_name,
-               submitted_at::TEXT AS submitted_at,
-               supervisor_decided_at::TEXT AS supervisor_decided_at,
-               hr_decided_at::TEXT AS hr_decided_at,
+               submitted_at,
+               supervisor_decided_at,
+               hr_decided_at,
                decided_by, decided_by_name, decision_notes,
-               created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
+               created_at, updated_at
         FROM leave_requests
         WHERE deleted_at IS NULL
         ORDER BY updated_at
@@ -255,7 +255,7 @@ pub async fn list_workforce_state(pool: &PgPool) -> Result<WorkforceStateDto, sq
     let leave_request_actions = sqlx::query_as::<_, LeaveRequestActionWriteDto>(
         r#"
         SELECT id, leave_request_id, action, actor_user_id, actor_name, notes,
-               created_at::TEXT AS created_at
+               created_at
         FROM leave_request_actions
         ORDER BY created_at
         "#,
@@ -266,7 +266,7 @@ pub async fn list_workforce_state(pool: &PgPool) -> Result<WorkforceStateDto, sq
         r#"
         SELECT id, employee_id, leave_type_id, year, movement_kind,
                available_delta, reserved_delta, used_delta, leave_request_id,
-               notes, created_at::TEXT AS created_at, created_by, created_by_name
+               notes, created_at, created_by, created_by_name
         FROM leave_balance_ledger
         ORDER BY created_at
         "#,
@@ -276,7 +276,7 @@ pub async fn list_workforce_state(pool: &PgPool) -> Result<WorkforceStateDto, sq
     let availability = sqlx::query_as::<_, EmployeeAvailabilityWriteDto>(
         r#"
         SELECT id, employee_id, date::TEXT AS date, source_type, source_id, reason,
-               created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
+               created_at, updated_at
         FROM employee_availability_exceptions
         WHERE deleted_at IS NULL
         ORDER BY date
@@ -291,9 +291,9 @@ pub async fn list_workforce_state(pool: &PgPool) -> Result<WorkforceStateDto, sq
                collection_date::TEXT AS collection_date, source_leave_request_id,
                status, resolution_type, replacement_employee_id,
                replacement_employee_name, rescheduled_date::TEXT AS rescheduled_date,
-               reason, resolved_at::TEXT AS resolved_at, resolved_by,
-               resolved_by_name, created_at::TEXT AS created_at,
-               updated_at::TEXT AS updated_at
+               reason, resolved_at, resolved_by,
+               resolved_by_name, created_at,
+               updated_at
         FROM collection_coverage_exceptions
         WHERE deleted_at IS NULL
         ORDER BY collection_date
