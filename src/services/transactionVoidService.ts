@@ -10,7 +10,7 @@ import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } fro
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { normalisasiHargaProduk } from '@/utils/pricing';
 import { recordMembershipPointTransaction } from '@/services/membershipService';
-import { enqueueContactSync, enqueuePendingProductsForSync, enqueueTransactionBundleSync } from '@/services/syncQueueService';
+import { enqueueContactSync, enqueueStockAffectedProductsForSync, enqueueTransactionBundleSync } from '@/services/syncQueueService';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -252,7 +252,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   if (deletedFinanceTransactions.length > 0) {
     await enqueueFinanceTransactionsSync(deletedFinanceTransactions, 'delete');

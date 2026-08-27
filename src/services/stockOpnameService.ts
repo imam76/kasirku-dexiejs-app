@@ -1,6 +1,6 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
-import { enqueuePendingProductsForSync, enqueueStockOpnameBundleSync } from '@/services/syncQueueService';
+import { enqueueStockAffectedProductsForSync, enqueueStockOpnameBundleSync } from '@/services/syncQueueService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import type { AuthUser, Product, StockMutation, StockOpname, StockOpnameItem } from '@/types';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
@@ -525,7 +525,7 @@ export const postStockOpname = async ({
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   await enqueueStockOpnameBundleSync(postedOpname, postedItems, 'update');
   await writeActivityLog({

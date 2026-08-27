@@ -1,9 +1,8 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
 import {
-  enqueuePendingProductsForSync,
-  enqueueProductSync,
   enqueueProductionOrderBundleSync,
+  enqueueStockAffectedProductsForSync,
 } from '@/services/syncQueueService';
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import type {
@@ -517,9 +516,12 @@ export const postProductionOrder = async ({
   }
 
   await enqueueStockMutations(stockMutations);
-  await enqueueProductSync(finishedProductForSync, 'update');
-  if (touchedMaterialProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedMaterialProductIds);
+  const touchedProductIds = new Set([
+    finishedProductForSync.id,
+    ...touchedMaterialProductIds,
+  ]);
+  if (touchedProductIds.size > 0) {
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   await enqueueProductionOrderBundleSync(postedOrder, postedItems, postedCosts, 'update');
   await writeActivityLog({
@@ -651,7 +653,7 @@ export const voidProductionOrder = async ({
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   await enqueueProductionOrderBundleSync(voidedOrder, items, costs, 'update');
   await writeActivityLog({

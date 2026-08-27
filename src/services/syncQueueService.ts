@@ -1178,7 +1178,10 @@ const mapProductToRemoteDto = (
   unit_mappings: normalizeProductUnitMappings(product),
   created_at: product.created_at,
   updated_at: product.updated_at,
-  preserve_stock: options.preserveStock || undefined,
+  // Master-product sync must not replay the operational stock snapshot. Stock
+  // is materialized remotely from the append-only stock mutation ledger.
+  // Callers can still opt out explicitly for a controlled legacy bootstrap.
+  preserve_stock: options.preserveStock ?? true,
 });
 
 const mapStockMutationToRemoteDto = (mutation: StockMutation): RemoteStockMutationDto => ({
@@ -6346,7 +6349,9 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       await mergeRemoteProductsIntoDexie(
         [remoteProduct],
         syncedAt,
-        { preserveLocalStock: currentQueueItem.payload.preserve_stock === true },
+        // Missing means "preserve" as well. This keeps queue rows created by
+        // older app versions safe after upgrading the Tauri backend.
+        { preserveLocalStock: currentQueueItem.payload.preserve_stock !== false },
       );
       return;
     }
@@ -8742,6 +8747,7 @@ export const enqueuePendingProductsForSync = async (
     preserveStock?: boolean;
   } = {},
 ) => {
+  const preserveStock = options.preserveStock ?? true;
   const candidateProducts = productIds
     ? (await db.products.bulkGet([...productIds])).filter((product): product is Product => Boolean(product))
     : await db.products.toArray();
@@ -8768,7 +8774,7 @@ export const enqueuePendingProductsForSync = async (
       if (
         existingQueueItem.status === 'failed'
         || (
-          options.preserveStock
+          preserveStock
           && existingQueueItem.status === 'pending'
           && isRemoteProductDto(existingQueueItem.payload)
           && existingQueueItem.payload.preserve_stock !== true
@@ -8777,7 +8783,7 @@ export const enqueuePendingProductsForSync = async (
         await db.syncQueue.update(existingQueueItem.id, {
           operation: 'update',
           payload: mapProductToRemoteDto(product, {
-            preserveStock: options.preserveStock,
+            preserveStock,
           }),
           status: 'pending',
           attempts: 0,
@@ -8790,7 +8796,7 @@ export const enqueuePendingProductsForSync = async (
     }
 
     await enqueueProductSync(product, 'update', {
-      preserveStock: options.preserveStock,
+      preserveStock,
       deferProcessing: true,
     });
     enqueued += 1;
@@ -8801,6 +8807,19 @@ export const enqueuePendingProductsForSync = async (
   }
   return enqueued;
 };
+
+/**
+ * Sync master fields for products changed by a stock event without replaying
+ * their local stock snapshot. The matching StockMutation is the only remote
+ * writer for the quantity change.
+ */
+export const enqueueStockAffectedProductsForSync = async (
+  productIds: ReadonlySet<string>,
+  options: { deferProcessing?: boolean } = {},
+) => enqueuePendingProductsForSync(productIds, {
+  deferProcessing: options.deferProcessing,
+  preserveStock: true,
+});
 
 export const enqueueSalesDocumentBundleSync = async (
   document: SalesDocument,

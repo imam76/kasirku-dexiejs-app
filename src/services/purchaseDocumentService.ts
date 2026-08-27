@@ -23,7 +23,7 @@ import {
   reversePurchaseInvoiceJournal,
   reversePurchaseReturnJournal,
 } from '@/services/generalLedgerService';
-import { enqueuePendingProductsForSync, enqueuePurchaseDocumentBundleSync } from '@/services/syncQueueService';
+import { enqueuePurchaseDocumentBundleSync, enqueueStockAffectedProductsForSync } from '@/services/syncQueueService';
 import { createPurchaseDocumentNumber } from '@/utils/purchaseDocuments/createPurchaseDocumentNumber';
 import { toBusinessDateKey } from '@/utils/businessDate';
 import {
@@ -818,7 +818,7 @@ export const issuePurchaseDocument = async (id: string) => {
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   await enqueuePurchaseDocumentBundleSync(issuedDocument, items, 'update');
 
@@ -988,7 +988,7 @@ export const voidPurchaseDocument = async (id: string, reason: string) => {
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   await enqueuePurchaseDocumentBundleSync(voidedDocument, items, 'update');
 
@@ -1093,7 +1093,7 @@ export const correctPurchaseDocument = async (sourceId: string, reason: string) 
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   await enqueuePurchaseDocumentBundleSync(voidedDocument, sourceItems, 'update');
   await enqueuePurchaseDocumentBundleSync(draftDocument, draftItems, 'create');

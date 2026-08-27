@@ -29,7 +29,7 @@ describe('POS stock discrepancy architecture', () => {
     expect(checkoutSource).toContain('quantityReceived: row.shortageQuantity');
     expect(checkoutSource).toContain("costStatus: 'ESTIMATED'");
     expect(checkoutSource).toContain('quantityDelta: row.shortageQuantity');
-    expect(checkoutSource).toContain('{ preserveStock: true }');
+    expect(checkoutSource).toContain('enqueueStockAffectedProductsForSync(touchedProductIds)');
   });
 
   test('keeps stock mutation retry idempotent on the server', () => {

@@ -11,7 +11,7 @@ import {
   postSalesInvoiceIssuedJournal,
   reverseSalesInvoiceJournal,
 } from '@/services/generalLedgerService';
-import { enqueuePendingProductsForSync, enqueueSalesDocumentBundleSync } from '@/services/syncQueueService';
+import { enqueueSalesDocumentBundleSync, enqueueStockAffectedProductsForSync } from '@/services/syncQueueService';
 import type {
   PaymentMethod,
   SalesDocument,
@@ -509,7 +509,7 @@ export const issueSalesDocument = async (id: string) => {
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   await enqueueSalesDocumentBundleSync(issuedDocument, items, 'update');
 };
@@ -661,7 +661,7 @@ export const voidSalesDocument = async (id: string, reason: string) => {
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   await enqueueSalesDocumentBundleSync(voidedDocument, items, 'update');
 };
@@ -757,7 +757,7 @@ export const correctSalesDocument = async (sourceId: string, reason: string) => 
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   await enqueueSalesDocumentBundleSync(voidedDocument, sourceItems, 'update');
   await enqueueSalesDocumentBundleSync(draftDocument, draftItems, 'create');

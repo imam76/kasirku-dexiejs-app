@@ -773,6 +773,9 @@ Implementasi pilot saat ini:
 - `postgres_upsert_auth_user` mengikuti pola yang sama untuk user master: local update dikirim lewat sync queue, lalu remote terbaru di-merge kembali ke Dexie.
 - Jika payload lokal kalah dari row remote yang lebih baru, repository mengembalikan row remote dan frontend me-merge hasilnya kembali ke Dexie.
 - Read refresh dari PostgreSQL tetap tidak menimpa data lokal dengan `sync_status = "pending"` atau `"failed"`.
+- `products.stock` adalah materialized snapshot, bukan payload master yang boleh
+  diputar ulang. Product upsert memakai `preserve_stock=true` secara default;
+  produk remote baru dimulai dari `0` dan memperoleh stok dari ledger.
 - `stock_mutations` tidak memakai last write wins. Mutasi stok disimpan sebagai event append-only yang idempotent; retry sync dengan `id` yang sama tidak menambah/mengurangi stok dua kali.
 - `activity_logs` juga append-only dan idempotent berdasarkan `id`; tidak ada operasi edit/delete activity log.
 
@@ -819,7 +822,7 @@ Implementasi saat ini:
 - `projects` menjadi entity Fase 17 pertama setelah departments dengan pola yang sama: migration PostgreSQL, Rust DTO/repository/command, frontend adapter, sync metadata Dexie, sync queue, read refresh, soft delete, dan last-write-wins berdasarkan `updated_at`.
 - `taxes` menjadi entity Fase 17 berikutnya dengan pola yang sama, tetap memakai baseline single tax/document fallback yang sudah ada di aplikasi.
 - `contacts` sudah masuk sebagai master data lebih besar dengan pola yang sama: migration PostgreSQL, Rust DTO/repository/command, frontend adapter, sync metadata Dexie, sync queue, read refresh, soft delete, dan last-write-wins berdasarkan `updated_at`.
-- `warehouses` dan `products` sudah masuk sebagai master data produk/stok. `warehouses` mengikuti pola archive/restore seperti master data lain. `products` menyinkronkan master product dan nilai `stock` yang ada pada record product.
+- `warehouses` dan `products` sudah masuk sebagai master data produk/stok. `warehouses` mengikuti pola archive/restore seperti master data lain. `products` menyinkronkan field master, sedangkan `stock` remote dipertahankan dan hanya dimaterialisasi dari `stock_mutations`.
 - Mutasi stock dasar sudah mulai masuk sebagai ledger PostgreSQL `stock_mutations`, dengan migration, Rust DTO/repository/command, frontend adapter, dan sync queue.
 - `postgres_upsert_stock_mutation` bersifat idempotent: insert event baru akan mengubah `products.stock`, sedangkan retry dengan event yang sama hanya mengembalikan event existing.
 - Workflow yang sudah mengirim event mutasi stok: POS checkout, void POS transaction, issue/void Sales Delivery, issue/void Purchase Receipt, issue/void Purchase Return, issue/void Sales Return restock, dan Shopping Note.

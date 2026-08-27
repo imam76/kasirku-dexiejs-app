@@ -29,7 +29,7 @@ import {
   isActiveRetailMember,
   recordMembershipPointTransaction,
 } from '@/services/membershipService';
-import { buildInventoryLotConsumptionOutboxItem, buildInventoryLotOutboxItem, buildTransactionBundleOutboxItem, enqueueContactSync, enqueuePendingProductsForSync, enqueueTransactionBundleSync, processPendingSyncQueue } from '@/services/syncQueueService';
+import { buildInventoryLotConsumptionOutboxItem, buildInventoryLotOutboxItem, buildTransactionBundleOutboxItem, enqueueContactSync, enqueueStockAffectedProductsForSync, enqueueTransactionBundleSync, processPendingSyncQueue } from '@/services/syncQueueService';
 import { getStoredHostIdentity } from '@/services/hostIdentityService';
 import { getProductSellableUnits } from '@/utils/productUnits';
 
@@ -844,7 +844,7 @@ export const checkout = async ({
   );
 
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds, { preserveStock: true });
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   if (financeTransactions.length > 0) {
     await enqueueFinanceTransactionsSync(financeTransactions, 'create');
@@ -950,7 +950,7 @@ export const recordPosExpense = async ({
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   await enqueueTransactionBundleSync(result.transaction, result.items, 'create');
   await writeActivityLog({

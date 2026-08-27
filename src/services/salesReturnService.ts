@@ -37,7 +37,7 @@ import type { SalesReturnSourceChain } from '@/utils/salesReturns/resolveSalesRe
 import { createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
 import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
-import { enqueuePendingProductsForSync } from '@/services/syncQueueService';
+import { enqueueStockAffectedProductsForSync } from '@/services/syncQueueService';
 
 export interface SalesReturnItemInput {
   source_item_id: string;
@@ -660,7 +660,7 @@ export const issueSalesReturn = async (id: string) => {
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   if (financeTransaction) {
     await enqueueFinanceTransactionsSync([financeTransaction], 'create');
@@ -716,7 +716,7 @@ export const voidSalesReturn = async (id: string, reason: string) => {
 
   await enqueueStockMutations(stockMutations);
   if (touchedProductIds.size > 0) {
-    await enqueuePendingProductsForSync(touchedProductIds);
+    await enqueueStockAffectedProductsForSync(touchedProductIds);
   }
   if (reversalFinanceTransaction) {
     await enqueueFinanceTransactionsSync([reversalFinanceTransaction], 'create');

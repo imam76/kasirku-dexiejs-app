@@ -112,6 +112,9 @@ pub async fn upsert_product(
     preserve_stock: bool,
 ) -> Result<ProductDto, sqlx::Error> {
     let product_id = input.id.clone();
+    // When stock is ledger-owned, a missing remote product must start at zero.
+    // Its queued stock mutations will then materialize the exact balance once.
+    let insert_stock = resolve_product_insert_stock(input.stock, preserve_stock);
     let upserted_product = sqlx::query_as::<_, ProductDto>(
         r#"
         INSERT INTO products (
@@ -181,7 +184,7 @@ pub async fn upsert_product(
     .bind(input.selling_unit)
     .bind(input.purchase_price)
     .bind(input.selling_price)
-    .bind(input.stock)
+    .bind(insert_stock)
     .bind(input.min_stock)
     .bind(input.sku)
     .bind(input.product_type)
@@ -203,6 +206,29 @@ pub async fn upsert_product(
     get_product_including_deleted(pool, product_id)
         .await?
         .ok_or(sqlx::Error::RowNotFound)
+}
+
+const fn resolve_product_insert_stock(stock: f64, preserve_stock: bool) -> f64 {
+    if preserve_stock {
+        0.0
+    } else {
+        stock
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_product_insert_stock;
+
+    #[test]
+    fn ledger_owned_product_insert_starts_at_zero() {
+        assert_eq!(resolve_product_insert_stock(8.0, true), 0.0);
+    }
+
+    #[test]
+    fn explicit_legacy_snapshot_keeps_its_stock() {
+        assert_eq!(resolve_product_insert_stock(8.0, false), 8.0);
+    }
 }
 
 pub async fn delete_product(pool: &PgPool, id: String) -> Result<Option<ProductDto>, sqlx::Error> {
