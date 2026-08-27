@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { isTauriRuntime, taxPostgresAdapter, type RemoteTaxDto } from '@/services/postgresAdapter';
 import type { Tax, TaxCalculationMode, TaxFlow, TaxRateType } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface TaxReadSyncResult {
   fetched: number;
@@ -54,12 +55,12 @@ const mapRemoteTaxToLocal = (
   effective_to: remoteTax.effective_to ?? undefined,
   is_default: remoteTax.deleted_at ? false : remoteTax.is_default,
   is_active: remoteTax.deleted_at ? false : remoteTax.is_active,
-  created_at: remoteTax.created_at,
-  updated_at: remoteTax.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteTax.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteTax.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteTax.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteTax.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (tax: Tax) => (

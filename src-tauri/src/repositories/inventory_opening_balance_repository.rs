@@ -239,7 +239,7 @@ fn validate_inventory_opening_posting_bundle(
             || !snapshot
                 .source_quantity
                 .is_some_and(|value| quantity_matches(value, quantity) && value > 0.0)
-            || snapshot.occurred_at.get(0..10) != Some(cutoff_date)
+            || snapshot.occurred_at.format("%Y-%m-%d").to_string() != cutoff_date
         {
             return Err(protocol_error(
                 "Snapshot stok tidak konsisten dengan baris saldo awal persediaan.",

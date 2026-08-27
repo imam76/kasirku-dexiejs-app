@@ -8,6 +8,7 @@ import {
   type RemoteCurrencyRateDto,
 } from '@/services/postgresAdapter';
 import type { Currency, CurrencyRate, CurrencyRateSource } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface CurrencyReadSyncResult {
   fetched: number;
@@ -37,12 +38,12 @@ const mapRemoteCurrencyToLocal = (
   decimal_places: remoteCurrency.decimal_places,
   is_base: remoteCurrency.is_base,
   is_active: remoteCurrency.deleted_at ? false : remoteCurrency.is_active,
-  created_at: remoteCurrency.created_at,
-  updated_at: remoteCurrency.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteCurrency.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteCurrency.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteCurrency.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteCurrency.updated_at),
 });
 
 const isCurrencyRateSource = (source: string): source is CurrencyRateSource => (
@@ -62,13 +63,13 @@ const mapRemoteCurrencyRateToLocal = (
   bi_buy_rate: remoteRate.bi_buy_rate ?? undefined,
   bi_sell_rate: remoteRate.bi_sell_rate ?? undefined,
   middle_rate: remoteRate.middle_rate,
-  fetched_at: remoteRate.fetched_at ?? undefined,
-  created_at: remoteRate.created_at,
-  updated_at: remoteRate.updated_at,
+  fetched_at: toCanonicalOptionalIsoTimestamp(remoteRate.fetched_at),
+  created_at: toCanonicalIsoTimestamp(remoteRate.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteRate.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteRate.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteRate.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (record: { sync_status?: string }) => (

@@ -26,16 +26,16 @@ pub async fn list_cash_bank_reconciliations(
             difference_amount,
             status,
             notes,
-            voided_at::TEXT AS voided_at,
+            voided_at,
             void_reason,
             version,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM cash_bank_reconciliations
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -72,16 +72,16 @@ pub async fn get_cash_bank_reconciliation(
             difference_amount,
             status,
             notes,
-            voided_at::TEXT AS voided_at,
+            voided_at,
             void_reason,
             version,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM cash_bank_reconciliations
         WHERE id = $1
         "#,
@@ -202,16 +202,16 @@ pub async fn upsert_cash_bank_reconciliation(
             difference_amount,
             status,
             notes,
-            voided_at::TEXT AS voided_at,
+            voided_at,
             void_reason,
             version,
             created_by,
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)

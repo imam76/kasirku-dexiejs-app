@@ -7,6 +7,7 @@ import {
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { AccountingPeriod, AccountingPeriodStatus, AccountingPeriodType } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 const ACCOUNTING_PERIOD_REFRESH_LIMIT = 500;
 
@@ -56,14 +57,14 @@ const mapRemoteAccountingPeriodToLocal = (
   start_date: remotePeriod.start_date,
   end_date: remotePeriod.end_date,
   status: isAccountingPeriodStatus(remotePeriod.status) ? remotePeriod.status : 'OPEN',
-  locked_at: optionalString(remotePeriod.locked_at),
+  locked_at: toCanonicalOptionalIsoTimestamp(remotePeriod.locked_at),
   locked_by: optionalString(remotePeriod.locked_by),
   locked_by_name: optionalString(remotePeriod.locked_by_name),
-  closed_at: optionalString(remotePeriod.closed_at),
+  closed_at: toCanonicalOptionalIsoTimestamp(remotePeriod.closed_at),
   closed_by: optionalString(remotePeriod.closed_by),
   closed_by_name: optionalString(remotePeriod.closed_by_name),
   closing_journal_entry_id: optionalString(remotePeriod.closing_journal_entry_id),
-  reopened_at: optionalString(remotePeriod.reopened_at),
+  reopened_at: toCanonicalOptionalIsoTimestamp(remotePeriod.reopened_at),
   reopened_by: optionalString(remotePeriod.reopened_by),
   reopened_by_name: optionalString(remotePeriod.reopened_by_name),
   reopen_reason: optionalString(remotePeriod.reopen_reason),
@@ -73,12 +74,12 @@ const mapRemoteAccountingPeriodToLocal = (
   created_by_name: optionalString(remotePeriod.created_by_name),
   updated_by: optionalString(remotePeriod.updated_by),
   updated_by_name: optionalString(remotePeriod.updated_by_name),
-  created_at: remotePeriod.created_at,
-  updated_at: remotePeriod.updated_at,
+  created_at: toCanonicalIsoTimestamp(remotePeriod.created_at),
+  updated_at: toCanonicalIsoTimestamp(remotePeriod.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remotePeriod.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remotePeriod.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (period: AccountingPeriod) => (

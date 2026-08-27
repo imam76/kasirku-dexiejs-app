@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -18,14 +19,14 @@ pub struct CashBankReconciliationDto {
     pub difference_amount: f64,
     pub status: String,
     pub notes: Option<String>,
-    pub voided_at: Option<String>,
+    pub voided_at: Option<DateTime<Utc>>,
     pub void_reason: Option<String>,
     pub version: i32,
     pub created_by: Option<String>,
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
     pub updated_by_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }

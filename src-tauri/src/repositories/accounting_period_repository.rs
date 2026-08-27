@@ -16,14 +16,14 @@ pub async fn list_accounting_periods(
             start_date::TEXT AS start_date,
             end_date::TEXT AS end_date,
             status,
-            locked_at::TEXT AS locked_at,
+            locked_at,
             locked_by,
             locked_by_name,
-            closed_at::TEXT AS closed_at,
+            closed_at,
             closed_by,
             closed_by_name,
             closing_journal_entry_id,
-            reopened_at::TEXT AS reopened_at,
+            reopened_at,
             reopened_by,
             reopened_by_name,
             reopen_reason,
@@ -33,9 +33,9 @@ pub async fn list_accounting_periods(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM accounting_periods
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -62,14 +62,14 @@ pub async fn get_accounting_period(
             start_date::TEXT AS start_date,
             end_date::TEXT AS end_date,
             status,
-            locked_at::TEXT AS locked_at,
+            locked_at,
             locked_by,
             locked_by_name,
-            closed_at::TEXT AS closed_at,
+            closed_at,
             closed_by,
             closed_by_name,
             closing_journal_entry_id,
-            reopened_at::TEXT AS reopened_at,
+            reopened_at,
             reopened_by,
             reopened_by_name,
             reopen_reason,
@@ -79,9 +79,9 @@ pub async fn get_accounting_period(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM accounting_periods
         WHERE id = $1
         "#,
@@ -192,14 +192,14 @@ pub async fn upsert_accounting_period(
             start_date::TEXT AS start_date,
             end_date::TEXT AS end_date,
             status,
-            locked_at::TEXT AS locked_at,
+            locked_at,
             locked_by,
             locked_by_name,
-            closed_at::TEXT AS closed_at,
+            closed_at,
             closed_by,
             closed_by_name,
             closing_journal_entry_id,
-            reopened_at::TEXT AS reopened_at,
+            reopened_at,
             reopened_by,
             reopened_by_name,
             reopen_reason,
@@ -209,9 +209,9 @@ pub async fn upsert_accounting_period(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)

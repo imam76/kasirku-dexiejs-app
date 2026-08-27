@@ -7,6 +7,7 @@ import {
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { CashBankReconciliation, CashBankReconciliationStatus } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 const CASH_BANK_RECONCILIATION_REFRESH_LIMIT = 500;
 
@@ -67,19 +68,19 @@ const mapRemoteCashBankReconciliationToLocal = (
     ? remoteReconciliation.status
     : 'DIFFERENCE',
   notes: optionalString(remoteReconciliation.notes),
-  voided_at: optionalString(remoteReconciliation.voided_at),
+  voided_at: toCanonicalOptionalIsoTimestamp(remoteReconciliation.voided_at),
   void_reason: optionalString(remoteReconciliation.void_reason),
   version: toPositiveVersion(remoteReconciliation.version),
   created_by: optionalString(remoteReconciliation.created_by),
   created_by_name: optionalString(remoteReconciliation.created_by_name),
   updated_by: optionalString(remoteReconciliation.updated_by),
   updated_by_name: optionalString(remoteReconciliation.updated_by_name),
-  created_at: remoteReconciliation.created_at,
-  updated_at: remoteReconciliation.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteReconciliation.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteReconciliation.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteReconciliation.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteReconciliation.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (reconciliation: CashBankReconciliation) => (

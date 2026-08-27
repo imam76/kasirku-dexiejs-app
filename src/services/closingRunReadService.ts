@@ -7,6 +7,7 @@ import {
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { ClosingRun, ClosingRunStatus } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 const CLOSING_RUN_REFRESH_LIMIT = 500;
 
@@ -61,8 +62,8 @@ const mapRemoteClosingRunToLocal = (
   total_contra_revenue_amount: optionalNumber(remoteRun.total_contra_revenue_amount) ?? 0,
   total_expense_amount: optionalNumber(remoteRun.total_expense_amount) ?? 0,
   closing_journal_entry_id: optionalString(remoteRun.closing_journal_entry_id),
-  posted_at: optionalString(remoteRun.posted_at),
-  reversed_at: optionalString(remoteRun.reversed_at),
+  posted_at: toCanonicalOptionalIsoTimestamp(remoteRun.posted_at),
+  reversed_at: toCanonicalOptionalIsoTimestamp(remoteRun.reversed_at),
   reversed_by: optionalString(remoteRun.reversed_by),
   reversed_by_name: optionalString(remoteRun.reversed_by_name),
   reversal_journal_entry_id: optionalString(remoteRun.reversal_journal_entry_id),
@@ -73,12 +74,12 @@ const mapRemoteClosingRunToLocal = (
   created_by_name: optionalString(remoteRun.created_by_name),
   updated_by: optionalString(remoteRun.updated_by),
   updated_by_name: optionalString(remoteRun.updated_by_name),
-  created_at: remoteRun.created_at,
-  updated_at: remoteRun.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteRun.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteRun.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteRun.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteRun.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (run: ClosingRun) => (

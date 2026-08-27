@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -21,6 +22,6 @@ pub struct StockMutationDto {
     pub reason: Option<String>,
     pub actor_user_id: Option<String>,
     pub actor_user_name: Option<String>,
-    pub occurred_at: String,
-    pub created_at: String,
+    pub occurred_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
 }

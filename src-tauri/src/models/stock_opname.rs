@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -5,10 +6,10 @@ pub struct StockOpnameDto {
     pub id: String,
     pub opname_number: String,
     pub status: String,
-    pub counted_at: String,
-    pub reviewed_at: Option<String>,
-    pub posted_at: Option<String>,
-    pub cancelled_at: Option<String>,
+    pub counted_at: DateTime<Utc>,
+    pub reviewed_at: Option<DateTime<Utc>>,
+    pub posted_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<DateTime<Utc>>,
     pub warehouse_id: Option<String>,
     pub warehouse_code: Option<String>,
     pub warehouse_name: Option<String>,
@@ -26,8 +27,8 @@ pub struct StockOpnameDto {
     pub total_adjustment_in: f64,
     pub total_adjustment_out: f64,
     pub total_variance_value: f64,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -45,8 +46,8 @@ pub struct StockOpnameItemDto {
     pub cost_per_unit: f64,
     pub variance_value: f64,
     pub notes: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

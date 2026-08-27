@@ -10,6 +10,7 @@ import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { Product, StockOpname, StockOpnameItem, StockOpnameStatus } from '@/types';
 import { calculateStockOpnameSummary } from '@/utils/stockOpname/calculateStockOpnameVariance';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface StockOpnameReadSyncResult {
   fetched: number;
@@ -73,10 +74,10 @@ const mapRemoteStockOpnameToLocal = (
   id: remoteOpname.id,
   opname_number: remoteOpname.opname_number,
   status: isStockOpnameStatus(remoteOpname.status) ? remoteOpname.status : 'DRAFT',
-  counted_at: remoteOpname.counted_at,
-  reviewed_at: optionalString(remoteOpname.reviewed_at),
-  posted_at: optionalString(remoteOpname.posted_at),
-  cancelled_at: optionalString(remoteOpname.cancelled_at),
+  counted_at: toCanonicalIsoTimestamp(remoteOpname.counted_at),
+  reviewed_at: toCanonicalOptionalIsoTimestamp(remoteOpname.reviewed_at),
+  posted_at: toCanonicalOptionalIsoTimestamp(remoteOpname.posted_at),
+  cancelled_at: toCanonicalOptionalIsoTimestamp(remoteOpname.cancelled_at),
   warehouse_id: optionalString(remoteOpname.warehouse_id),
   warehouse_code: optionalString(remoteOpname.warehouse_code),
   warehouse_name: optionalString(remoteOpname.warehouse_name),
@@ -94,12 +95,12 @@ const mapRemoteStockOpnameToLocal = (
   total_adjustment_in: remoteOpname.total_adjustment_in,
   total_adjustment_out: remoteOpname.total_adjustment_out,
   total_variance_value: remoteOpname.total_variance_value,
-  created_at: remoteOpname.created_at,
-  updated_at: remoteOpname.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteOpname.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteOpname.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteOpname.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteOpname.updated_at),
 });
 
 const mapRemoteStockOpnameItemToLocal = (
@@ -118,8 +119,8 @@ const mapRemoteStockOpnameItemToLocal = (
   cost_per_unit: remoteItem.cost_per_unit,
   variance_value: remoteItem.variance_value,
   notes: optionalString(remoteItem.notes),
-  created_at: remoteItem.created_at,
-  updated_at: remoteItem.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteItem.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteItem.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (opname: StockOpname) => (

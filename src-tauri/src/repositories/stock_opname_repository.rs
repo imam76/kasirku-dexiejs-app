@@ -9,10 +9,10 @@ macro_rules! stock_opname_select {
             id,
             opname_number,
             status,
-            counted_at::TEXT AS counted_at,
-            reviewed_at::TEXT AS reviewed_at,
-            posted_at::TEXT AS posted_at,
-            cancelled_at::TEXT AS cancelled_at,
+            counted_at,
+            reviewed_at,
+            posted_at,
+            cancelled_at,
             warehouse_id,
             warehouse_code,
             warehouse_name,
@@ -30,8 +30,8 @@ macro_rules! stock_opname_select {
             total_adjustment_in,
             total_adjustment_out,
             total_variance_value,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM stock_opnames
         "#
     };
@@ -54,8 +54,8 @@ macro_rules! stock_opname_item_select {
             cost_per_unit,
             variance_value,
             notes,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM stock_opname_items
         "#
     };
@@ -291,10 +291,10 @@ async fn upsert_stock_opname(
             id,
             opname_number,
             status,
-            counted_at::TEXT AS counted_at,
-            reviewed_at::TEXT AS reviewed_at,
-            posted_at::TEXT AS posted_at,
-            cancelled_at::TEXT AS cancelled_at,
+            counted_at,
+            reviewed_at,
+            posted_at,
+            cancelled_at,
             warehouse_id,
             warehouse_code,
             warehouse_name,
@@ -312,8 +312,8 @@ async fn upsert_stock_opname(
             total_adjustment_in,
             total_adjustment_out,
             total_variance_value,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)

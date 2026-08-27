@@ -6,6 +6,7 @@ import {
 } from '@/services/postgresAdapter';
 import { getLaterUpdatedAt } from '@/services/shared/remoteRefreshCursor';
 import type { StockMutation } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface StockMutationReadSyncResult {
   fetched: number;
@@ -48,8 +49,8 @@ const mapRemoteStockMutationToLocal = (remote: RemoteStockMutationDto): StockMut
   reason: optionalString(remote.reason),
   actor_user_id: optionalString(remote.actor_user_id),
   actor_user_name: optionalString(remote.actor_user_name),
-  occurred_at: remote.occurred_at,
-  created_at: remote.created_at,
+  occurred_at: toCanonicalIsoTimestamp(remote.occurred_at),
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
 });
 
 /**

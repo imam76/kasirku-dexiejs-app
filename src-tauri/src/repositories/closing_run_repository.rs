@@ -24,8 +24,8 @@ pub async fn list_closing_runs(
             total_contra_revenue_amount,
             total_expense_amount,
             closing_journal_entry_id,
-            posted_at::TEXT AS posted_at,
-            reversed_at::TEXT AS reversed_at,
+            posted_at,
+            reversed_at,
             reversed_by,
             reversed_by_name,
             reversal_journal_entry_id,
@@ -36,9 +36,9 @@ pub async fn list_closing_runs(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM closing_runs
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -73,8 +73,8 @@ pub async fn get_closing_run(
             total_contra_revenue_amount,
             total_expense_amount,
             closing_journal_entry_id,
-            posted_at::TEXT AS posted_at,
-            reversed_at::TEXT AS reversed_at,
+            posted_at,
+            reversed_at,
             reversed_by,
             reversed_by_name,
             reversal_journal_entry_id,
@@ -85,9 +85,9 @@ pub async fn get_closing_run(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM closing_runs
         WHERE id = $1
         "#,
@@ -215,8 +215,8 @@ pub async fn upsert_closing_run(
             total_contra_revenue_amount,
             total_expense_amount,
             closing_journal_entry_id,
-            posted_at::TEXT AS posted_at,
-            reversed_at::TEXT AS reversed_at,
+            posted_at,
+            reversed_at,
             reversed_by,
             reversed_by_name,
             reversal_journal_entry_id,
@@ -227,9 +227,9 @@ pub async fn upsert_closing_run(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)

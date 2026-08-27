@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -14,11 +15,11 @@ pub struct HrPositionDto {
     pub reports_to_position_name: Option<String>,
     pub description: Option<String>,
     pub is_active: bool,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     #[serde(default)]
     #[sqlx(default)]
-    pub deleted_at: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -41,11 +42,11 @@ pub struct EmploymentContractDto {
     pub status: String,
     pub notes: Option<String>,
     pub renewed_from_contract_id: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     #[serde(default)]
     #[sqlx(default)]
-    pub deleted_at: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -58,11 +59,11 @@ pub struct SalaryComponentDto {
     pub default_value: f64,
     pub is_taxable: bool,
     pub is_active: bool,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     #[serde(default)]
     #[sqlx(default)]
-    pub deleted_at: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -76,9 +77,9 @@ pub struct EmployeeSalaryComponentDto {
     pub calculation: String,
     pub value: f64,
     pub is_active: bool,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     #[serde(default)]
     #[sqlx(default)]
-    pub deleted_at: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }

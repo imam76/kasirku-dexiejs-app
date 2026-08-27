@@ -13,8 +13,8 @@ pub async fn list_hr_positions(
         r#"
         SELECT id, code, name, department_id, department_code, department_name, level,
                reports_to_position_id, reports_to_position_code, reports_to_position_name,
-               description, is_active, created_at::TEXT AS created_at,
-               updated_at::TEXT AS updated_at, deleted_at::TEXT AS deleted_at
+               description, is_active, created_at,
+               updated_at, deleted_at
         FROM hr_positions
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -63,8 +63,8 @@ pub async fn upsert_hr_position(
         r#"
         SELECT id, code, name, department_id, department_code, department_name, level,
                reports_to_position_id, reports_to_position_code, reports_to_position_name,
-               description, is_active, created_at::TEXT AS created_at,
-               updated_at::TEXT AS updated_at, deleted_at::TEXT AS deleted_at
+               description, is_active, created_at,
+               updated_at, deleted_at
         FROM hr_positions WHERE id = $1
         "#,
     )
@@ -85,8 +85,8 @@ pub async fn list_employment_contracts(
                start_date::TEXT AS start_date, end_date::TEXT AS end_date, job_position_id,
                job_position_code, job_position_name, department_id, department_code,
                department_name, base_salary, status, notes, renewed_from_contract_id,
-               created_at::TEXT AS created_at, updated_at::TEXT AS updated_at,
-               deleted_at::TEXT AS deleted_at
+               created_at, updated_at,
+               deleted_at
         FROM employment_contracts
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -143,8 +143,8 @@ pub async fn upsert_employment_contract(
                start_date::TEXT AS start_date, end_date::TEXT AS end_date, job_position_id,
                job_position_code, job_position_name, department_id, department_code,
                department_name, base_salary, status, notes, renewed_from_contract_id,
-               created_at::TEXT AS created_at, updated_at::TEXT AS updated_at,
-               deleted_at::TEXT AS deleted_at
+               created_at, updated_at,
+               deleted_at
         FROM employment_contracts WHERE id = $1
         "#,
     )
@@ -162,8 +162,8 @@ pub async fn list_salary_components(
     sqlx::query_as::<_, SalaryComponentDto>(
         r#"
         SELECT id, code, name, kind, calculation, default_value, is_taxable, is_active,
-               created_at::TEXT AS created_at, updated_at::TEXT AS updated_at,
-               deleted_at::TEXT AS deleted_at
+               created_at, updated_at,
+               deleted_at
         FROM salary_components
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -207,8 +207,8 @@ pub async fn upsert_salary_component(
     sqlx::query_as::<_, SalaryComponentDto>(
         r#"
         SELECT id, code, name, kind, calculation, default_value, is_taxable, is_active,
-               created_at::TEXT AS created_at, updated_at::TEXT AS updated_at,
-               deleted_at::TEXT AS deleted_at
+               created_at, updated_at,
+               deleted_at
         FROM salary_components WHERE id = $1
         "#,
     )
@@ -226,8 +226,8 @@ pub async fn list_employee_salary_components(
     sqlx::query_as::<_, EmployeeSalaryComponentDto>(
         r#"
         SELECT id, employee_id, salary_component_id, component_code, component_name,
-               kind, calculation, value, is_active, created_at::TEXT AS created_at,
-               updated_at::TEXT AS updated_at, deleted_at::TEXT AS deleted_at
+               kind, calculation, value, is_active, created_at,
+               updated_at, deleted_at
         FROM employee_salary_components
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -272,8 +272,8 @@ pub async fn upsert_employee_salary_component(
     sqlx::query_as::<_, EmployeeSalaryComponentDto>(
         r#"
         SELECT id, employee_id, salary_component_id, component_code, component_name,
-               kind, calculation, value, is_active, created_at::TEXT AS created_at,
-               updated_at::TEXT AS updated_at, deleted_at::TEXT AS deleted_at
+               kind, calculation, value, is_active, created_at,
+               updated_at, deleted_at
         FROM employee_salary_components WHERE id = $1
         "#,
     )

@@ -32,8 +32,8 @@ pub async fn list_stock_mutations(
             reason,
             actor_user_id,
             actor_user_name,
-            occurred_at::TEXT AS occurred_at,
-            created_at::TEXT AS created_at
+            occurred_at,
+            created_at
         FROM stock_mutations
         WHERE ($1::TIMESTAMPTZ IS NULL OR created_at > $1::TIMESTAMPTZ)
         ORDER BY created_at, id
@@ -72,8 +72,8 @@ pub async fn get_stock_mutation(
             reason,
             actor_user_id,
             actor_user_name,
-            occurred_at::TEXT AS occurred_at,
-            created_at::TEXT AS created_at
+            occurred_at,
+            created_at
         FROM stock_mutations
         WHERE id = $1
         "#,
@@ -250,8 +250,8 @@ pub(crate) async fn upsert_stock_mutation_in_tx(
             reason,
             actor_user_id,
             actor_user_name,
-            occurred_at::TEXT AS occurred_at,
-            created_at::TEXT AS created_at
+            occurred_at,
+            created_at
         "#,
         )
         .bind(input.id)
@@ -330,8 +330,8 @@ pub(crate) async fn upsert_stock_mutation_in_tx(
             reason,
             actor_user_id,
             actor_user_name,
-            occurred_at::TEXT AS occurred_at,
-            created_at::TEXT AS created_at
+            occurred_at,
+            created_at
         FROM stock_mutations
         WHERE id = $1
         "#,

@@ -18,6 +18,7 @@ import type {
   HrPosition,
   SalaryComponent,
 } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 const HR_REFRESH_LIMIT = 500;
 
@@ -46,14 +47,16 @@ const shouldApplyRemote = (
   return remoteUpdatedAt >= (local.remote_updated_at ?? local.updated_at);
 };
 
-const withoutRemoteMetadata = <T extends { deleted_at?: string | null }>(remote: T) => {
+const withoutRemoteMetadata = <T extends { created_at: string; updated_at: string; deleted_at?: string | null }>(remote: T) => {
   const record = { ...remote };
   delete record.deleted_at;
+  record.created_at = toCanonicalIsoTimestamp(record.created_at);
+  record.updated_at = toCanonicalIsoTimestamp(record.updated_at);
   return record;
 };
 
 const mergeCollection = async <
-  TLocal extends { id: string; updated_at: string; sync_status?: string; remote_updated_at?: string },
+  TLocal extends { id: string; created_at: string; updated_at: string; sync_status?: string; remote_updated_at?: string },
   TRemote extends TLocal & { deleted_at?: string | null },
 >(
   remotes: TRemote[],
@@ -73,7 +76,7 @@ const mergeCollection = async <
       sync_status: 'synced',
       sync_error: undefined,
       last_synced_at: syncedAt,
-      remote_updated_at: remote.updated_at,
+      remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
     } as unknown as TLocal);
     if (local) result.updated += 1;
     else result.inserted += 1;

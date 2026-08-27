@@ -12,9 +12,9 @@ pub async fn list_currencies(pool: &PgPool) -> Result<Vec<CurrencyDto>, sqlx::Er
             decimal_places,
             is_base,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM currencies
         WHERE deleted_at IS NULL
         ORDER BY is_base DESC, code ASC
@@ -35,9 +35,9 @@ pub async fn get_currency(pool: &PgPool, id: String) -> Result<Option<CurrencyDt
             decimal_places,
             is_base,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM currencies
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -61,9 +61,9 @@ async fn get_currency_including_deleted(
             decimal_places,
             is_base,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM currencies
         WHERE id = $1
         "#,
@@ -111,9 +111,9 @@ pub async fn upsert_currency(
             decimal_places,
             is_base,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -158,9 +158,9 @@ pub async fn delete_currency(
             decimal_places,
             is_base,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(id.clone())
@@ -190,10 +190,10 @@ pub async fn list_currency_rates(
             bi_buy_rate,
             bi_sell_rate,
             middle_rate,
-            fetched_at::TEXT AS fetched_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            fetched_at,
+            created_at,
+            updated_at,
+            deleted_at
         FROM currency_rates
         WHERE deleted_at IS NULL
           AND ($1::TEXT IS NULL OR base_currency_code = $1)
@@ -221,10 +221,10 @@ pub async fn get_currency_rate(
             bi_buy_rate,
             bi_sell_rate,
             middle_rate,
-            fetched_at::TEXT AS fetched_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            fetched_at,
+            created_at,
+            updated_at,
+            deleted_at
         FROM currency_rates
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -250,10 +250,10 @@ async fn get_currency_rate_including_deleted(
             bi_buy_rate,
             bi_sell_rate,
             middle_rate,
-            fetched_at::TEXT AS fetched_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            fetched_at,
+            created_at,
+            updated_at,
+            deleted_at
         FROM currency_rates
         WHERE id = $1
         "#,
@@ -309,10 +309,10 @@ pub async fn upsert_currency_rate(
             bi_buy_rate,
             bi_sell_rate,
             middle_rate,
-            fetched_at::TEXT AS fetched_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            fetched_at,
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -361,10 +361,10 @@ pub async fn delete_currency_rate(
             bi_buy_rate,
             bi_sell_rate,
             middle_rate,
-            fetched_at::TEXT AS fetched_at,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            fetched_at,
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(id.clone())
