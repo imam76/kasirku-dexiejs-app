@@ -4,6 +4,7 @@ use sqlx::PgPool;
 pub async fn list_employees(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<EmployeeDto>, sqlx::Error> {
     sqlx::query_as::<_, EmployeeDto>(
@@ -88,12 +89,13 @@ pub async fn list_employees(
             FROM employee_access_profiles
             WHERE deleted_at IS NULL
         ) access_profile ON access_profile.employee_id = employees.id
-        WHERE ($1::TIMESTAMPTZ IS NULL OR employees.updated_at > $1::TIMESTAMPTZ)
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (employees.updated_at, employees.id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY employees.updated_at, employees.id
-        LIMIT $2
+        LIMIT $3
         "#,
     )
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -341,6 +343,7 @@ pub async fn upsert_employee(
 pub async fn list_employee_areas(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<EmployeeAreaDto>, sqlx::Error> {
     sqlx::query_as::<_, EmployeeAreaDto>(
@@ -358,12 +361,13 @@ pub async fn list_employee_areas(
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM employee_areas
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
-        LIMIT $2
+        LIMIT $3
         "#,
     )
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -432,6 +436,7 @@ pub async fn upsert_employee_area(
 pub async fn list_employee_collection_schedules(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<EmployeeCollectionScheduleDto>, sqlx::Error> {
     sqlx::query_as::<_, EmployeeCollectionScheduleDto>(
@@ -453,12 +458,13 @@ pub async fn list_employee_collection_schedules(
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM employee_collection_schedules
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
-        LIMIT $2
+        LIMIT $3
         "#,
     )
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await

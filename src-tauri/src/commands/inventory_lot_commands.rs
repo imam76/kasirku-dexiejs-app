@@ -9,10 +9,14 @@ use tauri::State;
 pub async fn postgres_list_inventory_lots(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<InventoryLotDto>> {
     let pool = state.pool()?;
-    Ok(inventory_lot_repository::list_inventory_lots(&pool, updated_after, limit).await?)
+    Ok(
+        inventory_lot_repository::list_inventory_lots(&pool, updated_after, cursor_id, limit)
+            .await?,
+    )
 }
 
 #[tauri::command]

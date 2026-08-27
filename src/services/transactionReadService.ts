@@ -7,11 +7,8 @@ import {
   type RemoteTransactionDto,
   type RemoteTransactionItemDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type {
   PaymentMethod,
   PosPaymentMode,
@@ -233,19 +230,6 @@ export const mergeRemoteTransactionBundlesIntoDexie = async (
   return result;
 };
 
-const getLatestLocalTransactionUpdatedAt = async () => {
-  const transactions = await db.transactions.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    transactions,
-    (transaction) => transaction.remote_updated_at
-      ?? (transaction.sync_status === 'synced' ? transaction.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteTransactionBundleDto[]) => (
-  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.transaction.updated_at)
-);
-
 export const refreshTransactionsFromPostgres = async (): Promise<TransactionReadSyncResult> => {
   if (isRefreshingTransactionsFromPostgres || !canReadFromPostgres()) {
     return { ...EMPTY_TRANSACTION_READ_SYNC_RESULT };
@@ -254,27 +238,24 @@ export const refreshTransactionsFromPostgres = async (): Promise<TransactionRead
   isRefreshingTransactionsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_TRANSACTION_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalTransactionUpdatedAt();
 
-    while (true) {
-      const remoteBundles = await transactionPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'transactions',
+      pageSize: POSTGRES_TRANSACTION_REFRESH_LIMIT,
+      loadPage: (cursor) => transactionPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: POSTGRES_TRANSACTION_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteTransactionBundlesIntoDexie(remoteBundles);
-      addTransactionReadSyncResult(aggregate, result);
-
-      if (remoteBundles.length < POSTGRES_TRANSACTION_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteBundleUpdatedAt(remoteBundles);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteBundles) => {
+        addTransactionReadSyncResult(
+          aggregate,
+          await mergeRemoteTransactionBundlesIntoDexie(remoteBundles),
+        );
+      },
+      getUpdatedAt: (bundle) => bundle.transaction.updated_at,
+      getId: (bundle) => bundle.transaction.id,
+    });
 
     return aggregate;
   } catch (error) {

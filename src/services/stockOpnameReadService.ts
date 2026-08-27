@@ -6,11 +6,8 @@ import {
   type RemoteStockOpnameDto,
   type RemoteStockOpnameItemDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { Product, StockOpname, StockOpnameItem, StockOpnameStatus } from '@/types';
 import { calculateStockOpnameSummary } from '@/utils/stockOpname/calculateStockOpnameVariance';
 
@@ -127,19 +124,6 @@ const mapRemoteStockOpnameItemToLocal = (
 
 const hasLocalUnsyncedChanges = (opname: StockOpname) => (
   opname.sync_status === 'pending' || opname.sync_status === 'failed'
-);
-
-const getLatestLocalStockOpnameUpdatedAt = async () => {
-  const opnames = await db.stockOpnames.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    opnames,
-    (opname) => opname.remote_updated_at
-      ?? (opname.sync_status === 'synced' ? opname.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteStockOpnameBundleDto[]) => (
-  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.opname.updated_at)
 );
 
 const addStockOpnameReadSyncResult = (
@@ -287,27 +271,24 @@ export const refreshStockOpnamesFromPostgres = async (): Promise<StockOpnameRead
   isRefreshingStockOpnamesFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_STOCK_OPNAME_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalStockOpnameUpdatedAt();
 
-    while (true) {
-      const remoteBundles = await stockOpnamePostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'stockOpnames',
+      pageSize: POSTGRES_STOCK_OPNAME_REFRESH_LIMIT,
+      loadPage: (cursor) => stockOpnamePostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: POSTGRES_STOCK_OPNAME_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteStockOpnameBundlesIntoDexie(remoteBundles);
-      addStockOpnameReadSyncResult(aggregate, result);
-
-      if (remoteBundles.length < POSTGRES_STOCK_OPNAME_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteBundleUpdatedAt(remoteBundles);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteBundles) => {
+        addStockOpnameReadSyncResult(
+          aggregate,
+          await mergeRemoteStockOpnameBundlesIntoDexie(remoteBundles),
+        );
+      },
+      getUpdatedAt: (bundle) => bundle.opname.updated_at,
+      getId: (bundle) => bundle.opname.id,
+    });
 
     return aggregate;
   } finally {

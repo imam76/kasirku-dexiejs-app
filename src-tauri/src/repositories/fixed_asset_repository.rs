@@ -52,13 +52,15 @@ FROM fixed_asset_depreciation_run_lines
 pub async fn list_fixed_assets(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<FixedAssetDto>, sqlx::Error> {
     sqlx::query_as::<_, FixedAssetDto>(sqlx::AssertSqlSafe(format!(
-        "{} WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ) ORDER BY updated_at, id LIMIT $2",
+        "{} WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, ''))) ORDER BY updated_at, id LIMIT $3",
         ASSET_SELECT
     )))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -150,12 +152,18 @@ async fn list_lines(
 pub async fn list_run_bundles(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<FixedAssetDepreciationRunBundleDto>, sqlx::Error> {
     let runs = sqlx::query_as::<_, FixedAssetDepreciationRunDto>(sqlx::AssertSqlSafe(format!(
-        "{} WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ) ORDER BY updated_at, id LIMIT $2",
+        "{} WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, ''))) ORDER BY updated_at, id LIMIT $3",
         RUN_SELECT
-    ))).bind(updated_after).bind(limit.unwrap_or(300).clamp(1, 500)).fetch_all(pool).await?;
+    )))
+    .bind(updated_after)
+    .bind(cursor_id)
+    .bind(limit.unwrap_or(300).clamp(1, 500))
+    .fetch_all(pool)
+    .await?;
     let mut result = Vec::with_capacity(runs.len());
     for run in runs {
         let lines = list_lines(pool, &run.id).await?;

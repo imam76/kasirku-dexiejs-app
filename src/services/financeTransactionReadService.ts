@@ -6,11 +6,8 @@ import {
   isTauriRuntime,
   type RemoteFinanceTransactionDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type {
   AccountType,
   CooperativeFieldCashMovementKind,
@@ -245,20 +242,6 @@ export const mergeRemoteFinanceTransactionsIntoDexie = async (
   return result;
 };
 
-const getLatestLocalFinanceTransactionUpdatedAt = async () => {
-  const transactions = await db.financeTransactions.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    transactions,
-    (transaction) => (
-      transaction.remote_updated_at ?? (transaction.sync_status === 'synced' ? transaction.updated_at : undefined)
-    ),
-  );
-};
-
-const getLatestRemoteFinanceTransactionUpdatedAt = (remoteTransactions: RemoteFinanceTransactionDto[]) => (
-  getLatestRemoteUpdatedAt(remoteTransactions, (transaction) => transaction.updated_at)
-);
-
 const addFinanceTransactionReadSyncResult = (
   aggregate: FinanceTransactionReadSyncResult,
   next: FinanceTransactionReadSyncResult,
@@ -278,27 +261,23 @@ export const refreshFinanceTransactionsFromPostgres = async (): Promise<FinanceT
   isRefreshingFinanceTransactionsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_FINANCE_TRANSACTION_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalFinanceTransactionUpdatedAt();
-
-    while (true) {
-      const remoteTransactions = await financeTransactionPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'financeTransactions',
+      pageSize: FINANCE_TRANSACTION_REFRESH_LIMIT,
+      loadPage: (cursor) => financeTransactionPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: FINANCE_TRANSACTION_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteFinanceTransactionsIntoDexie(remoteTransactions);
-      addFinanceTransactionReadSyncResult(aggregate, result);
-
-      if (remoteTransactions.length < FINANCE_TRANSACTION_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteFinanceTransactionUpdatedAt(remoteTransactions);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteTransactions) => {
+        addFinanceTransactionReadSyncResult(
+          aggregate,
+          await mergeRemoteFinanceTransactionsIntoDexie(remoteTransactions),
+        );
+      },
+      getUpdatedAt: (transaction) => transaction.updated_at,
+      getId: (transaction) => transaction.id,
+    });
 
     return aggregate;
   } catch (error) {

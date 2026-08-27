@@ -162,6 +162,7 @@ macro_rules! opening_balance_line_select {
 pub async fn list_opening_balance_bundles(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<OpeningBalanceBundleDto>, sqlx::Error> {
     ensure_opening_balance_batch_hardening_columns(pool).await?;
@@ -170,12 +171,13 @@ pub async fn list_opening_balance_bundles(
     let batches = sqlx::query_as::<_, OpeningBalanceBatchDto>(concat!(
         opening_balance_batch_select!(),
         r#"
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
-        ORDER BY updated_at ASC, cutoff_date ASC, module ASC, id ASC
-        LIMIT $2
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
+        ORDER BY updated_at ASC, id ASC
+        LIMIT $3
         "#
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit)
     .fetch_all(pool)
     .await?;

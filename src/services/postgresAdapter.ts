@@ -2101,6 +2101,7 @@ export interface PostgresCommandError {
 
 export interface PostgresListOptions {
   updatedAfter?: string;
+  cursorId?: string;
   limit?: number;
 }
 
@@ -2273,6 +2274,7 @@ export const employeePostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteEmployeeDto[]>('postgres_list_employees', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2293,6 +2295,7 @@ export const employeeAreaPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteEmployeeAreaDto[]>('postgres_list_employee_areas', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2308,6 +2311,7 @@ export const employeeCollectionSchedulePostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteEmployeeCollectionScheduleDto[]>('postgres_list_employee_collection_schedules', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2378,6 +2382,7 @@ export const payrollRunPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemotePayrollRunBundleDto[]>('postgres_list_payroll_run_bundles', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2398,6 +2403,7 @@ export const employeeCashAdvancePostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteEmployeeCashAdvanceBundleDto[]>('postgres_list_employee_cash_advance_bundles', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2440,6 +2446,7 @@ export const hrPositionPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteHrPositionDto[]>('postgres_list_hr_positions', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2454,6 +2461,7 @@ export const employmentContractPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteEmploymentContractDto[]>('postgres_list_employment_contracts', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2468,6 +2476,7 @@ export const salaryComponentPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteSalaryComponentDto[]>('postgres_list_salary_components', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2482,6 +2491,7 @@ export const employeeSalaryComponentPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteEmployeeSalaryComponentDto[]>('postgres_list_employee_salary_components', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2496,6 +2506,7 @@ export const cashierSessionPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteCashierSessionDto[]>('postgres_list_cashier_sessions', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2516,6 +2527,7 @@ export const chartOfAccountPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteChartOfAccountDto[]>('postgres_list_chart_of_accounts', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2541,6 +2553,7 @@ export const financeAccountMappingPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteFinanceAccountMappingDto[]>('postgres_list_finance_account_mappings', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2622,9 +2635,13 @@ export const projectPostgresAdapter = {
 };
 
 export const fixedAssetPostgresAdapter = {
-  async list(updatedAfter?: string, limit = 500) {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
-    return invoke<RemoteFixedAssetDto[]>('postgres_list_fixed_assets', { updatedAfter, limit });
+    return invoke<RemoteFixedAssetDto[]>('postgres_list_fixed_assets', {
+      updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
+      limit: options.limit,
+    });
   },
 
   async upsert(input: RemoteFixedAssetDto) {
@@ -2634,11 +2651,15 @@ export const fixedAssetPostgresAdapter = {
 };
 
 export const fixedAssetDepreciationRunPostgresAdapter = {
-  async list(updatedAfter?: string, limit = 300) {
+  async list(options: PostgresListOptions = {}) {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteFixedAssetDepreciationRunBundleDto[]>(
       'postgres_list_fixed_asset_depreciation_run_bundles',
-      { updatedAfter, limit },
+      {
+        updatedAfter: options.updatedAfter,
+        cursorId: options.cursorId,
+        limit: options.limit,
+      },
     );
   },
 
@@ -2678,6 +2699,7 @@ export const contactPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteContactDto[]>('postgres_list_contacts', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2703,6 +2725,7 @@ export const promoPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemotePromoDto[]>('postgres_list_promos', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2825,6 +2848,7 @@ export const productPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteProductDto[]>('postgres_list_products', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2870,6 +2894,7 @@ export const posStockDiscrepancyPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemotePosStockDiscrepancyDto[]>('postgres_list_pos_stock_discrepancies', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2890,6 +2915,7 @@ export const inventoryLotPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteInventoryLotDto[]>('postgres_list_inventory_lots', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2920,6 +2946,7 @@ export const stockOpnamePostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteStockOpnameBundleDto[]>('postgres_list_stock_opname_bundles', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2940,6 +2967,7 @@ export const productionOrderPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteProductionOrderBundleDto[]>('postgres_list_production_order_bundles', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2960,6 +2988,7 @@ export const salesDocumentPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteSalesDocumentBundleDto[]>('postgres_list_sales_document_bundles', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -2980,6 +3009,7 @@ export const transactionPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteTransactionBundleDto[]>('postgres_list_transaction_bundles', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3000,6 +3030,7 @@ export const purchaseDocumentPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemotePurchaseDocumentBundleDto[]>('postgres_list_purchase_document_bundles', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3050,6 +3081,7 @@ export const financeTransactionPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteFinanceTransactionDto[]>('postgres_list_finance_transactions', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3070,6 +3102,7 @@ export const cashBankReconciliationPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteCashBankReconciliationDto[]>('postgres_list_cash_bank_reconciliations', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3090,6 +3123,7 @@ export const accountingPeriodPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteAccountingPeriodDto[]>('postgres_list_accounting_periods', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3110,6 +3144,7 @@ export const accountingFiscalYearPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteAccountingFiscalYearDto[]>('postgres_list_accounting_fiscal_years', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3130,6 +3165,7 @@ export const closingRunPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteClosingRunDto[]>('postgres_list_closing_runs', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3150,6 +3186,7 @@ export const fiscalYearClosingRunPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteFiscalYearClosingRunDto[]>('postgres_list_fiscal_year_closing_runs', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3170,6 +3207,7 @@ export const journalEntryPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteJournalEntryBundleDto[]>('postgres_list_journal_entry_bundles', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3190,6 +3228,7 @@ export const openingBalancePostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteOpeningBalanceBundleDto[]>('postgres_list_opening_balance_bundles', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3220,6 +3259,7 @@ export const cooperativeMemberPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteCooperativeMemberDto[]>('postgres_list_cooperative_members', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3252,6 +3292,7 @@ export const cooperativeAreaPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteCooperativeAreaDto[]>('postgres_list_cooperative_areas', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3272,6 +3313,7 @@ export const cooperativeSavingTransactionPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteCooperativeSavingTransactionDto[]>('postgres_list_cooperative_saving_transactions', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3292,6 +3334,7 @@ export const cooperativeMemberSavingBalancePostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteCooperativeMemberSavingBalanceDto[]>('postgres_list_cooperative_member_saving_balances', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3312,6 +3355,7 @@ export const cooperativeLoanPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteCooperativeLoanDto[]>('postgres_list_cooperative_loans', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3342,6 +3386,7 @@ export const cooperativeLoanInstallmentPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteCooperativeLoanInstallmentDto[]>('postgres_list_cooperative_loan_installments', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },
@@ -3362,6 +3407,7 @@ export const cooperativeLoanPaymentPostgresAdapter = {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteCooperativeLoanPaymentDto[]>('postgres_list_cooperative_loan_payments', {
       updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },

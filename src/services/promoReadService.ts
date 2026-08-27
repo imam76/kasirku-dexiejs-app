@@ -5,11 +5,8 @@ import {
   promoPostgresAdapter,
   type RemotePromoDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { Promo, PromoAppliesTo, PromoType, ProductCategory } from '@/types';
 
 export interface PromoReadSyncResult {
@@ -131,18 +128,6 @@ export const mergeRemotePromosIntoDexie = async (
   return result;
 };
 
-const getLatestLocalPromoUpdatedAt = async () => {
-  const promos = await db.promos.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    promos,
-    (promo) => promo.remote_updated_at ?? (promo.sync_status === 'synced' ? promo.updated_at : undefined),
-  );
-};
-
-const getLatestRemotePromoUpdatedAt = (remotePromos: RemotePromoDto[]) => (
-  getLatestRemoteUpdatedAt(remotePromos, (promo) => promo.updated_at)
-);
-
 const addPromoReadSyncResult = (
   aggregate: PromoReadSyncResult,
   next: PromoReadSyncResult,
@@ -161,27 +146,20 @@ export const refreshPromosFromPostgres = async (): Promise<PromoReadSyncResult> 
   isRefreshingPromosFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_PROMO_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalPromoUpdatedAt();
-
-    while (true) {
-      const remotePromos = await promoPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'promos',
+      pageSize: PROMO_REFRESH_LIMIT,
+      loadPage: (cursor) => promoPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: PROMO_REFRESH_LIMIT,
-      });
-      const result = await mergeRemotePromosIntoDexie(remotePromos);
-      addPromoReadSyncResult(aggregate, result);
-
-      if (remotePromos.length < PROMO_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemotePromoUpdatedAt(remotePromos);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remotePromos) => {
+        addPromoReadSyncResult(aggregate, await mergeRemotePromosIntoDexie(remotePromos));
+      },
+      getUpdatedAt: (promo) => promo.updated_at,
+      getId: (promo) => promo.id,
+    });
 
     return aggregate;
   } catch (error) {

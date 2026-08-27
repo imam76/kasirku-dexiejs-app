@@ -7,11 +7,8 @@ import {
   type RemoteProductionOrderDto,
   type RemoteProductionOrderItemDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type {
   ProductionOrder,
   ProductionOrderCost,
@@ -150,19 +147,6 @@ const mapRemoteProductionOrderCostToLocal = (
   updated_at: remoteCost.updated_at,
 });
 
-const getLatestLocalProductionOrderUpdatedAt = async () => {
-  const orders = await db.productionOrders.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    orders,
-    (order) => order.remote_updated_at
-      ?? (order.sync_status === 'synced' ? order.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteProductionOrderBundleDto[]) => (
-  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.order.updated_at)
-);
-
 const addProductionOrderReadSyncResult = (
   aggregate: ProductionOrderReadSyncResult,
   next: ProductionOrderReadSyncResult,
@@ -271,27 +255,24 @@ export const refreshProductionOrdersFromPostgres = async (): Promise<ProductionO
   isRefreshingProductionOrdersFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_PRODUCTION_ORDER_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalProductionOrderUpdatedAt();
 
-    while (true) {
-      const remoteBundles = await productionOrderPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'productionOrders',
+      pageSize: POSTGRES_PRODUCTION_ORDER_REFRESH_LIMIT,
+      loadPage: (cursor) => productionOrderPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: POSTGRES_PRODUCTION_ORDER_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteProductionOrderBundlesIntoDexie(remoteBundles);
-      addProductionOrderReadSyncResult(aggregate, result);
-
-      if (remoteBundles.length < POSTGRES_PRODUCTION_ORDER_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteBundleUpdatedAt(remoteBundles);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteBundles) => {
+        addProductionOrderReadSyncResult(
+          aggregate,
+          await mergeRemoteProductionOrderBundlesIntoDexie(remoteBundles),
+        );
+      },
+      getUpdatedAt: (bundle) => bundle.order.updated_at,
+      getId: (bundle) => bundle.order.id,
+    });
 
     return aggregate;
   } finally {

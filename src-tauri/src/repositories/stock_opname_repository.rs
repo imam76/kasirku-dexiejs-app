@@ -64,18 +64,20 @@ macro_rules! stock_opname_item_select {
 pub async fn list_stock_opname_bundles(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<StockOpnameBundleDto>, sqlx::Error> {
     let limit = limit.unwrap_or(200).clamp(1, 500);
     let opnames = sqlx::query_as::<_, StockOpnameDto>(concat!(
         stock_opname_select!(),
         r#"
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
-        ORDER BY updated_at ASC, created_at ASC, id ASC
-        LIMIT $2
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
+        ORDER BY updated_at ASC, id ASC
+        LIMIT $3
         "#
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit)
     .fetch_all(pool)
     .await?;

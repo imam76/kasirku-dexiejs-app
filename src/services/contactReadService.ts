@@ -5,11 +5,8 @@ import {
   isTauriRuntime,
   type RemoteContactDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { Contact, ContactType, RetailMembershipStatus } from '@/types';
 
 export interface ContactReadSyncResult {
@@ -174,18 +171,6 @@ export const mergeRemoteContactsIntoDexie = async (
   return result;
 };
 
-const getLatestLocalContactUpdatedAt = async () => {
-  const contacts = await db.contacts.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    contacts,
-    (contact) => contact.remote_updated_at ?? (contact.sync_status === 'synced' ? contact.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteContactUpdatedAt = (remoteContacts: RemoteContactDto[]) => (
-  getLatestRemoteUpdatedAt(remoteContacts, (contact) => contact.updated_at)
-);
-
 const addContactReadSyncResult = (
   aggregate: ContactReadSyncResult,
   next: ContactReadSyncResult,
@@ -204,27 +189,20 @@ export const refreshContactsFromPostgres = async (): Promise<ContactReadSyncResu
   isRefreshingContactsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_CONTACT_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalContactUpdatedAt();
-
-    while (true) {
-      const remoteContacts = await contactPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'contacts',
+      pageSize: CONTACT_REFRESH_LIMIT,
+      loadPage: (cursor) => contactPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: CONTACT_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteContactsIntoDexie(remoteContacts);
-      addContactReadSyncResult(aggregate, result);
-
-      if (remoteContacts.length < CONTACT_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteContactUpdatedAt(remoteContacts);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteContacts) => {
+        addContactReadSyncResult(aggregate, await mergeRemoteContactsIntoDexie(remoteContacts));
+      },
+      getUpdatedAt: (contact) => contact.updated_at,
+      getId: (contact) => contact.id,
+    });
 
     return aggregate;
   } catch (error) {

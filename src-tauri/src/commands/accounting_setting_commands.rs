@@ -12,12 +12,18 @@ use tauri::State;
 pub async fn postgres_list_finance_account_mappings(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<FinanceAccountMappingDto>> {
     let pool = state.pool()?;
     Ok(
-        accounting_setting_repository::list_finance_account_mappings(&pool, updated_after, limit)
-            .await?,
+        accounting_setting_repository::list_finance_account_mappings(
+            &pool,
+            updated_after,
+            cursor_id,
+            limit,
+        )
+        .await?,
     )
 }
 

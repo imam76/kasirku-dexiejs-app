@@ -6,12 +6,8 @@ import {
   type RemoteInventoryLotConsumptionDto,
   type RemoteInventoryLotDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  getLaterUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { getLaterUpdatedAt, toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { InventoryLot, InventoryLotConsumption } from '@/types';
 
 export interface InventoryLotReadSyncResult {
@@ -187,18 +183,6 @@ export const mergeRemoteInventoryLotConsumptionsIntoDexie = async (
   return result;
 };
 
-const getLatestLocalInventoryLotUpdatedAt = async () => {
-  const lots = await db.inventoryLots.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    lots,
-    (lot) => lot.remote_updated_at ?? (lot.sync_status === 'synced' ? lot.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteInventoryLotUpdatedAt = (remoteLots: RemoteInventoryLotDto[]) => (
-  getLatestRemoteUpdatedAt(remoteLots, (lot) => lot.updated_at)
-);
-
 export const refreshInventoryLotsFromPostgres = async (): Promise<InventoryLotReadSyncResult> => {
   if (isRefreshingInventoryLotsFromPostgres || !canReadFromPostgres()) {
     return { ...EMPTY_RESULT };
@@ -207,25 +191,24 @@ export const refreshInventoryLotsFromPostgres = async (): Promise<InventoryLotRe
   isRefreshingInventoryLotsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_RESULT };
-    let updatedAfter = await getLatestLocalInventoryLotUpdatedAt();
-
-    while (true) {
-      const remoteLots = await inventoryLotPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'inventoryLots',
+      pageSize: INVENTORY_LOT_REFRESH_LIMIT,
+      loadPage: (cursor) => inventoryLotPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: INVENTORY_LOT_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteInventoryLotsIntoDexie(remoteLots);
-      aggregate.fetched += result.fetched;
-      aggregate.inserted += result.inserted;
-      aggregate.updated += result.updated;
-      aggregate.skipped += result.skipped;
-
-      if (remoteLots.length < INVENTORY_LOT_REFRESH_LIMIT) break;
-
-      const nextUpdatedAfter = getLatestRemoteInventoryLotUpdatedAt(remoteLots);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteLots) => {
+        const result = await mergeRemoteInventoryLotsIntoDexie(remoteLots);
+        aggregate.fetched += result.fetched;
+        aggregate.inserted += result.inserted;
+        aggregate.updated += result.updated;
+        aggregate.skipped += result.skipped;
+      },
+      getUpdatedAt: (lot) => lot.updated_at,
+      getId: (lot) => lot.id,
+    });
 
     return aggregate;
   } finally {

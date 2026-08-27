@@ -281,7 +281,10 @@ impl ClassPort {
         hardware_id.starts_with("BTHENUM")
             || hardware_id.starts_with("BTHLE")
             || hardware_id.contains("BTHMODEM")
-            || self.friendly_name.to_ascii_lowercase().contains("bluetooth")
+            || self
+                .friendly_name
+                .to_ascii_lowercase()
+                .contains("bluetooth")
     }
 
     /// Port sedang siap dipakai (tidak sekadar terdaftar dari hasil pairing).
@@ -320,8 +323,7 @@ pub fn list_serial_class_ports() -> Vec<ClassPort> {
             Reserved: 0,
         };
 
-        let ok =
-            unsafe { SetupDiEnumDeviceInfo(device_info_set, index, &mut device_info_data) };
+        let ok = unsafe { SetupDiEnumDeviceInfo(device_info_set, index, &mut device_info_data) };
         if ok == 0 {
             break;
         }
@@ -344,12 +346,8 @@ pub fn list_serial_class_ports() -> Vec<ClassPort> {
                 SPDRP_FRIENDLYNAME,
             )
             .unwrap_or_default(),
-            hardware_id: read_device_property(
-                device_info_set,
-                &device_info_data,
-                SPDRP_HARDWAREID,
-            )
-            .unwrap_or_default(),
+            hardware_id: read_device_property(device_info_set, &device_info_data, SPDRP_HARDWAREID)
+                .unwrap_or_default(),
             problem: read_device_problem(device_info_data.DevInst),
         });
     }
@@ -361,10 +359,7 @@ pub fn list_serial_class_ports() -> Vec<ClassPort> {
 
 /// Nama COM port disimpan di device registry key (`PortName`), bukan di properti
 /// SetupAPI biasa.
-fn read_port_name(
-    device_info_set: HDEVINFO,
-    device_info_data: &SP_DEVINFO_DATA,
-) -> Option<String> {
+fn read_port_name(device_info_set: HDEVINFO, device_info_data: &SP_DEVINFO_DATA) -> Option<String> {
     let key: HKEY = unsafe {
         SetupDiOpenDevRegKey(
             device_info_set,

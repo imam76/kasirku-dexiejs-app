@@ -10,11 +10,8 @@ import {
   type RemotePayrollRunDto,
   type RemotePayrollRunItemDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type {
   EmployeeCashAdvance,
   EmployeeCashAdvanceRepayment,
@@ -230,32 +227,6 @@ const mapRemoteCashAdvanceRepaymentToLocal = (
   updated_at: remoteRepayment.updated_at,
 });
 
-const getLatestPayrollRunRemoteUpdatedAt = async () => {
-  const runs = await db.payrollRuns.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    runs,
-    (run) => run.remote_updated_at
-      ?? (run.sync_status === 'synced' ? run.updated_at : undefined),
-  );
-};
-
-const getLatestCashAdvanceRemoteUpdatedAt = async () => {
-  const cashAdvances = await db.employeeCashAdvances.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    cashAdvances,
-    (cashAdvance) => cashAdvance.remote_updated_at
-      ?? (cashAdvance.sync_status === 'synced' ? cashAdvance.updated_at : undefined),
-  );
-};
-
-const getLatestRemotePayrollBundleUpdatedAt = (remoteBundles: RemotePayrollRunBundleDto[]) => (
-  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.run.updated_at)
-);
-
-const getLatestRemoteCashAdvanceBundleUpdatedAt = (remoteBundles: RemoteEmployeeCashAdvanceBundleDto[]) => (
-  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.cash_advance.updated_at)
-);
-
 const addPayrollReadSyncResult = (
   aggregate: PayrollReadSyncResult,
   next: PayrollReadSyncResult,
@@ -374,27 +345,24 @@ export const refreshPayrollRunsFromPostgres = async (): Promise<PayrollReadSyncR
   isRefreshingPayrollRunsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_PAYROLL_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestPayrollRunRemoteUpdatedAt();
 
-    while (true) {
-      const remoteBundles = await payrollRunPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'payrollRuns',
+      pageSize: POSTGRES_PAYROLL_REFRESH_LIMIT,
+      loadPage: (cursor) => payrollRunPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: POSTGRES_PAYROLL_REFRESH_LIMIT,
-      });
-      const result = await mergeRemotePayrollRunBundlesIntoDexie(remoteBundles);
-      addPayrollReadSyncResult(aggregate, result);
-
-      if (remoteBundles.length < POSTGRES_PAYROLL_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemotePayrollBundleUpdatedAt(remoteBundles);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteBundles) => {
+        addPayrollReadSyncResult(
+          aggregate,
+          await mergeRemotePayrollRunBundlesIntoDexie(remoteBundles),
+        );
+      },
+      getUpdatedAt: (bundle) => bundle.run.updated_at,
+      getId: (bundle) => bundle.run.id,
+    });
 
     return aggregate;
   } finally {
@@ -410,27 +378,24 @@ export const refreshEmployeeCashAdvancesFromPostgres = async (): Promise<Payroll
   isRefreshingEmployeeCashAdvancesFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_PAYROLL_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestCashAdvanceRemoteUpdatedAt();
 
-    while (true) {
-      const remoteBundles = await employeeCashAdvancePostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'employeeCashAdvances',
+      pageSize: POSTGRES_PAYROLL_REFRESH_LIMIT,
+      loadPage: (cursor) => employeeCashAdvancePostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: POSTGRES_PAYROLL_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteEmployeeCashAdvanceBundlesIntoDexie(remoteBundles);
-      addPayrollReadSyncResult(aggregate, result);
-
-      if (remoteBundles.length < POSTGRES_PAYROLL_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteCashAdvanceBundleUpdatedAt(remoteBundles);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteBundles) => {
+        addPayrollReadSyncResult(
+          aggregate,
+          await mergeRemoteEmployeeCashAdvanceBundlesIntoDexie(remoteBundles),
+        );
+      },
+      getUpdatedAt: (bundle) => bundle.cash_advance.updated_at,
+      getId: (bundle) => bundle.cash_advance.id,
+    });
 
     return aggregate;
   } finally {

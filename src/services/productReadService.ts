@@ -5,11 +5,8 @@ import {
   productPostgresAdapter,
   type RemoteProductDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { Product, ProductUnit, ProductUnitMapping, WholesalePrice } from '@/types';
 import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
 
@@ -200,18 +197,6 @@ export const mergeRemoteProductsIntoDexie = async (
   return result;
 };
 
-const getLatestLocalProductUpdatedAt = async () => {
-  const products = await db.products.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    products,
-    (product) => product.remote_updated_at ?? (product.sync_status === 'synced' ? product.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteProductUpdatedAt = (remoteProducts: RemoteProductDto[]) => (
-  getLatestRemoteUpdatedAt(remoteProducts, (product) => product.updated_at)
-);
-
 const addProductReadSyncResult = (
   aggregate: ProductReadSyncResult,
   next: ProductReadSyncResult,
@@ -230,27 +215,20 @@ export const refreshProductsFromPostgres = async (): Promise<ProductReadSyncResu
   isRefreshingProductsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_PRODUCT_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalProductUpdatedAt();
-
-    while (true) {
-      const remoteProducts = await productPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'products',
+      pageSize: PRODUCT_REFRESH_LIMIT,
+      loadPage: (cursor) => productPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: PRODUCT_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteProductsIntoDexie(remoteProducts);
-      addProductReadSyncResult(aggregate, result);
-
-      if (remoteProducts.length < PRODUCT_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteProductUpdatedAt(remoteProducts);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteProducts) => {
+        addProductReadSyncResult(aggregate, await mergeRemoteProductsIntoDexie(remoteProducts));
+      },
+      getUpdatedAt: (product) => product.updated_at,
+      getId: (product) => product.id,
+    });
 
     return aggregate;
   } catch (error) {

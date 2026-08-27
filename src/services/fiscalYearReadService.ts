@@ -6,11 +6,8 @@ import {
   type RemoteAccountingFiscalYearDto,
   type RemoteFiscalYearClosingRunDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type {
   AccountingFiscalYear,
   AccountingFiscalYearStatus,
@@ -231,19 +228,6 @@ export const mergeRemoteFiscalYearClosingRunsIntoDexie = async (
   return result;
 };
 
-const getLatestLocalFiscalYearUpdatedAt = async () => {
-  const fiscalYears = await db.accountingFiscalYears.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    fiscalYears,
-    (fiscalYear) => fiscalYear.remote_updated_at
-      ?? (fiscalYear.sync_status === 'synced' ? fiscalYear.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteFiscalYearUpdatedAt = (remoteFiscalYears: RemoteAccountingFiscalYearDto[]) => (
-  getLatestRemoteUpdatedAt(remoteFiscalYears, (fiscalYear) => fiscalYear.updated_at)
-);
-
 export const refreshAccountingFiscalYearsFromPostgres = async (): Promise<FiscalYearReadSyncResult> => {
   if (isRefreshingFiscalYearsFromPostgres || !canReadFromPostgres()) {
     return { ...EMPTY_RESULT };
@@ -252,44 +236,31 @@ export const refreshAccountingFiscalYearsFromPostgres = async (): Promise<Fiscal
   isRefreshingFiscalYearsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_RESULT };
-    let updatedAfter = await getLatestLocalFiscalYearUpdatedAt();
-
-    while (true) {
-      const remoteFiscalYears = await accountingFiscalYearPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'accountingFiscalYears',
+      pageSize: FISCAL_YEAR_REFRESH_LIMIT,
+      loadPage: (cursor) => accountingFiscalYearPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: FISCAL_YEAR_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteAccountingFiscalYearsIntoDexie(remoteFiscalYears);
-      aggregate.fetched += result.fetched;
-      aggregate.inserted += result.inserted;
-      aggregate.updated += result.updated;
-      aggregate.deleted += result.deleted;
-      aggregate.skipped += result.skipped;
-
-      if (remoteFiscalYears.length < FISCAL_YEAR_REFRESH_LIMIT) break;
-
-      const nextUpdatedAfter = getLatestRemoteFiscalYearUpdatedAt(remoteFiscalYears);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteFiscalYears) => {
+        const result = await mergeRemoteAccountingFiscalYearsIntoDexie(remoteFiscalYears);
+        aggregate.fetched += result.fetched;
+        aggregate.inserted += result.inserted;
+        aggregate.updated += result.updated;
+        aggregate.deleted += result.deleted;
+        aggregate.skipped += result.skipped;
+      },
+      getUpdatedAt: (fiscalYear) => fiscalYear.updated_at,
+      getId: (fiscalYear) => fiscalYear.id,
+    });
 
     return aggregate;
   } finally {
     isRefreshingFiscalYearsFromPostgres = false;
   }
 };
-
-const getLatestLocalFiscalYearClosingRunUpdatedAt = async () => {
-  const runs = await db.fiscalYearClosingRuns.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    runs,
-    (run) => run.remote_updated_at ?? (run.sync_status === 'synced' ? run.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteFiscalYearClosingRunUpdatedAt = (remoteRuns: RemoteFiscalYearClosingRunDto[]) => (
-  getLatestRemoteUpdatedAt(remoteRuns, (run) => run.updated_at)
-);
 
 export const refreshFiscalYearClosingRunsFromPostgres = async (): Promise<FiscalYearReadSyncResult> => {
   if (isRefreshingFiscalYearClosingRunsFromPostgres || !canReadFromPostgres()) {
@@ -299,26 +270,25 @@ export const refreshFiscalYearClosingRunsFromPostgres = async (): Promise<Fiscal
   isRefreshingFiscalYearClosingRunsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_RESULT };
-    let updatedAfter = await getLatestLocalFiscalYearClosingRunUpdatedAt();
-
-    while (true) {
-      const remoteRuns = await fiscalYearClosingRunPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'fiscalYearClosingRuns',
+      pageSize: FISCAL_YEAR_CLOSING_RUN_REFRESH_LIMIT,
+      loadPage: (cursor) => fiscalYearClosingRunPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: FISCAL_YEAR_CLOSING_RUN_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteFiscalYearClosingRunsIntoDexie(remoteRuns);
-      aggregate.fetched += result.fetched;
-      aggregate.inserted += result.inserted;
-      aggregate.updated += result.updated;
-      aggregate.deleted += result.deleted;
-      aggregate.skipped += result.skipped;
-
-      if (remoteRuns.length < FISCAL_YEAR_CLOSING_RUN_REFRESH_LIMIT) break;
-
-      const nextUpdatedAfter = getLatestRemoteFiscalYearClosingRunUpdatedAt(remoteRuns);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteRuns) => {
+        const result = await mergeRemoteFiscalYearClosingRunsIntoDexie(remoteRuns);
+        aggregate.fetched += result.fetched;
+        aggregate.inserted += result.inserted;
+        aggregate.updated += result.updated;
+        aggregate.deleted += result.deleted;
+        aggregate.skipped += result.skipped;
+      },
+      getUpdatedAt: (run) => run.updated_at,
+      getId: (run) => run.id,
+    });
 
     return aggregate;
   } finally {

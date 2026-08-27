@@ -5,11 +5,8 @@ import {
   isTauriRuntime,
   type RemoteChartOfAccountDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { AccountNormalBalance, AccountType, ChartOfAccount } from '@/types';
 
 export interface ChartOfAccountReadSyncResult {
@@ -119,18 +116,6 @@ export const mergeRemoteChartOfAccountsIntoDexie = async (
   return result;
 };
 
-const getLatestLocalChartOfAccountUpdatedAt = async () => {
-  const accounts = await db.chartOfAccounts.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    accounts,
-    (account) => account.remote_updated_at ?? (account.sync_status === 'synced' ? account.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteChartOfAccountUpdatedAt = (remoteAccounts: RemoteChartOfAccountDto[]) => (
-  getLatestRemoteUpdatedAt(remoteAccounts, (account) => account.updated_at)
-);
-
 const addChartOfAccountReadSyncResult = (
   aggregate: ChartOfAccountReadSyncResult,
   next: ChartOfAccountReadSyncResult,
@@ -149,27 +134,20 @@ export const refreshChartOfAccountsFromPostgres = async (): Promise<ChartOfAccou
   isRefreshingChartOfAccountsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_CHART_OF_ACCOUNT_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalChartOfAccountUpdatedAt();
-
-    while (true) {
-      const remoteAccounts = await chartOfAccountPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'chartOfAccounts',
+      pageSize: CHART_OF_ACCOUNT_REFRESH_LIMIT,
+      loadPage: (cursor) => chartOfAccountPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: CHART_OF_ACCOUNT_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteChartOfAccountsIntoDexie(remoteAccounts);
-      addChartOfAccountReadSyncResult(aggregate, result);
-
-      if (remoteAccounts.length < CHART_OF_ACCOUNT_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteChartOfAccountUpdatedAt(remoteAccounts);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteAccounts) => {
+        addChartOfAccountReadSyncResult(aggregate, await mergeRemoteChartOfAccountsIntoDexie(remoteAccounts));
+      },
+      getUpdatedAt: (account) => account.updated_at,
+      getId: (account) => account.id,
+    });
 
     return aggregate;
   } catch (error) {

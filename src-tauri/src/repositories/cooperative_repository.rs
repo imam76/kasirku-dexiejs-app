@@ -336,15 +336,17 @@ fn build_cooperative_member_code(
 pub async fn list_cooperative_members(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<CooperativeMemberDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeMemberDto>(concat!(
         cooperative_member_select!(),
-        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
           ORDER BY updated_at, id
-          LIMIT $2"
+          LIMIT $3"
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -398,15 +400,17 @@ pub async fn upsert_cooperative_member_code(
 pub async fn list_cooperative_areas(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<CooperativeAreaDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeAreaDto>(concat!(
         cooperative_area_select!(),
-        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
           ORDER BY updated_at, id
-          LIMIT $2"
+          LIMIT $3"
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -644,15 +648,17 @@ pub async fn upsert_cooperative_member(
 pub async fn list_cooperative_saving_transactions(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<CooperativeSavingTransactionDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeSavingTransactionDto>(concat!(
         cooperative_saving_transaction_select!(),
-        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
           ORDER BY updated_at, id
-          LIMIT $2"
+          LIMIT $3"
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -865,15 +871,17 @@ pub async fn upsert_cooperative_saving_transaction(
 pub async fn list_cooperative_member_saving_balances(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<CooperativeMemberSavingBalanceDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeMemberSavingBalanceDto>(concat!(
         cooperative_member_saving_balance_select!(),
-        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
           ORDER BY updated_at, id
-          LIMIT $2"
+          LIMIT $3"
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -957,15 +965,17 @@ pub async fn upsert_cooperative_member_saving_balance(
 pub async fn list_cooperative_loans(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<CooperativeLoanDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeLoanDto>(concat!(
         cooperative_loan_select!(),
-        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
           ORDER BY updated_at, id
-          LIMIT $2"
+          LIMIT $3"
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -1073,10 +1083,12 @@ pub async fn delete_cooperative_loan_migration(
     .execute(&mut *tx)
     .await?;
 
-    sqlx::query("UPDATE cooperative_loans SET updated_at = NOW(), deleted_at = NOW() WHERE id = $1")
-        .bind(&loan_id)
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE cooperative_loans SET updated_at = NOW(), deleted_at = NOW() WHERE id = $1",
+    )
+    .bind(&loan_id)
+    .execute(&mut *tx)
+    .await?;
 
     tx.commit().await?;
 
@@ -1448,15 +1460,17 @@ pub async fn upsert_cooperative_loan(
 pub async fn list_cooperative_loan_installments(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<CooperativeLoanInstallmentDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeLoanInstallmentDto>(concat!(
         cooperative_loan_installment_select!(),
-        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
           ORDER BY updated_at, id
-          LIMIT $2"
+          LIMIT $3"
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -1621,15 +1635,17 @@ pub async fn upsert_cooperative_loan_installment(
 pub async fn list_cooperative_loan_payments(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<CooperativeLoanPaymentDto>, sqlx::Error> {
     sqlx::query_as::<_, CooperativeLoanPaymentDto>(concat!(
         cooperative_loan_payment_select!(),
-        " WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        " WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
           ORDER BY updated_at, id
-          LIMIT $2"
+          LIMIT $3"
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await

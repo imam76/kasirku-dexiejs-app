@@ -8,11 +8,8 @@ import {
   type RemoteEmployeeCollectionScheduleDto,
   type RemoteEmployeeDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { ChartOfAccount, Employee, EmployeeArea, EmployeeCollectionSchedule } from '@/types';
 
 export interface EmployeeReadSyncResult {
@@ -353,35 +350,31 @@ const addReadSyncResult = (aggregate: EmployeeReadSyncResult, next: EmployeeRead
   aggregate.skipped += next.skipped;
 };
 
-const localEmployeeCursor = (record: { remote_updated_at?: string; updated_at: string; sync_status?: string }) => (
-  record.remote_updated_at ?? (record.sync_status === 'synced' ? record.updated_at : undefined)
-);
-
 /**
- * Delta fetch loop shared by the 3 employee-bundle tables: pull rows changed since the local
- * cursor, merge into Dexie, advance the cursor from the batch, repeat until a short page ends
- * pagination. Mirrors salesDocumentReadService.ts, run independently per table since each has
- * its own cursor index.
+ * Delta fetch loop shared by the 3 employee-bundle tables, each with a durable composite
+ * checkpoint independent from the rows being merged.
  */
-const refreshEmployeeTableFromPostgres = async <TRemote extends { updated_at: string }>(
-  getLocalCursor: () => Promise<string | undefined>,
-  list: (options: { updatedAfter?: string; limit?: number }) => Promise<TRemote[]>,
+const refreshEmployeeTableFromPostgres = async <TRemote extends { id: string; updated_at: string }>(
+  entity: string,
+  list: (options: { updatedAfter?: string; cursorId?: string; limit?: number }) => Promise<TRemote[]>,
   merge: (remoteRows: TRemote[]) => Promise<EmployeeReadSyncResult>,
 ): Promise<EmployeeReadSyncResult> => {
   const aggregate = { ...EMPTY_READ_SYNC_RESULT };
-  let updatedAfter = await getLocalCursor();
 
-  while (true) {
-    const remoteRows = await list({ updatedAfter, limit: EMPLOYEE_REFRESH_LIMIT });
-    const result = await merge(remoteRows);
-    addReadSyncResult(aggregate, result);
-
-    if (remoteRows.length < EMPLOYEE_REFRESH_LIMIT) break;
-
-    const nextUpdatedAfter = getLatestRemoteUpdatedAt(remoteRows, (row) => row.updated_at);
-    if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-    updatedAfter = nextUpdatedAfter;
-  }
+  await pullStoredUpdatedAtIdPages({
+    entity,
+    pageSize: EMPLOYEE_REFRESH_LIMIT,
+    loadPage: (cursor) => list({
+      updatedAfter: cursor?.updatedAt,
+      cursorId: cursor?.id,
+      limit: EMPLOYEE_REFRESH_LIMIT,
+    }),
+    mergePage: async (remoteRows) => {
+      addReadSyncResult(aggregate, await merge(remoteRows));
+    },
+    getUpdatedAt: (row) => row.updated_at,
+    getId: (row) => row.id,
+  });
 
   return aggregate;
 };
@@ -401,19 +394,17 @@ export const refreshEmployeesFromPostgres = async (): Promise<EmployeeReadSyncSu
   try {
     return {
       employees: await refreshEmployeeTableFromPostgres(
-        async () => getLatestLocalRemoteUpdatedAt(await db.employees.toArray(), localEmployeeCursor),
+        'employees',
         (options) => employeePostgresAdapter.list(options),
         mergeRemoteEmployeesIntoDexie,
       ),
       employeeAreas: await refreshEmployeeTableFromPostgres(
-        async () => getLatestLocalRemoteUpdatedAt(await db.employeeAreas.toArray(), localEmployeeCursor),
+        'employeeAreas',
         (options) => employeeAreaPostgresAdapter.list(options),
         mergeRemoteEmployeeAreasIntoDexie,
       ),
       collectionSchedules: await refreshEmployeeTableFromPostgres(
-        async () => (
-          getLatestLocalRemoteUpdatedAt(await db.employeeCollectionSchedules.toArray(), localEmployeeCursor)
-        ),
+        'employeeCollectionSchedules',
         (options) => employeeCollectionSchedulePostgresAdapter.list(options),
         mergeRemoteEmployeeCollectionSchedulesIntoDexie,
       ),

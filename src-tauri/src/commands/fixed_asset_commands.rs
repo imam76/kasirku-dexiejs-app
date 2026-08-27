@@ -9,10 +9,11 @@ use tauri::State;
 pub async fn postgres_list_fixed_assets(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<FixedAssetDto>> {
     let pool = state.pool()?;
-    Ok(fixed_asset_repository::list_fixed_assets(&pool, updated_after, limit).await?)
+    Ok(fixed_asset_repository::list_fixed_assets(&pool, updated_after, cursor_id, limit).await?)
 }
 
 #[tauri::command]
@@ -28,10 +29,11 @@ pub async fn postgres_upsert_fixed_asset(
 pub async fn postgres_list_fixed_asset_depreciation_run_bundles(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<FixedAssetDepreciationRunBundleDto>> {
     let pool = state.pool()?;
-    Ok(fixed_asset_repository::list_run_bundles(&pool, updated_after, limit).await?)
+    Ok(fixed_asset_repository::list_run_bundles(&pool, updated_after, cursor_id, limit).await?)
 }
 
 #[tauri::command]

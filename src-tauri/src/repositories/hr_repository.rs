@@ -6,6 +6,7 @@ use sqlx::PgPool;
 pub async fn list_hr_positions(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<HrPositionDto>, sqlx::Error> {
     sqlx::query_as::<_, HrPositionDto>(
@@ -15,12 +16,13 @@ pub async fn list_hr_positions(
                description, is_active, created_at::TEXT AS created_at,
                updated_at::TEXT AS updated_at, deleted_at::TEXT AS deleted_at
         FROM hr_positions
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
-        LIMIT $2
+        LIMIT $3
         "#,
     )
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -74,6 +76,7 @@ pub async fn upsert_hr_position(
 pub async fn list_employment_contracts(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<EmploymentContractDto>, sqlx::Error> {
     sqlx::query_as::<_, EmploymentContractDto>(
@@ -85,12 +88,13 @@ pub async fn list_employment_contracts(
                created_at::TEXT AS created_at, updated_at::TEXT AS updated_at,
                deleted_at::TEXT AS deleted_at
         FROM employment_contracts
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
-        LIMIT $2
+        LIMIT $3
         "#,
     )
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -152,6 +156,7 @@ pub async fn upsert_employment_contract(
 pub async fn list_salary_components(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<SalaryComponentDto>, sqlx::Error> {
     sqlx::query_as::<_, SalaryComponentDto>(
@@ -160,12 +165,13 @@ pub async fn list_salary_components(
                created_at::TEXT AS created_at, updated_at::TEXT AS updated_at,
                deleted_at::TEXT AS deleted_at
         FROM salary_components
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
-        LIMIT $2
+        LIMIT $3
         "#,
     )
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -214,6 +220,7 @@ pub async fn upsert_salary_component(
 pub async fn list_employee_salary_components(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<EmployeeSalaryComponentDto>, sqlx::Error> {
     sqlx::query_as::<_, EmployeeSalaryComponentDto>(
@@ -222,12 +229,13 @@ pub async fn list_employee_salary_components(
                kind, calculation, value, is_active, created_at::TEXT AS created_at,
                updated_at::TEXT AS updated_at, deleted_at::TEXT AS deleted_at
         FROM employee_salary_components
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
-        LIMIT $2
+        LIMIT $3
         "#,
     )
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await

@@ -119,11 +119,13 @@ const RootLayout = () => {
   const { isRouteEnabled } = useEnabledModules({ currentUser, currentRole })
   const { modal } = App.useApp()
   const [collapsed, setCollapsed] = useState(false)
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const mobileNavigationKey = `${location.pathname}${location.hash}`
+  const [mobileNavOpenKey, setMobileNavOpenKey] = useState<string | null>(null)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackWave, setFeedbackWave] = useState<1 | 2>(1)
   const isMobile = useIsMobile()
   const isPhoneViewport = useMediaQuery('(max-width: 767.98px)')
+  const mobileNavOpen = isMobile && mobileNavOpenKey === mobileNavigationKey
   const showMobileCashierSession = isMobile && location.pathname === '/transaction'
   const { data: mobileCashierSession } = useQuery({
     queryKey: getCashierSessionActiveQueryKey(currentUser?.id),
@@ -132,18 +134,12 @@ const RootLayout = () => {
   })
 
   useEffect(() => {
-    if (!isMobile) setMobileNavOpen(false)
-  }, [isMobile])
-
-  useEffect(() => {
-    setMobileNavOpen(false)
-  }, [location.pathname, location.hash])
-
-  useEffect(() => {
-    const openMobileNavigation = () => setMobileNavOpen(true)
+    const openMobileNavigation = () => {
+      if (isMobile) setMobileNavOpenKey(mobileNavigationKey)
+    }
     window.addEventListener(OPEN_MOBILE_NAVIGATION_EVENT, openMobileNavigation)
     return () => window.removeEventListener(OPEN_MOBILE_NAVIGATION_EVENT, openMobileNavigation)
-  }, [])
+  }, [isMobile, mobileNavigationKey])
   useEffect(() => {
     // Increment session on mount
     incrementSessionCount()
@@ -367,12 +363,16 @@ const RootLayout = () => {
 
   const openKeys = getOpenKeysForSelected(filteredNavLinks, selectedKey)
   const openKeySignature = openKeys.join('|')
-  const [openMenuKeys, setOpenMenuKeys] = useState<string[]>(openKeys)
-
-  useEffect(() => {
-    const activeOpenKeys = openKeySignature ? openKeySignature.split('|') : []
-    setOpenMenuKeys((currentKeys) => Array.from(new Set([...currentKeys, ...activeOpenKeys])))
-  }, [openKeySignature])
+  const [openMenuState, setOpenMenuState] = useState({
+    routeSignature: openKeySignature,
+    keys: openKeys,
+  })
+  const openMenuKeys = openMenuState.routeSignature === openKeySignature
+    ? openMenuState.keys
+    : Array.from(new Set([...openMenuState.keys, ...openKeys]))
+  const handleOpenMenuChange = (keys: string[]) => {
+    setOpenMenuState({ routeSignature: openKeySignature, keys })
+  }
 
   const requiredPermission = getRequiredPermissionForPath(location.pathname)
   const canOpenCurrentPath = canAccessPermissionRule(currentUser ?? undefined, requiredPermission, { currentRole, permissionSet })
@@ -414,7 +414,7 @@ const RootLayout = () => {
                   : (collapsed ? t('root.openSidebar') : t('root.closeSidebar'))}
                 aria-expanded={isMobile ? mobileNavOpen : !collapsed}
                 onClick={() => {
-                  if (isMobile) setMobileNavOpen((current) => !current)
+                  if (isMobile) setMobileNavOpenKey(mobileNavOpen ? null : mobileNavigationKey)
                   else setCollapsed((current) => !current)
                 }}
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-sm transition-all hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:scale-95 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-blue-500 dark:hover:bg-gray-700 dark:hover:text-blue-300"
@@ -522,7 +522,7 @@ const RootLayout = () => {
                 mode="inline"
                 selectedKeys={[selectedKey]}
                 openKeys={openMenuKeys}
-                onOpenChange={setOpenMenuKeys}
+                onOpenChange={handleOpenMenuChange}
                 items={menuItems}
                 theme={isDark ? 'dark' : 'light'}
                 style={{ height: '100%', borderRight: 0, overflowX: 'hidden', overflowY: 'auto' }}
@@ -584,7 +584,7 @@ const RootLayout = () => {
             placement="left"
             width={320}
             open={isMobile && mobileNavOpen}
-            onClose={() => setMobileNavOpen(false)}
+            onClose={() => setMobileNavOpenKey(null)}
             destroyOnHidden
             rootClassName="tablet-navigation-drawer"
             styles={{
@@ -596,8 +596,8 @@ const RootLayout = () => {
               mode="inline"
               selectedKeys={[selectedKey]}
               openKeys={openMenuKeys}
-              onOpenChange={setOpenMenuKeys}
-              onClick={() => setMobileNavOpen(false)}
+              onOpenChange={handleOpenMenuChange}
+              onClick={() => setMobileNavOpenKey(null)}
               items={menuItems}
               theme={isDark ? 'dark' : 'light'}
               style={{ height: '100%', borderRight: 0, overflowX: 'hidden', overflowY: 'auto', paddingTop: 8 }}
@@ -611,7 +611,7 @@ const RootLayout = () => {
               moreLabel={t('home.mobile.more')}
               navigationLabel={t('root.navigation')}
               drawerOpen={mobileNavOpen}
-              onOpenMore={() => setMobileNavOpen(true)}
+              onOpenMore={() => setMobileNavOpenKey(mobileNavigationKey)}
             />
           )}
 

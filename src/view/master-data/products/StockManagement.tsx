@@ -1,5 +1,6 @@
 import { Alert, App, Button, Card, Dropdown, Segmented } from 'antd';
 import type { MenuProps } from 'antd';
+import { useNavigate } from '@tanstack/react-router';
 import { Plus, Upload, Download, MoreVertical, Package } from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useStockManagement } from '@/hooks/useStockManagement';
@@ -64,6 +65,7 @@ export default function StockManagement() {
     importProductsFromCsv,
     isImporting,
   } = useStockManagement();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -81,6 +83,11 @@ export default function StockManagement() {
   const handleAddProduct = () => {
     resetForm();
     setIsModalOpen(true);
+  };
+
+  const handleOpeningStockClick = () => {
+    setIsActionDrawerOpen(false);
+    void navigate({ to: '/finance/opening-balances/inventory' });
   };
 
   const handleEditProduct = (product: Product) => {
@@ -463,6 +470,9 @@ export default function StockManagement() {
       extra={!isMobile ? (
         <div className="flex items-center gap-2">
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button icon={<Package size={16} />} onClick={handleOpeningStockClick}>
+              {t('openingBalances.modules.inventory.title')}
+            </Button>
             <Dropdown trigger={['click']} placement="bottomRight" menu={{ items: exportMenuItems, onClick: handleExportMenuClick }}>
               <Button icon={<Download size={16} />}>
                 {t('stock.exportCsv')}
@@ -497,6 +507,16 @@ export default function StockManagement() {
         onClose={() => setIsActionDrawerOpen(false)}
       >
         <div className="space-y-3 pb-3">
+          <Button
+            block
+            size="large"
+            icon={<Package size={20} />}
+            onClick={handleOpeningStockClick}
+            className="flex h-14 items-center justify-start font-semibold"
+          >
+            {t('openingBalances.modules.inventory.title')}
+          </Button>
+
           <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
             <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900">
               <Download size={18} />

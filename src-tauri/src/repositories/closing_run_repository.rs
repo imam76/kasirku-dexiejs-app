@@ -4,6 +4,7 @@ use sqlx::PgPool;
 pub async fn list_closing_runs(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<ClosingRunDto>, sqlx::Error> {
     sqlx::query_as::<_, ClosingRunDto>(
@@ -39,12 +40,13 @@ pub async fn list_closing_runs(
             updated_at::TEXT AS updated_at,
             deleted_at::TEXT AS deleted_at
         FROM closing_runs
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
-        LIMIT $2
+        LIMIT $3
         "#,
     )
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await

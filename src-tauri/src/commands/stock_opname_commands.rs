@@ -9,10 +9,14 @@ use tauri::State;
 pub async fn postgres_list_stock_opname_bundles(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<StockOpnameBundleDto>> {
     let pool = state.pool()?;
-    Ok(stock_opname_repository::list_stock_opname_bundles(&pool, updated_after, limit).await?)
+    Ok(
+        stock_opname_repository::list_stock_opname_bundles(&pool, updated_after, cursor_id, limit)
+            .await?,
+    )
 }
 
 #[tauri::command]

@@ -4,11 +4,8 @@ import {
   isTauriRuntime,
   type RemoteClosingRunDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { ClosingRun, ClosingRunStatus } from '@/types';
 
 const CLOSING_RUN_REFRESH_LIMIT = 500;
@@ -159,18 +156,6 @@ export const mergeRemoteClosingRunsIntoDexie = async (
   return result;
 };
 
-const getLatestLocalClosingRunUpdatedAt = async () => {
-  const runs = await db.closingRuns.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    runs,
-    (run) => run.remote_updated_at ?? (run.sync_status === 'synced' ? run.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteClosingRunUpdatedAt = (remoteRuns: RemoteClosingRunDto[]) => (
-  getLatestRemoteUpdatedAt(remoteRuns, (run) => run.updated_at)
-);
-
 export const refreshClosingRunsFromPostgres =
   async (): Promise<ClosingRunReadSyncResult> => {
     if (isRefreshingClosingRunsFromPostgres || !canReadFromPostgres()) {
@@ -180,26 +165,25 @@ export const refreshClosingRunsFromPostgres =
     isRefreshingClosingRunsFromPostgres = true;
     try {
       const aggregate = { ...EMPTY_CLOSING_RUN_READ_SYNC_RESULT };
-      let updatedAfter = await getLatestLocalClosingRunUpdatedAt();
-
-      while (true) {
-        const remoteRuns = await closingRunPostgresAdapter.list({
-          updatedAfter,
+      await pullStoredUpdatedAtIdPages({
+        entity: 'closingRuns',
+        pageSize: CLOSING_RUN_REFRESH_LIMIT,
+        loadPage: (cursor) => closingRunPostgresAdapter.list({
+          updatedAfter: cursor?.updatedAt,
+          cursorId: cursor?.id,
           limit: CLOSING_RUN_REFRESH_LIMIT,
-        });
-        const result = await mergeRemoteClosingRunsIntoDexie(remoteRuns);
-        aggregate.fetched += result.fetched;
-        aggregate.inserted += result.inserted;
-        aggregate.updated += result.updated;
-        aggregate.deleted += result.deleted;
-        aggregate.skipped += result.skipped;
-
-        if (remoteRuns.length < CLOSING_RUN_REFRESH_LIMIT) break;
-
-        const nextUpdatedAfter = getLatestRemoteClosingRunUpdatedAt(remoteRuns);
-        if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-        updatedAfter = nextUpdatedAfter;
-      }
+        }),
+        mergePage: async (remoteRuns) => {
+          const result = await mergeRemoteClosingRunsIntoDexie(remoteRuns);
+          aggregate.fetched += result.fetched;
+          aggregate.inserted += result.inserted;
+          aggregate.updated += result.updated;
+          aggregate.deleted += result.deleted;
+          aggregate.skipped += result.skipped;
+        },
+        getUpdatedAt: (run) => run.updated_at,
+        getId: (run) => run.id,
+      });
 
       return aggregate;
     } finally {

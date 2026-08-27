@@ -5,11 +5,8 @@ import {
   postgresAdapter,
   type RemoteCooperativeAreaDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { CooperativeArea } from '@/types';
 
 const COOPERATIVE_AREA_REFRESH_LIMIT = 500;
@@ -132,18 +129,6 @@ export const mergeRemoteCooperativeAreasIntoDexie = async (
   return result;
 };
 
-const getLatestLocalCooperativeAreaUpdatedAt = async () => {
-  const areas = await db.cooperativeAreas.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    areas,
-    (area) => area.remote_updated_at ?? (area.sync_status === 'synced' ? area.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteCooperativeAreaUpdatedAt = (remoteAreas: RemoteCooperativeAreaDto[]) => (
-  getLatestRemoteUpdatedAt(remoteAreas, (area) => area.updated_at)
-);
-
 export const refreshCooperativeAreasFromPostgres = async (): Promise<CooperativeAreaReadSyncResult> => {
   if (isRefreshingCooperativeAreasFromPostgres || !canUsePostgres()) {
     return { ...EMPTY_READ_SYNC_RESULT };
@@ -152,25 +137,24 @@ export const refreshCooperativeAreasFromPostgres = async (): Promise<Cooperative
   isRefreshingCooperativeAreasFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalCooperativeAreaUpdatedAt();
-
-    while (true) {
-      const remoteAreas = await cooperativeAreaPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'cooperativeAreas',
+      pageSize: COOPERATIVE_AREA_REFRESH_LIMIT,
+      loadPage: (cursor) => cooperativeAreaPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: COOPERATIVE_AREA_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteCooperativeAreasIntoDexie(remoteAreas);
-      aggregate.fetched += result.fetched;
-      aggregate.inserted += result.inserted;
-      aggregate.updated += result.updated;
-      aggregate.skipped += result.skipped;
-
-      if (remoteAreas.length < COOPERATIVE_AREA_REFRESH_LIMIT) break;
-
-      const nextUpdatedAfter = getLatestRemoteCooperativeAreaUpdatedAt(remoteAreas);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteAreas) => {
+        const result = await mergeRemoteCooperativeAreasIntoDexie(remoteAreas);
+        aggregate.fetched += result.fetched;
+        aggregate.inserted += result.inserted;
+        aggregate.updated += result.updated;
+        aggregate.skipped += result.skipped;
+      },
+      getUpdatedAt: (area) => area.updated_at,
+      getId: (area) => area.id,
+    });
 
     return aggregate;
   } finally {

@@ -9,13 +9,17 @@ use tauri::State;
 pub async fn postgres_list_opening_balance_bundles(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<OpeningBalanceBundleDto>> {
     let pool = state.pool()?;
-    Ok(
-        opening_balance_repository::list_opening_balance_bundles(&pool, updated_after, limit)
-            .await?,
+    Ok(opening_balance_repository::list_opening_balance_bundles(
+        &pool,
+        updated_after,
+        cursor_id,
+        limit,
     )
+    .await?)
 }
 
 #[tauri::command]

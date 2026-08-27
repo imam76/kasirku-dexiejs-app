@@ -11,10 +11,7 @@ import {
   type RemoteHrPositionDto,
   type RemoteSalaryComponentDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-} from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type {
   EmployeeSalaryComponent,
   EmploymentContract,
@@ -116,30 +113,33 @@ export const mergeRemoteHrDataIntoDexie = async (input: {
   ),
 });
 
-const fetchAllRemoteWithCursor = async <
-  TLocal extends { updated_at: string; sync_status?: string; remote_updated_at?: string },
-  TRemote extends { updated_at: string },
->(
-  getLocalRecords: () => Promise<TLocal[]>,
+const refreshRemoteCollection = async <TRemote extends { id: string; updated_at: string }>(
+  entity: string,
   listRemote: (options: PostgresListOptions) => Promise<TRemote[]>,
-): Promise<TRemote[]> => {
-  const allRemotes: TRemote[] = [];
-  let updatedAfter = getLatestLocalRemoteUpdatedAt(
-    await getLocalRecords(),
-    (record) => record.remote_updated_at ?? (record.sync_status === 'synced' ? record.updated_at : undefined),
-  );
+  mergeRemote: (page: TRemote[], syncedAt: string) => Promise<HrReadResult>,
+): Promise<HrReadResult> => {
+  const aggregate = emptyResult();
 
-  while (true) {
-    const page = await listRemote({ updatedAfter, limit: HR_REFRESH_LIMIT });
-    allRemotes.push(...page);
-    if (page.length < HR_REFRESH_LIMIT) break;
+  await pullStoredUpdatedAtIdPages({
+    entity,
+    pageSize: HR_REFRESH_LIMIT,
+    loadPage: (cursor) => listRemote({
+      updatedAfter: cursor?.updatedAt,
+      cursorId: cursor?.id,
+      limit: HR_REFRESH_LIMIT,
+    }),
+    mergePage: async (page) => {
+      const result = await mergeRemote(page, new Date().toISOString());
+      aggregate.fetched += result.fetched;
+      aggregate.inserted += result.inserted;
+      aggregate.updated += result.updated;
+      aggregate.skipped += result.skipped;
+    },
+    getUpdatedAt: (item) => item.updated_at,
+    getId: (item) => item.id,
+  });
 
-    const nextUpdatedAfter = getLatestRemoteUpdatedAt(page, (item) => item.updated_at);
-    if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-    updatedAfter = nextUpdatedAfter;
-  }
-
-  return allRemotes;
+  return aggregate;
 };
 
 let isRefreshing = false;
@@ -160,20 +160,42 @@ export const refreshHrDataFromPostgres = async (): Promise<HrReadSummary> => {
   isRefreshing = true;
   try {
     const [positions, contracts, salaryComponents, employeeSalaryComponents] = await Promise.all([
-      fetchAllRemoteWithCursor(() => db.hrPositions.toArray(), hrPositionPostgresAdapter.list),
-      fetchAllRemoteWithCursor(() => db.employmentContracts.toArray(), employmentContractPostgresAdapter.list),
-      fetchAllRemoteWithCursor(() => db.salaryComponents.toArray(), salaryComponentPostgresAdapter.list),
-      fetchAllRemoteWithCursor(
-        () => db.employeeSalaryComponents.toArray(),
+      refreshRemoteCollection('hrPositions', hrPositionPostgresAdapter.list, (page, syncedAt) => (
+        mergeCollection<HrPosition, RemoteHrPositionDto>(
+          page,
+          (id) => db.hrPositions.get(id),
+          (record) => db.hrPositions.put(record),
+          syncedAt,
+        )
+      )),
+      refreshRemoteCollection('employmentContracts', employmentContractPostgresAdapter.list, (page, syncedAt) => (
+        mergeCollection<EmploymentContract, RemoteEmploymentContractDto>(
+          page,
+          (id) => db.employmentContracts.get(id),
+          (record) => db.employmentContracts.put(record),
+          syncedAt,
+        )
+      )),
+      refreshRemoteCollection('salaryComponents', salaryComponentPostgresAdapter.list, (page, syncedAt) => (
+        mergeCollection<SalaryComponent, RemoteSalaryComponentDto>(
+          page,
+          (id) => db.salaryComponents.get(id),
+          (record) => db.salaryComponents.put(record),
+          syncedAt,
+        )
+      )),
+      refreshRemoteCollection(
+        'employeeSalaryComponents',
         employeeSalaryComponentPostgresAdapter.list,
+        (page, syncedAt) => mergeCollection<EmployeeSalaryComponent, RemoteEmployeeSalaryComponentDto>(
+          page,
+          (id) => db.employeeSalaryComponents.get(id),
+          (record) => db.employeeSalaryComponents.put(record),
+          syncedAt,
+        ),
       ),
     ]);
-    return mergeRemoteHrDataIntoDexie({
-      positions,
-      contracts,
-      salaryComponents,
-      employeeSalaryComponents,
-    });
+    return { positions, contracts, salaryComponents, employeeSalaryComponents };
   } finally {
     isRefreshing = false;
   }

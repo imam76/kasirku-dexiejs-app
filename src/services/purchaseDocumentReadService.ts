@@ -6,11 +6,8 @@ import {
   type RemotePurchaseDocumentDto,
   type RemotePurchaseDocumentItemDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type {
   AccountType,
   PaymentMethod,
@@ -338,18 +335,6 @@ export const mergeRemotePurchaseDocumentBundlesIntoDexie = async (
   return result;
 };
 
-const getLatestLocalPurchaseDocumentUpdatedAt = async () => {
-  const documents = await db.purchaseDocuments.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    documents,
-    (document) => document.remote_updated_at ?? (document.sync_status === 'synced' ? document.updated_at : undefined),
-  );
-};
-
-const getLatestRemotePurchaseDocumentBundleUpdatedAt = (remoteBundles: RemotePurchaseDocumentBundleDto[]) => (
-  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.document.updated_at)
-);
-
 const addPurchaseDocumentReadSyncResult = (
   aggregate: PurchaseDocumentReadSyncResult,
   next: PurchaseDocumentReadSyncResult,
@@ -368,22 +353,24 @@ export const refreshPurchaseDocumentsFromPostgres = async (): Promise<PurchaseDo
   isRefreshingPurchaseDocumentsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_PURCHASE_DOCUMENT_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalPurchaseDocumentUpdatedAt();
 
-    while (true) {
-      const remoteBundles = await purchaseDocumentPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'purchaseDocuments',
+      pageSize: PURCHASE_DOCUMENT_REFRESH_LIMIT,
+      loadPage: (cursor) => purchaseDocumentPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: PURCHASE_DOCUMENT_REFRESH_LIMIT,
-      });
-      const result = await mergeRemotePurchaseDocumentBundlesIntoDexie(remoteBundles);
-      addPurchaseDocumentReadSyncResult(aggregate, result);
-
-      if (remoteBundles.length < PURCHASE_DOCUMENT_REFRESH_LIMIT) break;
-
-      const nextUpdatedAfter = getLatestRemotePurchaseDocumentBundleUpdatedAt(remoteBundles);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteBundles) => {
+        addPurchaseDocumentReadSyncResult(
+          aggregate,
+          await mergeRemotePurchaseDocumentBundlesIntoDexie(remoteBundles),
+        );
+      },
+      getUpdatedAt: (bundle) => bundle.document.updated_at,
+      getId: (bundle) => bundle.document.id,
+    });
 
     return aggregate;
   } finally {

@@ -52,17 +52,19 @@ macro_rules! inventory_lot_consumption_columns {
 pub async fn list_inventory_lots(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<InventoryLotDto>, sqlx::Error> {
     sqlx::query_as::<_, InventoryLotDto>(concat!(
         "SELECT ",
         inventory_lot_columns!(),
         " FROM inventory_lots
-          WHERE ($1::TEXT IS NULL OR updated_at > $1)
+          WHERE ($1::TEXT IS NULL OR (updated_at, id) > ($1, COALESCE($2::TEXT, '')))
           ORDER BY updated_at, id
-          LIMIT $2"
+          LIMIT $3"
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await

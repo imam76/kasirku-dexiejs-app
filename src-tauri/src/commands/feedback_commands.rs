@@ -6,9 +6,8 @@ fn feedback_http_client() -> Result<reqwest::Client, String> {
     // Android's rustls platform verifier needs explicit JNI initialization.
     // A bundled Mozilla root store keeps this command independent from the
     // WebView and Android lifecycle while retaining full certificate checks.
-    let root_store = rustls::RootCertStore::from_iter(
-        webpki_roots::TLS_SERVER_ROOTS.iter().cloned(),
-    );
+    let root_store =
+        rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
     let crypto_provider = std::sync::Arc::new(rustls::crypto::aws_lc_rs::default_provider());
     let mut tls_config = rustls::ClientConfig::builder_with_provider(crypto_provider)
         .with_safe_default_protocol_versions()

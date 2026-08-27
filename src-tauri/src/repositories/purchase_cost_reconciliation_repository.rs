@@ -97,7 +97,8 @@ pub async fn list_purchase_cost_reconciliation_bundles(
     // Fetch every page's items in a single round trip, grouped by reconciliation_id, instead of
     // one query per reconciliation (N+1).
     let ids: Vec<String> = reconciliations.iter().map(|r| r.id.clone()).collect();
-    let mut items_by_reconciliation = list_purchase_cost_reconciliation_items_for_ids(pool, &ids).await?;
+    let mut items_by_reconciliation =
+        list_purchase_cost_reconciliation_items_for_ids(pool, &ids).await?;
 
     Ok(reconciliations
         .into_iter()
@@ -105,7 +106,10 @@ pub async fn list_purchase_cost_reconciliation_bundles(
             let items = items_by_reconciliation
                 .remove(&reconciliation.id)
                 .unwrap_or_default();
-            PurchaseCostReconciliationBundleDto { reconciliation, items }
+            PurchaseCostReconciliationBundleDto {
+                reconciliation,
+                items,
+            }
         })
         .collect())
 }
@@ -152,8 +156,7 @@ pub async fn upsert_purchase_cost_reconciliation_bundle(
     let reconciliation = get_purchase_cost_reconciliation_in_tx(&mut tx, &reconciliation_id)
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
-    let items =
-        list_purchase_cost_reconciliation_items_in_tx(&mut tx, &reconciliation_id).await?;
+    let items = list_purchase_cost_reconciliation_items_in_tx(&mut tx, &reconciliation_id).await?;
     tx.commit().await?;
 
     Ok(PurchaseCostReconciliationBundleDto {
@@ -528,8 +531,17 @@ mod tests {
         let reconciliation_id = format!("{prefix}1");
         let item_id = format!("{prefix}1-ITEM-1");
         let bundle = PurchaseCostReconciliationBundleDto {
-            reconciliation: reconciliation_dto(&reconciliation_id, &doc_id, "2026-08-01T00:00:00.000Z"),
-            items: vec![item_dto(&item_id, &reconciliation_id, "PRODUCT-1", "2026-08-01T00:00:00.000Z")],
+            reconciliation: reconciliation_dto(
+                &reconciliation_id,
+                &doc_id,
+                "2026-08-01T00:00:00.000Z",
+            ),
+            items: vec![item_dto(
+                &item_id,
+                &reconciliation_id,
+                "PRODUCT-1",
+                "2026-08-01T00:00:00.000Z",
+            )],
         };
 
         let result = upsert_purchase_cost_reconciliation_bundle(&pool, bundle)
@@ -567,8 +579,17 @@ mod tests {
         let reconciliation_id = format!("{prefix}1");
         let item_id = format!("{prefix}1-ITEM-1");
         let bundle = || PurchaseCostReconciliationBundleDto {
-            reconciliation: reconciliation_dto(&reconciliation_id, &doc_id, "2026-08-01T00:00:00.000Z"),
-            items: vec![item_dto(&item_id, &reconciliation_id, "PRODUCT-1", "2026-08-01T00:00:00.000Z")],
+            reconciliation: reconciliation_dto(
+                &reconciliation_id,
+                &doc_id,
+                "2026-08-01T00:00:00.000Z",
+            ),
+            items: vec![item_dto(
+                &item_id,
+                &reconciliation_id,
+                "PRODUCT-1",
+                "2026-08-01T00:00:00.000Z",
+            )],
         };
 
         upsert_purchase_cost_reconciliation_bundle(&pool, bundle())
@@ -586,7 +607,10 @@ mod tests {
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(reconciliation_count, 1, "retry must not create a duplicate reconciliation row");
+        assert_eq!(
+            reconciliation_count, 1,
+            "retry must not create a duplicate reconciliation row"
+        );
 
         let item_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM purchase_cost_reconciliation_items WHERE reconciliation_id = $1",
@@ -619,8 +643,17 @@ mod tests {
         upsert_purchase_cost_reconciliation_bundle(
             &pool,
             PurchaseCostReconciliationBundleDto {
-                reconciliation: reconciliation_dto(&reconciliation_id, &doc_id, "2026-08-01T00:00:00.000Z"),
-                items: vec![item_dto(&item_id, &reconciliation_id, "PRODUCT-1", "2026-08-01T00:00:00.000Z")],
+                reconciliation: reconciliation_dto(
+                    &reconciliation_id,
+                    &doc_id,
+                    "2026-08-01T00:00:00.000Z",
+                ),
+                items: vec![item_dto(
+                    &item_id,
+                    &reconciliation_id,
+                    "PRODUCT-1",
+                    "2026-08-01T00:00:00.000Z",
+                )],
             },
         )
         .await
@@ -661,7 +694,11 @@ mod tests {
             upsert_purchase_cost_reconciliation_bundle(
                 &pool,
                 PurchaseCostReconciliationBundleDto {
-                    reconciliation: reconciliation_dto(&reconciliation_id, &doc_id, "2026-08-01T00:00:00.000Z"),
+                    reconciliation: reconciliation_dto(
+                        &reconciliation_id,
+                        &doc_id,
+                        "2026-08-01T00:00:00.000Z",
+                    ),
                     items: vec![],
                 },
             )
@@ -713,7 +750,10 @@ mod tests {
         force_server_created_at(&pool, &newer_id, "2999-01-01T00:00:00.000Z").await;
 
         // "Device Z" already pulled through the newer record - this is its saved cursor.
-        let device_z_cursor = (Some("2999-01-01T00:00:00.000Z".to_string()), Some(newer_id.clone()));
+        let device_z_cursor = (
+            Some("2999-01-01T00:00:00.000Z".to_string()),
+            Some(newer_id.clone()),
+        );
 
         // "Device X" was offline for a long time. It created this record weeks earlier (older
         // business created_at) but only pushes it to Postgres now - after device Y's record has
@@ -736,7 +776,9 @@ mod tests {
         // dropped.
         let pulled = pull_all_from(&pool, device_z_cursor, 500).await;
         assert!(
-            pulled.iter().any(|bundle| bundle.reconciliation.id == older_id),
+            pulled
+                .iter()
+                .any(|bundle| bundle.reconciliation.id == older_id),
             "a record pushed late with an older business created_at must still be delta-fetched \
              once it arrives at the server"
         );

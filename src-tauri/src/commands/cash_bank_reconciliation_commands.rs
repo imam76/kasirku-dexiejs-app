@@ -9,6 +9,7 @@ use tauri::State;
 pub async fn postgres_list_cash_bank_reconciliations(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<CashBankReconciliationDto>> {
     let pool = state.pool()?;
@@ -16,6 +17,7 @@ pub async fn postgres_list_cash_bank_reconciliations(
         cash_bank_reconciliation_repository::list_cash_bank_reconciliations(
             &pool,
             updated_after,
+            cursor_id,
             limit,
         )
         .await?,

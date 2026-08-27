@@ -4,6 +4,7 @@ import {
   posStockDiscrepancyPostgresAdapter,
   type RemotePosStockDiscrepancyDto,
 } from '@/services/postgresAdapter';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { PosStockDiscrepancy } from '@/types';
 
 const toLocal = (
@@ -49,10 +50,20 @@ export const mergeRemotePosStockDiscrepanciesIntoDexie = async (
 
 export const refreshPosStockDiscrepanciesFromPostgres = async () => {
   if (!isTauriRuntime()) return 0;
-  const localRows = await db.posStockDiscrepancies.orderBy('updated_at').reverse().limit(1).toArray();
-  const remoteRows = await posStockDiscrepancyPostgresAdapter.list({
-    updatedAfter: localRows[0]?.remote_updated_at ?? localRows[0]?.updated_at,
-    limit: 1000,
+  let merged = 0;
+  await pullStoredUpdatedAtIdPages({
+    entity: 'posStockDiscrepancies',
+    pageSize: 1000,
+    loadPage: (cursor) => posStockDiscrepancyPostgresAdapter.list({
+      updatedAfter: cursor?.updatedAt,
+      cursorId: cursor?.id,
+      limit: 1000,
+    }),
+    mergePage: async (remoteRows) => {
+      merged += await mergeRemotePosStockDiscrepanciesIntoDexie(remoteRows);
+    },
+    getUpdatedAt: (row) => row.updated_at,
+    getId: (row) => row.id,
   });
-  return mergeRemotePosStockDiscrepanciesIntoDexie(remoteRows);
+  return merged;
 };

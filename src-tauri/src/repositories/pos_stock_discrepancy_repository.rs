@@ -4,6 +4,7 @@ use sqlx::PgPool;
 pub async fn list(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<PosStockDiscrepancyDto>, sqlx::Error> {
     sqlx::query_as::<_, PosStockDiscrepancyDto>(
@@ -16,11 +17,12 @@ pub async fn list(
             reviewed_at::TEXT AS reviewed_at, investigation_cause, investigation_note,
             stock_opname_id, created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
         FROM pos_stock_discrepancies
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
-        ORDER BY updated_at, id LIMIT $2
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
+        ORDER BY updated_at, id LIMIT $3
     "#,
     )
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await

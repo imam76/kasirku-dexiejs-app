@@ -7,11 +7,8 @@ import {
   type RemoteOpeningBalanceBundleDto,
   type RemoteOpeningBalanceLineDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type {
   InventoryLot,
   OpeningBalanceBatch,
@@ -183,19 +180,6 @@ const mapRemoteOpeningBalanceLineToLocal = (
 
 const hasLocalUnsyncedBatchChanges = (batch: OpeningBalanceBatch | undefined) => (
   batch?.sync_status === 'pending' || batch?.sync_status === 'failed'
-);
-
-const getLatestLocalOpeningBalanceBatchUpdatedAt = async () => {
-  const batches = await db.openingBalanceBatches.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    batches,
-    (batch) => batch.remote_updated_at
-      ?? (batch.sync_status === 'synced' ? batch.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteOpeningBalanceBundleDto[]) => (
-  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.batch.updated_at)
 );
 
 const addOpeningBalanceReadSyncResult = (
@@ -388,27 +372,24 @@ export const refreshOpeningBalancesFromPostgres = async (): Promise<OpeningBalan
   isRefreshingOpeningBalancesFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_OPENING_BALANCE_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalOpeningBalanceBatchUpdatedAt();
 
-    while (true) {
-      const remoteBundles = await openingBalancePostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'openingBalanceBatches',
+      pageSize: POSTGRES_OPENING_BALANCE_REFRESH_LIMIT,
+      loadPage: (cursor) => openingBalancePostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: POSTGRES_OPENING_BALANCE_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteOpeningBalanceBundlesIntoDexie(remoteBundles);
-      addOpeningBalanceReadSyncResult(aggregate, result);
-
-      if (remoteBundles.length < POSTGRES_OPENING_BALANCE_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteBundleUpdatedAt(remoteBundles);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteBundles) => {
+        addOpeningBalanceReadSyncResult(
+          aggregate,
+          await mergeRemoteOpeningBalanceBundlesIntoDexie(remoteBundles),
+        );
+      },
+      getUpdatedAt: (bundle) => bundle.batch.updated_at,
+      getId: (bundle) => bundle.batch.id,
+    });
 
     return aggregate;
   } catch (error) {

@@ -17,11 +17,8 @@ import {
   type RemoteCooperativeMemberSavingBalanceDto,
   type RemoteCooperativeSavingTransactionDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type {
   CooperativeLoan,
   CooperativeLoanInstallment,
@@ -616,37 +613,31 @@ const addReadSyncResult = (aggregate: CooperativeReadSyncResult, next: Cooperati
   aggregate.skipped += next.skipped;
 };
 
-const localCooperativeCursor = (record: { remote_updated_at?: string; updated_at: string; sync_status?: string }) => (
-  record.remote_updated_at ?? (record.sync_status === 'synced' ? record.updated_at : undefined)
-);
-
 /**
- * Generic per-table delta fetch loop: pull rows changed since the latest known cursor, merge
- * into Dexie, advance the cursor from the batch, repeat until a short page ends pagination.
- * Mirrors the pattern in salesDocumentReadService.ts, applied independently per cooperative
- * bundle table now that each has its own cursor index (migration 0074) and - for loans/
- * installments - tombstone-based deletes instead of the old full-list diff reconciliation.
+ * Generic per-table keyset loop. Its checkpoint is independent from local business rows so the
+ * v121 recovery backfill starts from the beginning and resumes safely page by page.
  */
-const refreshCooperativeTableFromPostgres = async <TRemote extends { updated_at: string }>(
-  getLocalCursor: () => Promise<string | undefined>,
-  list: (options: { updatedAfter?: string; limit?: number }) => Promise<TRemote[]>,
+const refreshCooperativeTableFromPostgres = async <TRemote extends { id: string; updated_at: string }>(
+  entity: string,
+  list: (options: { updatedAfter?: string; cursorId?: string; limit?: number }) => Promise<TRemote[]>,
   merge: (remoteRows: TRemote[]) => Promise<CooperativeReadSyncResult>,
 ): Promise<CooperativeReadSyncResult> => {
   const aggregate = { ...EMPTY_READ_SYNC_RESULT };
-  let updatedAfter = await getLocalCursor();
 
-  while (true) {
-    const remoteRows = await list({ updatedAfter, limit: COOPERATIVE_BUNDLE_REFRESH_LIMIT });
-    const result = await merge(remoteRows);
-    addReadSyncResult(aggregate, result);
-
-    if (remoteRows.length < COOPERATIVE_BUNDLE_REFRESH_LIMIT) break;
-
-    const nextUpdatedAfter = getLatestRemoteUpdatedAt(remoteRows, (row) => row.updated_at);
-    if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-
-    updatedAfter = nextUpdatedAfter;
-  }
+  await pullStoredUpdatedAtIdPages({
+    entity,
+    pageSize: COOPERATIVE_BUNDLE_REFRESH_LIMIT,
+    loadPage: (cursor) => list({
+      updatedAfter: cursor?.updatedAt,
+      cursorId: cursor?.id,
+      limit: COOPERATIVE_BUNDLE_REFRESH_LIMIT,
+    }),
+    mergePage: async (remoteRows) => {
+      addReadSyncResult(aggregate, await merge(remoteRows));
+    },
+    getUpdatedAt: (row) => row.updated_at,
+    getId: (row) => row.id,
+  });
 
   return aggregate;
 };
@@ -659,9 +650,7 @@ export const refreshCooperativeMembersFromPostgres = async (): Promise<Cooperati
   isRefreshingCooperativeMembersFromPostgres = true;
   try {
     return await refreshCooperativeTableFromPostgres(
-      () => db.cooperativeMembers.toArray().then((members) => (
-        getLatestLocalRemoteUpdatedAt(members, localCooperativeCursor)
-      )),
+      'cooperativeMembers',
       (options) => cooperativeMemberPostgresAdapter.list(options),
       mergeRemoteCooperativeMembersIntoDexie,
     );
@@ -681,9 +670,7 @@ export const refreshCooperativeSavingTransactionsFromPostgres = async (): Promis
   isRefreshingCooperativeSavingTransactionsFromPostgres = true;
   try {
     return await refreshCooperativeTableFromPostgres(
-      () => db.cooperativeSavingTransactions.toArray().then((transactions) => (
-        getLatestLocalRemoteUpdatedAt(transactions, localCooperativeCursor)
-      )),
+      'cooperativeSavingTransactions',
       (options) => cooperativeSavingTransactionPostgresAdapter.list(options),
       mergeRemoteCooperativeSavingTransactionsIntoDexie,
     );
@@ -703,9 +690,7 @@ export const refreshCooperativeMemberSavingBalancesFromPostgres = async (): Prom
   isRefreshingCooperativeMemberSavingBalancesFromPostgres = true;
   try {
     return await refreshCooperativeTableFromPostgres(
-      () => db.cooperativeMemberSavingBalances.toArray().then((balances) => (
-        getLatestLocalRemoteUpdatedAt(balances, localCooperativeCursor)
-      )),
+      'cooperativeMemberSavingBalances',
       (options) => cooperativeMemberSavingBalancePostgresAdapter.list(options),
       mergeRemoteCooperativeMemberSavingBalancesIntoDexie,
     );
@@ -725,9 +710,7 @@ export const refreshCooperativeLoansFromPostgres = async (): Promise<Cooperative
   isRefreshingCooperativeLoansFromPostgres = true;
   try {
     return await refreshCooperativeTableFromPostgres(
-      () => db.cooperativeLoans.toArray().then((loans) => (
-        getLatestLocalRemoteUpdatedAt(loans, localCooperativeCursor)
-      )),
+      'cooperativeLoans',
       (options) => cooperativeLoanPostgresAdapter.list(options),
       mergeRemoteCooperativeLoansIntoDexie,
     );
@@ -747,9 +730,7 @@ export const refreshCooperativeLoanInstallmentsFromPostgres = async (): Promise<
   isRefreshingCooperativeLoanInstallmentsFromPostgres = true;
   try {
     return await refreshCooperativeTableFromPostgres(
-      () => db.cooperativeLoanInstallments.toArray().then((installments) => (
-        getLatestLocalRemoteUpdatedAt(installments, localCooperativeCursor)
-      )),
+      'cooperativeLoanInstallments',
       (options) => cooperativeLoanInstallmentPostgresAdapter.list(options),
       mergeRemoteCooperativeLoanInstallmentsIntoDexie,
     );
@@ -769,9 +750,7 @@ export const refreshCooperativeLoanPaymentsFromPostgres = async (): Promise<Coop
   isRefreshingCooperativeLoanPaymentsFromPostgres = true;
   try {
     return await refreshCooperativeTableFromPostgres(
-      () => db.cooperativeLoanPayments.toArray().then((payments) => (
-        getLatestLocalRemoteUpdatedAt(payments, localCooperativeCursor)
-      )),
+      'cooperativeLoanPayments',
       (options) => cooperativeLoanPaymentPostgresAdapter.list(options),
       mergeRemoteCooperativeLoanPaymentsIntoDexie,
     );

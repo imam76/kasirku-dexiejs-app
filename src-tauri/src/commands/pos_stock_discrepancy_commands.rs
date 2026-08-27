@@ -9,10 +9,11 @@ use tauri::State;
 pub async fn postgres_list_pos_stock_discrepancies(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<PosStockDiscrepancyDto>> {
     let pool = state.pool()?;
-    Ok(pos_stock_discrepancy_repository::list(&pool, updated_after, limit).await?)
+    Ok(pos_stock_discrepancy_repository::list(&pool, updated_after, cursor_id, limit).await?)
 }
 
 #[tauri::command]

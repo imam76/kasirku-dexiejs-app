@@ -146,18 +146,20 @@ macro_rules! sales_document_item_select {
 pub async fn list_sales_document_bundles(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<SalesDocumentBundleDto>, sqlx::Error> {
     let limit = limit.unwrap_or(200).clamp(1, 500);
     let documents = sqlx::query_as::<_, SalesDocumentDto>(concat!(
         sales_document_select!(),
         r#"
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
-        ORDER BY updated_at ASC, created_at ASC, id ASC
-        LIMIT $2
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
+        ORDER BY updated_at ASC, id ASC
+        LIMIT $3
         "#
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit)
     .fetch_all(pool)
     .await?;

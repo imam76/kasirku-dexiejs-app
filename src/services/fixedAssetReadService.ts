@@ -7,10 +7,7 @@ import {
   type RemoteFixedAssetDepreciationRunBundleDto,
   type RemoteFixedAssetDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-} from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { FixedAsset, FixedAssetDepreciationRun } from '@/types';
 
 export interface FixedAssetReadSyncResult {
@@ -135,52 +132,26 @@ export const mergeRemoteFixedAssetRunBundlesIntoDexie = async (
 
 const canRefresh = () => isTauriRuntime() && (typeof navigator === 'undefined' || navigator.onLine);
 
-const getLatestLocalFixedAssetUpdatedAt = async () => {
-  const assets = await db.fixedAssets.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    assets,
-    (asset) => asset.remote_updated_at
-      ?? (asset.sync_status === 'synced' ? asset.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteFixedAssetUpdatedAt = (remoteAssets: RemoteFixedAssetDto[]) => (
-  getLatestRemoteUpdatedAt(remoteAssets, (asset) => asset.updated_at)
-);
-
-const getLatestLocalFixedAssetRunUpdatedAt = async () => {
-  const runs = await db.fixedAssetDepreciationRuns.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    runs,
-    (run) => run.remote_updated_at
-      ?? (run.sync_status === 'synced' ? run.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteFixedAssetRunUpdatedAt = (bundles: RemoteFixedAssetDepreciationRunBundleDto[]) => (
-  getLatestRemoteUpdatedAt(bundles, (bundle) => bundle.run.updated_at)
-);
-
 export const refreshFixedAssetsFromPostgres = async () => {
   if (isRefreshingFixedAssetsFromPostgres || !canRefresh()) return emptyResult();
 
   isRefreshingFixedAssetsFromPostgres = true;
   try {
     const aggregate = emptyResult();
-    let updatedAfter = await getLatestLocalFixedAssetUpdatedAt();
-
-    while (true) {
-      const remoteAssets = await fixedAssetPostgresAdapter.list(updatedAfter, FIXED_ASSET_REFRESH_LIMIT);
-      const result = await mergeRemoteFixedAssetsIntoDexie(remoteAssets);
-      addReadSyncResult(aggregate, result);
-
-      if (remoteAssets.length < FIXED_ASSET_REFRESH_LIMIT) break;
-
-      const nextUpdatedAfter = getLatestRemoteFixedAssetUpdatedAt(remoteAssets);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-
-      updatedAfter = nextUpdatedAfter;
-    }
+    await pullStoredUpdatedAtIdPages({
+      entity: 'fixedAssets',
+      pageSize: FIXED_ASSET_REFRESH_LIMIT,
+      loadPage: (cursor) => fixedAssetPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
+        limit: FIXED_ASSET_REFRESH_LIMIT,
+      }),
+      mergePage: async (remoteAssets) => {
+        addReadSyncResult(aggregate, await mergeRemoteFixedAssetsIntoDexie(remoteAssets));
+      },
+      getUpdatedAt: (asset) => asset.updated_at,
+      getId: (asset) => asset.id,
+    });
 
     return aggregate;
   } catch (error) {
@@ -197,20 +168,20 @@ export const refreshFixedAssetRunsFromPostgres = async () => {
   isRefreshingFixedAssetRunsFromPostgres = true;
   try {
     const aggregate = emptyResult();
-    let updatedAfter = await getLatestLocalFixedAssetRunUpdatedAt();
-
-    while (true) {
-      const bundles = await fixedAssetDepreciationRunPostgresAdapter.list(updatedAfter, FIXED_ASSET_RUN_REFRESH_LIMIT);
-      const result = await mergeRemoteFixedAssetRunBundlesIntoDexie(bundles);
-      addReadSyncResult(aggregate, result);
-
-      if (bundles.length < FIXED_ASSET_RUN_REFRESH_LIMIT) break;
-
-      const nextUpdatedAfter = getLatestRemoteFixedAssetRunUpdatedAt(bundles);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-
-      updatedAfter = nextUpdatedAfter;
-    }
+    await pullStoredUpdatedAtIdPages({
+      entity: 'fixedAssetDepreciationRuns',
+      pageSize: FIXED_ASSET_RUN_REFRESH_LIMIT,
+      loadPage: (cursor) => fixedAssetDepreciationRunPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
+        limit: FIXED_ASSET_RUN_REFRESH_LIMIT,
+      }),
+      mergePage: async (bundles) => {
+        addReadSyncResult(aggregate, await mergeRemoteFixedAssetRunBundlesIntoDexie(bundles));
+      },
+      getUpdatedAt: (bundle) => bundle.run.updated_at,
+      getId: (bundle) => bundle.run.id,
+    });
 
     return aggregate;
   } catch (error) {

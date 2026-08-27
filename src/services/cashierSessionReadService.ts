@@ -5,11 +5,8 @@ import {
   isTauriRuntime,
   type RemoteCashierSessionDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { CashierSession } from '@/types';
 
 export interface CashierSessionReadSyncResult {
@@ -130,20 +127,6 @@ export const mergeRemoteCashierSessionsIntoDexie = async (
   return result;
 };
 
-const getLatestLocalCashierSessionUpdatedAt = async () => {
-  const sessions = await db.cashierSessions.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    sessions,
-    (session) => (
-      session.remote_updated_at ?? (session.sync_status === 'synced' ? session.updated_at : undefined)
-    ),
-  );
-};
-
-const getLatestRemoteCashierSessionUpdatedAt = (remoteSessions: RemoteCashierSessionDto[]) => (
-  getLatestRemoteUpdatedAt(remoteSessions, (session) => session.updated_at)
-);
-
 const addCashierSessionReadSyncResult = (
   aggregate: CashierSessionReadSyncResult,
   next: CashierSessionReadSyncResult,
@@ -162,27 +145,20 @@ export const refreshCashierSessionsFromPostgres = async (): Promise<CashierSessi
   isRefreshingCashierSessionsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_CASHIER_SESSION_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalCashierSessionUpdatedAt();
-
-    while (true) {
-      const remoteSessions = await cashierSessionPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'cashierSessions',
+      pageSize: CASHIER_SESSION_REFRESH_LIMIT,
+      loadPage: (cursor) => cashierSessionPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: CASHIER_SESSION_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteCashierSessionsIntoDexie(remoteSessions);
-      addCashierSessionReadSyncResult(aggregate, result);
-
-      if (remoteSessions.length < CASHIER_SESSION_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteCashierSessionUpdatedAt(remoteSessions);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteSessions) => {
+        addCashierSessionReadSyncResult(aggregate, await mergeRemoteCashierSessionsIntoDexie(remoteSessions));
+      },
+      getUpdatedAt: (session) => session.updated_at,
+      getId: (session) => session.id,
+    });
 
     return aggregate;
   } catch (error) {

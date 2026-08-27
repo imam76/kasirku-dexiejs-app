@@ -9,10 +9,19 @@ use tauri::State;
 pub async fn postgres_list_journal_entry_bundles(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<JournalEntryBundleDto>> {
     let pool = state.pool()?;
-    Ok(journal_entry_repository::list_journal_entry_bundles(&pool, updated_after, limit).await?)
+    Ok(
+        journal_entry_repository::list_journal_entry_bundles(
+            &pool,
+            updated_after,
+            cursor_id,
+            limit,
+        )
+        .await?,
+    )
 }
 
 #[tauri::command]

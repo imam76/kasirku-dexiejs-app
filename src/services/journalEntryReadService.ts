@@ -7,11 +7,8 @@ import {
   type RemoteJournalEntryDto,
   type RemoteJournalEntryLineDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { AccountType, JournalEntry, JournalEntryLine, JournalEntryStatus, JournalSourceType } from '@/types';
 
 export interface JournalEntryReadSyncResult {
@@ -131,19 +128,6 @@ const hasLocalUnsyncedChanges = (entry: JournalEntry) => (
   entry.sync_status === 'pending' || entry.sync_status === 'failed'
 );
 
-const getLatestLocalJournalEntryUpdatedAt = async () => {
-  const entries = await db.journalEntries.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    entries,
-    (entry) => entry.remote_updated_at
-      ?? (entry.sync_status === 'synced' ? entry.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteJournalEntryBundleDto[]) => (
-  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.entry.updated_at)
-);
-
 const addJournalEntryReadSyncResult = (
   aggregate: JournalEntryReadSyncResult,
   next: JournalEntryReadSyncResult,
@@ -239,27 +223,24 @@ export const refreshJournalEntriesFromPostgres = async (): Promise<JournalEntryR
   isRefreshingJournalEntriesFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_JOURNAL_ENTRY_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalJournalEntryUpdatedAt();
 
-    while (true) {
-      const remoteBundles = await journalEntryPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'journalEntries',
+      pageSize: POSTGRES_JOURNAL_ENTRY_REFRESH_LIMIT,
+      loadPage: (cursor) => journalEntryPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: POSTGRES_JOURNAL_ENTRY_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteJournalEntryBundlesIntoDexie(remoteBundles);
-      addJournalEntryReadSyncResult(aggregate, result);
-
-      if (remoteBundles.length < POSTGRES_JOURNAL_ENTRY_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteBundleUpdatedAt(remoteBundles);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteBundles) => {
+        addJournalEntryReadSyncResult(
+          aggregate,
+          await mergeRemoteJournalEntryBundlesIntoDexie(remoteBundles),
+        );
+      },
+      getUpdatedAt: (bundle) => bundle.entry.updated_at,
+      getId: (bundle) => bundle.entry.id,
+    });
 
     return aggregate;
   } catch (error) {

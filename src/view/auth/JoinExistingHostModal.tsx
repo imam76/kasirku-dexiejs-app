@@ -4,7 +4,7 @@ import { Server } from 'lucide-react';
 import { getRemoteSetupConfig, saveSetupConfigForRuntime } from '@/services/setupKeyService';
 import { setPostgresConnectionHealth } from '@/store/postgresConnectionStore';
 import type { PostgresHealth } from '@/services/postgresAdapter';
-import { HostDatabaseSetup, type HostDatabaseTarget } from '@/view/auth/HostDatabaseSetup';
+import { HostDatabaseSetup } from '@/view/auth/HostDatabaseSetup';
 
 interface JoinExistingHostModalProps {
   open: boolean;
@@ -17,7 +17,7 @@ export const JoinExistingHostModal = ({ open, onClose, onJoined }: JoinExistingH
   const [isChecking, setIsChecking] = useState(false);
 
   const handleConfigured = useCallback(
-    async (health: PostgresHealth, _target: HostDatabaseTarget) => {
+    async (health: PostgresHealth) => {
       setPostgresConnectionHealth(health);
       setIsChecking(true);
       try {

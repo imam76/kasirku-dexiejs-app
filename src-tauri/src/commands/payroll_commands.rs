@@ -9,10 +9,14 @@ use tauri::State;
 pub async fn postgres_list_payroll_run_bundles(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<PayrollRunBundleDto>> {
     let pool = state.pool()?;
-    Ok(payroll_repository::list_payroll_run_bundles(&pool, updated_after, limit).await?)
+    Ok(
+        payroll_repository::list_payroll_run_bundles(&pool, updated_after, cursor_id, limit)
+            .await?,
+    )
 }
 
 #[tauri::command]
@@ -37,10 +41,17 @@ pub async fn postgres_upsert_payroll_run_bundle(
 pub async fn postgres_list_employee_cash_advance_bundles(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<EmployeeCashAdvanceBundleDto>> {
     let pool = state.pool()?;
-    Ok(payroll_repository::list_employee_cash_advance_bundles(&pool, updated_after, limit).await?)
+    Ok(payroll_repository::list_employee_cash_advance_bundles(
+        &pool,
+        updated_after,
+        cursor_id,
+        limit,
+    )
+    .await?)
 }
 
 #[tauri::command]

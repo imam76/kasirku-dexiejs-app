@@ -31,10 +31,8 @@ pub async fn postgres_get_purchase_cost_reconciliation_bundle(
 ) -> PostgresCommandResult<Option<PurchaseCostReconciliationBundleDto>> {
     let pool = state.pool()?;
     Ok(
-        purchase_cost_reconciliation_repository::get_purchase_cost_reconciliation_bundle(
-            &pool, id,
-        )
-        .await?,
+        purchase_cost_reconciliation_repository::get_purchase_cost_reconciliation_bundle(&pool, id)
+            .await?,
     )
 }
 

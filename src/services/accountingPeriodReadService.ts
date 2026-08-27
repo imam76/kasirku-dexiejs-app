@@ -4,11 +4,8 @@ import {
   isTauriRuntime,
   type RemoteAccountingPeriodDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { AccountingPeriod, AccountingPeriodStatus, AccountingPeriodType } from '@/types';
 
 const ACCOUNTING_PERIOD_REFRESH_LIMIT = 500;
@@ -159,18 +156,6 @@ export const mergeRemoteAccountingPeriodsIntoDexie = async (
   return result;
 };
 
-const getLatestLocalAccountingPeriodUpdatedAt = async () => {
-  const periods = await db.accountingPeriods.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    periods,
-    (period) => period.remote_updated_at ?? (period.sync_status === 'synced' ? period.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteAccountingPeriodUpdatedAt = (remotePeriods: RemoteAccountingPeriodDto[]) => (
-  getLatestRemoteUpdatedAt(remotePeriods, (period) => period.updated_at)
-);
-
 export const refreshAccountingPeriodsFromPostgres =
   async (): Promise<AccountingPeriodReadSyncResult> => {
     if (isRefreshingAccountingPeriodsFromPostgres || !canReadFromPostgres()) {
@@ -180,26 +165,25 @@ export const refreshAccountingPeriodsFromPostgres =
     isRefreshingAccountingPeriodsFromPostgres = true;
     try {
       const aggregate = { ...EMPTY_ACCOUNTING_PERIOD_READ_SYNC_RESULT };
-      let updatedAfter = await getLatestLocalAccountingPeriodUpdatedAt();
-
-      while (true) {
-        const remotePeriods = await accountingPeriodPostgresAdapter.list({
-          updatedAfter,
+      await pullStoredUpdatedAtIdPages({
+        entity: 'accountingPeriods',
+        pageSize: ACCOUNTING_PERIOD_REFRESH_LIMIT,
+        loadPage: (cursor) => accountingPeriodPostgresAdapter.list({
+          updatedAfter: cursor?.updatedAt,
+          cursorId: cursor?.id,
           limit: ACCOUNTING_PERIOD_REFRESH_LIMIT,
-        });
-        const result = await mergeRemoteAccountingPeriodsIntoDexie(remotePeriods);
-        aggregate.fetched += result.fetched;
-        aggregate.inserted += result.inserted;
-        aggregate.updated += result.updated;
-        aggregate.deleted += result.deleted;
-        aggregate.skipped += result.skipped;
-
-        if (remotePeriods.length < ACCOUNTING_PERIOD_REFRESH_LIMIT) break;
-
-        const nextUpdatedAfter = getLatestRemoteAccountingPeriodUpdatedAt(remotePeriods);
-        if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) break;
-        updatedAfter = nextUpdatedAfter;
-      }
+        }),
+        mergePage: async (remotePeriods) => {
+          const result = await mergeRemoteAccountingPeriodsIntoDexie(remotePeriods);
+          aggregate.fetched += result.fetched;
+          aggregate.inserted += result.inserted;
+          aggregate.updated += result.updated;
+          aggregate.deleted += result.deleted;
+          aggregate.skipped += result.skipped;
+        },
+        getUpdatedAt: (period) => period.updated_at,
+        getId: (period) => period.id,
+      });
 
       return aggregate;
     } finally {

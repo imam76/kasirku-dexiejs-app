@@ -7,11 +7,8 @@ import {
   type RemoteSalesDocumentDto,
   type RemoteSalesDocumentItemDto,
 } from '@/services/postgresAdapter';
-import {
-  getLatestLocalRemoteUpdatedAt,
-  getLatestRemoteUpdatedAt,
-  toTimestamp,
-} from '@/services/shared/remoteRefreshCursor';
+import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type {
   AccountType,
   PaymentMethod,
@@ -254,19 +251,6 @@ const hasLocalUnsyncedChanges = (document: SalesDocument) => (
   document.sync_status === 'pending' || document.sync_status === 'failed'
 );
 
-const getLatestLocalSalesDocumentUpdatedAt = async () => {
-  const documents = await db.salesDocuments.toArray();
-  return getLatestLocalRemoteUpdatedAt(
-    documents,
-    (document) => document.remote_updated_at
-      ?? (document.sync_status === 'synced' ? document.updated_at : undefined),
-  );
-};
-
-const getLatestRemoteBundleUpdatedAt = (remoteBundles: RemoteSalesDocumentBundleDto[]) => (
-  getLatestRemoteUpdatedAt(remoteBundles, (bundle) => bundle.document.updated_at)
-);
-
 const addSalesDocumentReadSyncResult = (
   aggregate: SalesDocumentReadSyncResult,
   next: SalesDocumentReadSyncResult,
@@ -350,27 +334,24 @@ export const refreshSalesDocumentsFromPostgres = async (): Promise<SalesDocument
   isRefreshingSalesDocumentsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_SALES_DOCUMENT_READ_SYNC_RESULT };
-    let updatedAfter = await getLatestLocalSalesDocumentUpdatedAt();
 
-    while (true) {
-      const remoteBundles = await salesDocumentPostgresAdapter.list({
-        updatedAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'salesDocuments',
+      pageSize: POSTGRES_SALES_DOCUMENT_REFRESH_LIMIT,
+      loadPage: (cursor) => salesDocumentPostgresAdapter.list({
+        updatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: POSTGRES_SALES_DOCUMENT_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteSalesDocumentBundlesIntoDexie(remoteBundles);
-      addSalesDocumentReadSyncResult(aggregate, result);
-
-      if (remoteBundles.length < POSTGRES_SALES_DOCUMENT_REFRESH_LIMIT) {
-        break;
-      }
-
-      const nextUpdatedAfter = getLatestRemoteBundleUpdatedAt(remoteBundles);
-      if (!nextUpdatedAfter || nextUpdatedAfter === updatedAfter) {
-        break;
-      }
-
-      updatedAfter = nextUpdatedAfter;
-    }
+      }),
+      mergePage: async (remoteBundles) => {
+        addSalesDocumentReadSyncResult(
+          aggregate,
+          await mergeRemoteSalesDocumentBundlesIntoDexie(remoteBundles),
+        );
+      },
+      getUpdatedAt: (bundle) => bundle.document.updated_at,
+      getId: (bundle) => bundle.document.id,
+    });
 
     return aggregate;
   } catch (error) {

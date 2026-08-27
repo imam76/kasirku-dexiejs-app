@@ -9,10 +9,17 @@ use tauri::State;
 pub async fn postgres_list_sales_document_bundles(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<SalesDocumentBundleDto>> {
     let pool = state.pool()?;
-    Ok(sales_document_repository::list_sales_document_bundles(&pool, updated_after, limit).await?)
+    Ok(sales_document_repository::list_sales_document_bundles(
+        &pool,
+        updated_after,
+        cursor_id,
+        limit,
+    )
+    .await?)
 }
 
 #[tauri::command]

@@ -9,13 +9,17 @@ use tauri::State;
 pub async fn postgres_list_production_order_bundles(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<ProductionOrderBundleDto>> {
     let pool = state.pool()?;
-    Ok(
-        production_order_repository::list_production_order_bundles(&pool, updated_after, limit)
-            .await?,
+    Ok(production_order_repository::list_production_order_bundles(
+        &pool,
+        updated_after,
+        cursor_id,
+        limit,
     )
+    .await?)
 }
 
 #[tauri::command]

@@ -9,10 +9,11 @@ use tauri::State;
 pub async fn postgres_list_promos(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<PromoDto>> {
     let pool = state.pool()?;
-    Ok(promo_repository::list_promos(&pool, updated_after, limit).await?)
+    Ok(promo_repository::list_promos(&pool, updated_after, cursor_id, limit).await?)
 }
 
 #[tauri::command]

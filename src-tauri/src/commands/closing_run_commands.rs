@@ -9,10 +9,11 @@ use tauri::State;
 pub async fn postgres_list_closing_runs(
     state: State<'_, PostgresState>,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<ClosingRunDto>> {
     let pool = state.pool()?;
-    Ok(closing_run_repository::list_closing_runs(&pool, updated_after, limit).await?)
+    Ok(closing_run_repository::list_closing_runs(&pool, updated_after, cursor_id, limit).await?)
 }
 
 #[tauri::command]

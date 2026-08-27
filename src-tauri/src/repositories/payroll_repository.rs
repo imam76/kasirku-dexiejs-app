@@ -135,18 +135,20 @@ macro_rules! employee_cash_advance_repayment_select {
 pub async fn list_payroll_run_bundles(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<PayrollRunBundleDto>, sqlx::Error> {
     let limit = limit.unwrap_or(200).clamp(1, 500);
     let runs = sqlx::query_as::<_, PayrollRunDto>(concat!(
         payroll_run_select!(),
         r#"
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
-        ORDER BY updated_at ASC, created_at ASC, id ASC
-        LIMIT $2
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
+        ORDER BY updated_at ASC, id ASC
+        LIMIT $3
         "#
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit)
     .fetch_all(pool)
     .await?;
@@ -249,18 +251,20 @@ pub async fn upsert_payroll_run_bundle(
 pub async fn list_employee_cash_advance_bundles(
     pool: &PgPool,
     updated_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<EmployeeCashAdvanceBundleDto>, sqlx::Error> {
     let limit = limit.unwrap_or(200).clamp(1, 500);
     let cash_advances = sqlx::query_as::<_, EmployeeCashAdvanceDto>(concat!(
         employee_cash_advance_select!(),
         r#"
-        WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
-        ORDER BY updated_at ASC, created_at ASC, id ASC
-        LIMIT $2
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
+        ORDER BY updated_at ASC, id ASC
+        LIMIT $3
         "#
     ))
     .bind(updated_after)
+    .bind(cursor_id)
     .bind(limit)
     .fetch_all(pool)
     .await?;
