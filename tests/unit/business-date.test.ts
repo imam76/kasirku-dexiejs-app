@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test';
+import dayjs from '@/lib/dayjs';
 import {
+  businessWallTimeToIso,
   getBusinessDayBoundsIso,
   isBusinessDateKeyInRange,
   toBusinessDateKey,
   toBusinessDatePrefix,
+  toBusinessZonedDateTime,
 } from '@/utils/businessDate';
 
 describe('business date (Asia/Jakarta)', () => {
@@ -26,6 +29,17 @@ describe('business date (Asia/Jakarta)', () => {
   test('produces YYYYMMDD prefixes matching the WIB day', () => {
     expect(toBusinessDatePrefix('2026-08-26T17:00:00.000Z')).toBe('20260827');
     expect(toBusinessDatePrefix(new Date('2026-08-26T23:30:00Z'))).toBe('20260827');
+  });
+
+  test('interprets picker wall time as WIB independently of its source timezone', () => {
+    const pickerValueWithUtcZone = dayjs.utc('2026-08-28T10:15:30.250Z');
+
+    expect(businessWallTimeToIso(pickerValueWithUtcZone)).toBe(
+      '2026-08-28T03:15:30.250Z',
+    );
+    expect(toBusinessZonedDateTime('2026-08-28T03:15:30.250Z').format('YYYY-MM-DD HH:mm:ss.SSS')).toBe(
+      '2026-08-28 10:15:30.250',
+    );
   });
 
   test('day bounds cover the full WIB day as UTC instants', () => {

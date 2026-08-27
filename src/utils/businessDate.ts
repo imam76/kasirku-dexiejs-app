@@ -1,4 +1,5 @@
 import dayjs from '@/lib/dayjs';
+import type { Dayjs } from 'dayjs';
 
 /**
  * Business-day helpers pinned to Asia/Jakarta (WIB, UTC+7), independent of the
@@ -8,7 +9,7 @@ import dayjs from '@/lib/dayjs';
  * date grouping/filtering).
  */
 
-const BUSINESS_TIMEZONE = 'Asia/Jakarta';
+export const BUSINESS_TIMEZONE = 'Asia/Jakarta';
 
 /**
  * Parses `value` in the Asia/Jakarta timezone, OS-timezone-independently.
@@ -22,11 +23,23 @@ const BUSINESS_TIMEZONE = 'Asia/Jakarta';
  *   These are parsed directly via `dayjs.tz(value, zone)`, which reads the
  *   literal digits as a Jakarta calendar date instead.
  */
-const parseInBusinessTimezone = (value: string | Date) => (
+export const toBusinessZonedDateTime = (value: string | Date) => (
   typeof value === 'string' && value.length <= 10
     ? dayjs.tz(value, BUSINESS_TIMEZONE)
     : dayjs(value).tz(BUSINESS_TIMEZONE)
 );
+
+/**
+ * Interprets wall-clock digits selected by a date/time picker as Asia/Jakarta time,
+ * regardless of the host OS timezone, and returns the corresponding UTC instant.
+ */
+export const businessWallTimeToIso = (value: Dayjs): string => {
+  if (!value.isValid()) {
+    throw new Error('Tanggal dan waktu bisnis tidak valid.');
+  }
+
+  return value.tz(BUSINESS_TIMEZONE, true).toISOString();
+};
 
 /**
  * Converts a timestamp/instant to its Asia/Jakarta calendar date key
@@ -34,7 +47,7 @@ const parseInBusinessTimezone = (value: string | Date) => (
  * correct WIB day even though its UTC date is the previous day.
  */
 export const toBusinessDateKey = (value: string | Date): string => (
-  parseInBusinessTimezone(value).format('YYYY-MM-DD')
+  toBusinessZonedDateTime(value).format('YYYY-MM-DD')
 );
 
 /**
@@ -42,7 +55,7 @@ export const toBusinessDateKey = (value: string | Date): string => (
  * (`YYYYMMDD`), for use in daily-reset document/number sequences.
  */
 export const toBusinessDatePrefix = (value: string | Date): string => (
-  parseInBusinessTimezone(value).format('YYYYMMDD')
+  toBusinessZonedDateTime(value).format('YYYYMMDD')
 );
 
 /**
@@ -51,7 +64,7 @@ export const toBusinessDatePrefix = (value: string | Date): string => (
  * timestamps.
  */
 export const getBusinessDayBoundsIso = (value: string | Date): { startIso: string; endIso: string } => {
-  const zoned = parseInBusinessTimezone(value);
+  const zoned = toBusinessZonedDateTime(value);
   return {
     startIso: zoned.startOf('day').toISOString(),
     endIso: zoned.endOf('day').toISOString(),

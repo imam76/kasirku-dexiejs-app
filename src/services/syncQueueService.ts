@@ -458,8 +458,8 @@ const mapLotteryToRemoteDto = (lottery: Lottery): RemoteLotteryDto => ({
   name: lottery.name,
   min_total: lottery.min_total,
   max_total: lottery.max_total,
-  start_at: lottery.start_at,
-  end_at: lottery.end_at,
+  start_at: lottery.start_at ?? null,
+  end_at: lottery.end_at ?? null,
   active: lottery.active,
   created_by: lottery.created_by,
   created_at: lottery.created_at,
@@ -2266,6 +2266,8 @@ const isRemoteLotteryDto = (payload: unknown): payload is RemoteLotteryDto => {
     typeof candidate.id === 'string' &&
     typeof candidate.name === 'string' &&
     typeof candidate.min_total === 'number' &&
+    (candidate.start_at == null || typeof candidate.start_at === 'string') &&
+    (candidate.end_at == null || typeof candidate.end_at === 'string') &&
     typeof candidate.active === 'boolean' &&
     typeof candidate.created_at === 'string' &&
     typeof candidate.updated_at === 'string'

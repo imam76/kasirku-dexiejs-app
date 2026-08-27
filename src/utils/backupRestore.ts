@@ -9,9 +9,10 @@ import { ensureMembershipSetting } from '@/services/membershipService';
 import { ensureDefaultPaymentMethods } from '@/services/paymentMethodService';
 import { backfillLegacyPosPaymentSnapshots } from '@/services/posPaymentMethodService';
 import { backfillMissingPosTransactionPayments } from '@/services/posTransactionPaymentService';
-import type { AuthUser, Product } from '@/types';
+import type { AuthUser, Lottery, Product } from '@/types';
 import { ensureFixedAssetAccountDefaults } from '@/services/fixedAssetService';
 import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 const hasActiveOwner = (users: AuthUser[]) => {
   return users.some((user) => user.role === 'OWNER' && user.is_active);
@@ -25,6 +26,16 @@ const normalizeStoredProduct = (product: Product): Product => ({
         unit_mappings: normalizeProductUnitMappings(product),
       }
     : {}),
+});
+
+const normalizeStoredLottery = (lottery: Lottery): Lottery => ({
+  ...lottery,
+  start_at: toCanonicalOptionalIsoTimestamp(lottery.start_at) ?? null,
+  end_at: toCanonicalOptionalIsoTimestamp(lottery.end_at) ?? null,
+  created_at: toCanonicalIsoTimestamp(lottery.created_at),
+  updated_at: toCanonicalIsoTimestamp(lottery.updated_at),
+  last_synced_at: toCanonicalOptionalIsoTimestamp(lottery.last_synced_at),
+  remote_updated_at: toCanonicalOptionalIsoTimestamp(lottery.remote_updated_at),
 });
 
 export const backupDatabase = async () => {
@@ -50,7 +61,7 @@ export const backupDatabase = async () => {
       profitLogs: await db.profitLogs.toArray(),
       profitBalance: await db.profitBalance.toArray(),
       promos: await db.promos.toArray(),
-      lotteries: await db.lotteries.toArray(),
+      lotteries: (await db.lotteries.toArray()).map(normalizeStoredLottery),
       contacts: await db.contacts.toArray(),
       departments: await db.departments.toArray(),
       projects: await db.projects.toArray(),
@@ -334,7 +345,11 @@ export const restoreDatabase = async (file: File) => {
           if (data.profitLogs?.length) await db.profitLogs.bulkAdd(data.profitLogs);
           if (data.profitBalance?.length) await db.profitBalance.bulkAdd(data.profitBalance);
           if (data.promos?.length) await db.promos.bulkAdd(data.promos);
-          if (data.lotteries?.length) await db.lotteries.bulkAdd(data.lotteries);
+          if (data.lotteries?.length) {
+            await db.lotteries.bulkAdd(
+              data.lotteries.map((lottery: Lottery) => normalizeStoredLottery(lottery)),
+            );
+          }
           if (data.contacts?.length) await db.contacts.bulkAdd(data.contacts);
           if (data.departments?.length) await db.departments.bulkAdd(data.departments);
           if (data.projects?.length) await db.projects.bulkAdd(data.projects);

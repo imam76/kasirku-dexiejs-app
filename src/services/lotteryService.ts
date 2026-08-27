@@ -2,6 +2,8 @@ import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '
 import { db } from '@/lib/db';
 import type { Lottery } from '@/types';
 import { enqueueLotterySync } from '@/services/syncQueueService';
+import { toBusinessZonedDateTime } from '@/utils/businessDate';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface LotteryFormInput {
   name: string;
@@ -12,13 +14,20 @@ export interface LotteryFormInput {
   active: boolean;
 }
 
+export type NormalizedLotteryFormInput = Omit<
+  LotteryFormInput,
+  'max_total' | 'start_at' | 'end_at'
+> & {
+  max_total: number | null;
+  start_at: string | null;
+  end_at: string | null;
+};
+
 export interface LotteryEvaluationResult {
   lottery_number?: string;
   lottery_id?: string;
   lottery_name?: string;
 }
-
-const pad = (value: number, length: number) => String(value).padStart(length, '0');
 
 const getCashierInitials = (cashierName?: string) => {
   const trimmed = (cashierName ?? '').trim();
@@ -35,9 +44,10 @@ const getCashierInitials = (cashierName?: string) => {
 
 export const buildLotteryNumber = (now: Date, cashierName?: string) => {
   const initials = getCashierInitials(cashierName);
-  const datePart = `${pad(now.getFullYear() % 100, 2)}${pad(now.getMonth() + 1, 2)}${pad(now.getDate(), 2)}`;
-  const timePart = `${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}${pad(now.getSeconds(), 2)}`;
-  const msPart = pad(now.getMilliseconds(), 3);
+  const businessNow = toBusinessZonedDateTime(now);
+  const datePart = businessNow.format('YYMMDD');
+  const timePart = businessNow.format('HHmmss');
+  const msPart = businessNow.format('SSS');
 
   return `UND-${initials}-${datePart}-${timePart}-${msPart}`;
 };
@@ -60,14 +70,29 @@ const isLotteryEligible = (lottery: Lottery, totalAmount: number) => {
   return true;
 };
 
-const sanitizeLotteryInput = (input: LotteryFormInput): LotteryFormInput => {
+const normalizeOptionalLotteryTimestamp = (
+  value: string | null | undefined,
+  fieldLabel: string,
+): string | null => {
+  if (!value) return null;
+
+  try {
+    return toCanonicalIsoTimestamp(value);
+  } catch {
+    throw new Error(`${fieldLabel} undian tidak valid.`);
+  }
+};
+
+export const normalizeLotteryFormInput = (
+  input: LotteryFormInput,
+): NormalizedLotteryFormInput => {
   const name = input.name.trim();
   const minTotal = Number(input.min_total);
   const maxTotal = input.max_total == null || input.max_total === undefined
     ? null
     : Number(input.max_total);
-  const startAt = input.start_at || null;
-  const endAt = input.end_at || null;
+  const startAt = normalizeOptionalLotteryTimestamp(input.start_at, 'Tanggal mulai');
+  const endAt = normalizeOptionalLotteryTimestamp(input.end_at, 'Tanggal selesai');
 
   if (!name) {
     throw new Error('Nama undian wajib diisi.');
@@ -83,7 +108,7 @@ const sanitizeLotteryInput = (input: LotteryFormInput): LotteryFormInput => {
     }
   }
 
-  if (startAt && endAt && new Date(startAt).getTime() > new Date(endAt).getTime()) {
+  if (startAt && endAt && Date.parse(startAt) > Date.parse(endAt)) {
     throw new Error('Tanggal mulai undian tidak boleh melewati tanggal selesai.');
   }
 
@@ -136,7 +161,7 @@ export const createLottery = async (input: LotteryFormInput): Promise<Lottery> =
   const now = new Date().toISOString();
   const lottery: Lottery = {
     id: crypto.randomUUID(),
-    ...sanitizeLotteryInput(input),
+    ...normalizeLotteryFormInput(input),
     created_by: currentUser?.id,
     created_at: now,
     updated_at: now,
@@ -167,7 +192,7 @@ export const updateLottery = async (lotteryId: string, input: LotteryFormInput):
 
   const updatedLottery: Lottery = {
     ...existingLottery,
-    ...sanitizeLotteryInput(input),
+    ...normalizeLotteryFormInput(input),
     updated_at: new Date().toISOString(),
     sync_status: 'pending',
     sync_error: undefined,

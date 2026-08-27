@@ -497,8 +497,8 @@ export interface Lottery {
   name: string;
   min_total: number;
   max_total?: number | null;
-  start_at?: string | null;
-  end_at?: string | null;
+  start_at: string | null;
+  end_at: string | null;
   active: boolean;
   created_by?: string;
   created_at: string;

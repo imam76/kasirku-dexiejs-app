@@ -5,9 +5,12 @@ import type { Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Edit2, Plus, Ticket, Trash2 } from 'lucide-react';
 import { db } from '@/lib/db';
-import dayjs from '@/lib/dayjs';
 import { createLottery, deleteLottery, updateLottery, type LotteryFormInput } from '@/services/lotteryService';
 import type { Lottery } from '@/types';
+import {
+  businessWallTimeToIso,
+  toBusinessZonedDateTime,
+} from '@/utils/businessDate';
 import { formatCurrency } from '@/utils/formatters';
 
 const { Text } = Typography;
@@ -28,8 +31,12 @@ const getRangeLabel = (lottery: Lottery) => (
 );
 
 const getPeriodLabel = (lottery: Lottery) => {
-  const start = lottery.start_at ? dayjs(lottery.start_at).tz().format('DD MMM YYYY HH:mm') : 'Sekarang';
-  const end = lottery.end_at ? dayjs(lottery.end_at).tz().format('DD MMM YYYY HH:mm') : 'Tanpa batas';
+  const start = lottery.start_at
+    ? toBusinessZonedDateTime(lottery.start_at).format('DD MMM YYYY HH:mm')
+    : 'Sekarang';
+  const end = lottery.end_at
+    ? toBusinessZonedDateTime(lottery.end_at).format('DD MMM YYYY HH:mm')
+    : 'Tanpa batas';
 
   return `${start} - ${end}`;
 };
@@ -38,8 +45,8 @@ const toLotteryFormInput = (values: LotteryFormValues): LotteryFormInput => ({
   name: values.name,
   min_total: Number(values.min_total),
   max_total: values.max_total ?? null,
-  start_at: values.start_at?.toISOString() ?? null,
-  end_at: values.end_at?.toISOString() ?? null,
+  start_at: values.start_at ? businessWallTimeToIso(values.start_at) : null,
+  end_at: values.end_at ? businessWallTimeToIso(values.end_at) : null,
   active: Boolean(values.active),
 });
 
@@ -47,8 +54,8 @@ const getLotteryFormValues = (lottery: Lottery): LotteryFormValues => ({
   name: lottery.name,
   min_total: lottery.min_total,
   max_total: lottery.max_total ?? null,
-  start_at: lottery.start_at ? dayjs(lottery.start_at) : null,
-  end_at: lottery.end_at ? dayjs(lottery.end_at) : null,
+  start_at: lottery.start_at ? toBusinessZonedDateTime(lottery.start_at) : null,
+  end_at: lottery.end_at ? toBusinessZonedDateTime(lottery.end_at) : null,
   active: lottery.active,
 });
 
