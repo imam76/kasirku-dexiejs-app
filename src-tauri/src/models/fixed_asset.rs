@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -41,9 +42,9 @@ pub struct FixedAssetDto {
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
     pub updated_by_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -67,13 +68,13 @@ pub struct FixedAssetDepreciationRunDto {
     pub created_by_name: Option<String>,
     pub posted_by: Option<String>,
     pub posted_by_name: Option<String>,
-    pub posted_at: Option<String>,
+    pub posted_at: Option<DateTime<Utc>>,
     pub reversed_by: Option<String>,
     pub reversed_by_name: Option<String>,
-    pub reversed_at: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub reversed_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -107,7 +108,7 @@ pub struct FixedAssetDepreciationRunLineDto {
     pub project_id: Option<String>,
     pub project_code: Option<String>,
     pub project_name: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

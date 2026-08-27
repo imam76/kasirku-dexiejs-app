@@ -9,6 +9,7 @@ import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { Product, ProductUnit, ProductUnitMapping, WholesalePrice } from '@/types';
 import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface ProductReadSyncResult {
   fetched: number;
@@ -109,12 +110,12 @@ const mapRemoteProductToLocal = (
       remoteProduct.selling_unit,
       sellableUnits,
     ),
-    created_at: remoteProduct.created_at,
-    updated_at: remoteProduct.updated_at,
+    created_at: toCanonicalIsoTimestamp(remoteProduct.created_at),
+    updated_at: toCanonicalIsoTimestamp(remoteProduct.updated_at),
     sync_status: 'synced',
     sync_error: undefined,
     last_synced_at: syncedAt,
-    remote_updated_at: remoteProduct.updated_at,
+    remote_updated_at: toCanonicalIsoTimestamp(remoteProduct.updated_at),
   };
 };
 

@@ -14,8 +14,8 @@ pub async fn list(
             system_quantity_snapshot, requested_quantity, shortage_quantity, stock_unit,
             observation, cashier_note, cashier_user_id, cashier_user_name, device_id,
             device_name, status, reviewed_by, reviewed_by_name,
-            reviewed_at::TEXT AS reviewed_at, investigation_cause, investigation_note,
-            stock_opname_id, created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
+            reviewed_at, investigation_cause, investigation_note,
+            stock_opname_id, created_at, updated_at
         FROM pos_stock_discrepancies
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id LIMIT $3
@@ -36,8 +36,8 @@ pub async fn get(pool: &PgPool, id: String) -> Result<Option<PosStockDiscrepancy
             system_quantity_snapshot, requested_quantity, shortage_quantity, stock_unit,
             observation, cashier_note, cashier_user_id, cashier_user_name, device_id,
             device_name, status, reviewed_by, reviewed_by_name,
-            reviewed_at::TEXT AS reviewed_at, investigation_cause, investigation_note,
-            stock_opname_id, created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
+            reviewed_at, investigation_cause, investigation_note,
+            stock_opname_id, created_at, updated_at
         FROM pos_stock_discrepancies WHERE id = $1
     "#,
     )
@@ -91,8 +91,8 @@ pub async fn upsert(
             system_quantity_snapshot, requested_quantity, shortage_quantity, stock_unit,
             observation, cashier_note, cashier_user_id, cashier_user_name, device_id,
             device_name, status, reviewed_by, reviewed_by_name,
-            reviewed_at::TEXT AS reviewed_at, investigation_cause, investigation_note,
-            stock_opname_id, created_at::TEXT AS created_at, updated_at::TEXT AS updated_at
+            reviewed_at, investigation_cause, investigation_note,
+            stock_opname_id, created_at, updated_at
     "#,
     )
     .bind(input.id)

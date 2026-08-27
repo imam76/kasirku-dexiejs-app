@@ -12,9 +12,9 @@ pub async fn list_warehouses(pool: &PgPool) -> Result<Vec<WarehouseDto>, sqlx::E
             phone,
             notes,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM warehouses
         WHERE deleted_at IS NULL
         ORDER BY name ASC
@@ -35,9 +35,9 @@ pub async fn get_warehouse(pool: &PgPool, id: String) -> Result<Option<Warehouse
             phone,
             notes,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM warehouses
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -61,9 +61,9 @@ async fn get_warehouse_including_deleted(
             phone,
             notes,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM warehouses
         WHERE id = $1
         "#,
@@ -111,9 +111,9 @@ pub async fn upsert_warehouse(
             phone,
             notes,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -158,9 +158,9 @@ pub async fn delete_warehouse(
             phone,
             notes,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(id.clone())

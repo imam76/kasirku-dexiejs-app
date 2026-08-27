@@ -8,6 +8,7 @@ import {
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { Promo, PromoAppliesTo, PromoType, ProductCategory } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface PromoReadSyncResult {
   fetched: number;
@@ -49,20 +50,20 @@ const mapRemotePromoToLocal = (
   applies_to: isPromoAppliesTo(remotePromo.applies_to) ? remotePromo.applies_to : 'all',
   product_ids: remotePromo.product_ids ?? undefined,
   categories: (remotePromo.categories as ProductCategory[] | null) ?? undefined,
-  start_at: remotePromo.start_at ?? undefined,
-  end_at: remotePromo.end_at ?? undefined,
+  start_at: toCanonicalOptionalIsoTimestamp(remotePromo.start_at),
+  end_at: toCanonicalOptionalIsoTimestamp(remotePromo.end_at),
   min_qty: remotePromo.min_qty ?? undefined,
   min_total: remotePromo.min_total ?? undefined,
   voucher_code: remotePromo.voucher_code ?? undefined,
   active: remotePromo.active,
   priority: remotePromo.priority,
   created_by: remotePromo.created_by ?? undefined,
-  created_at: remotePromo.created_at,
-  updated_at: remotePromo.updated_at,
+  created_at: toCanonicalIsoTimestamp(remotePromo.created_at),
+  updated_at: toCanonicalIsoTimestamp(remotePromo.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remotePromo.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remotePromo.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (promo: Promo) => (

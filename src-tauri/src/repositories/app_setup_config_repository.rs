@@ -8,7 +8,7 @@ pub async fn get_app_setup_config(pool: &PgPool) -> Result<Option<AppSetupConfig
         r#"
         SELECT
             enabled_modules,
-            configured_at::TEXT AS configured_at,
+            configured_at,
             configured_by,
             module_catalog_version
         FROM app_setup_config
@@ -43,7 +43,7 @@ pub async fn upsert_app_setup_config(
             updated_at = NOW()
         RETURNING
             enabled_modules,
-            configured_at::TEXT AS configured_at,
+            configured_at,
             configured_by,
             module_catalog_version
         "#,

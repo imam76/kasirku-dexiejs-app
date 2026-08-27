@@ -9,6 +9,7 @@ import {
 } from '@/services/postgresAdapter';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { FixedAsset, FixedAssetDepreciationRun } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface FixedAssetReadSyncResult {
   fetched: number;
@@ -57,11 +58,13 @@ const withAssetSync = (remote: RemoteFixedAssetDto, syncedAt: string): FixedAsse
   created_by_name: remote.created_by_name ?? undefined,
   updated_by: remote.updated_by ?? undefined,
   updated_by_name: remote.updated_by_name ?? undefined,
-  deleted_at: remote.deleted_at ?? undefined,
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
+  deleted_at: toCanonicalOptionalIsoTimestamp(remote.deleted_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 const withRunSync = (
@@ -77,15 +80,17 @@ const withRunSync = (
   created_by_name: remote.created_by_name ?? undefined,
   posted_by: remote.posted_by ?? undefined,
   posted_by_name: remote.posted_by_name ?? undefined,
-  posted_at: remote.posted_at ?? undefined,
+  posted_at: toCanonicalOptionalIsoTimestamp(remote.posted_at),
   reversed_by: remote.reversed_by ?? undefined,
   reversed_by_name: remote.reversed_by_name ?? undefined,
-  reversed_at: remote.reversed_at ?? undefined,
-  deleted_at: remote.deleted_at ?? undefined,
+  reversed_at: toCanonicalOptionalIsoTimestamp(remote.reversed_at),
+  deleted_at: toCanonicalOptionalIsoTimestamp(remote.deleted_at),
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 export const mergeRemoteFixedAssetsIntoDexie = async (

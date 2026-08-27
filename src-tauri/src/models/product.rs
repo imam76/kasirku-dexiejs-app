@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -19,9 +20,9 @@ pub struct ProductDto {
     pub wholesale_prices: Option<Value>,
     pub sellable_units: Option<Value>,
     pub unit_mappings: Option<Value>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

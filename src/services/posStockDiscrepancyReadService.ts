@@ -6,6 +6,7 @@ import {
 } from '@/services/postgresAdapter';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { PosStockDiscrepancy } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 const toLocal = (
   remote: RemotePosStockDiscrepancyDto,
@@ -22,14 +23,16 @@ const toLocal = (
   device_name: remote.device_name ?? undefined,
   reviewed_by: remote.reviewed_by ?? undefined,
   reviewed_by_name: remote.reviewed_by_name ?? undefined,
-  reviewed_at: remote.reviewed_at ?? undefined,
+  reviewed_at: toCanonicalOptionalIsoTimestamp(remote.reviewed_at),
   investigation_cause: remote.investigation_cause ?? undefined,
   investigation_note: remote.investigation_note ?? undefined,
   stock_opname_id: remote.stock_opname_id ?? undefined,
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 export const mergeRemotePosStockDiscrepanciesIntoDexie = async (

@@ -5,6 +5,7 @@ import { isTauriRuntime } from '@/utils/export/platform';
 import { appSetupConfigPostgresAdapter } from '@/services/postgresAdapter';
 import { usePostgresConnectionStore } from '@/store/postgresConnectionStore';
 import { resolveSetupConfigReconciliation } from '@/utils/setupConfigReconciliation';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
 export const CURRENT_MODULE_CATALOG_VERSION = 13;
@@ -193,7 +194,7 @@ export const getRemoteSetupConfig = async (): Promise<SetupConfig | null> => {
 
   return normalizeSetupConfig({
     enabledModules: remoteConfig.enabledModules,
-    configuredAt: remoteConfig.configuredAt,
+    configuredAt: toCanonicalIsoTimestamp(remoteConfig.configuredAt),
     configuredBy: remoteConfig.configuredBy,
     moduleCatalogVersion: remoteConfig.moduleCatalogVersion,
   });

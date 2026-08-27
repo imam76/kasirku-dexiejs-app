@@ -8,6 +8,7 @@ import {
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { CashierSession } from '@/types';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 export interface CashierSessionReadSyncResult {
   fetched: number;
@@ -39,10 +40,10 @@ const mapRemoteCashierSessionToLocal = (
   status: remoteSession.status,
   cashier_user_id: optionalString(remoteSession.cashier_user_id),
   cashier_user_name: optionalString(remoteSession.cashier_user_name),
-  opened_at: remoteSession.opened_at,
+  opened_at: toCanonicalIsoTimestamp(remoteSession.opened_at),
   opening_cash_amount: remoteSession.opening_cash_amount,
   opening_note: optionalString(remoteSession.opening_note),
-  closed_at: optionalString(remoteSession.closed_at),
+  closed_at: toCanonicalOptionalIsoTimestamp(remoteSession.closed_at),
   closed_by_user_id: optionalString(remoteSession.closed_by_user_id),
   closed_by_user_name: optionalString(remoteSession.closed_by_user_name),
   closing_cash_amount: optionalNumber(remoteSession.closing_cash_amount),
@@ -56,12 +57,12 @@ const mapRemoteCashierSessionToLocal = (
   voided_transaction_count: optionalNumber(remoteSession.voided_transaction_count),
   cash_difference_amount: optionalNumber(remoteSession.cash_difference_amount),
   balance_status: remoteSession.balance_status ?? undefined,
-  created_at: remoteSession.created_at,
-  updated_at: remoteSession.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteSession.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteSession.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteSession.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteSession.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (session: CashierSession) => (

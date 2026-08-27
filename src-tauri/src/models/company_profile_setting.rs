@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -9,6 +10,6 @@ pub struct CompanyProfileSettingDto {
     pub logo_file_name: Option<String>,
     pub logo_mime_type: Option<String>,
     pub logo_size: Option<i64>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

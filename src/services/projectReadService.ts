@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { isTauriRuntime, projectPostgresAdapter, type RemoteProjectDto } from '@/services/postgresAdapter';
 import type { Project, ProjectStatus } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface ProjectReadSyncResult {
   fetched: number;
@@ -40,12 +41,12 @@ const mapRemoteProjectToLocal = (
   budget_amount: remoteProject.budget_amount ?? undefined,
   description: remoteProject.description ?? undefined,
   is_active: remoteProject.deleted_at ? false : remoteProject.is_active,
-  created_at: remoteProject.created_at,
-  updated_at: remoteProject.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteProject.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteProject.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteProject.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteProject.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (project: Project) => (

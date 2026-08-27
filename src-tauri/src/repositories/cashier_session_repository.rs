@@ -15,10 +15,10 @@ pub async fn list_cashier_sessions(
             status,
             cashier_user_id,
             cashier_user_name,
-            opened_at::TEXT AS opened_at,
+            opened_at,
             opening_cash_amount,
             opening_note,
-            closed_at::TEXT AS closed_at,
+            closed_at,
             closed_by_user_id,
             closed_by_user_name,
             closing_cash_amount,
@@ -32,8 +32,8 @@ pub async fn list_cashier_sessions(
             voided_transaction_count,
             cash_difference_amount,
             balance_status,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM cashier_sessions
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -59,10 +59,10 @@ pub async fn get_cashier_session(
             status,
             cashier_user_id,
             cashier_user_name,
-            opened_at::TEXT AS opened_at,
+            opened_at,
             opening_cash_amount,
             opening_note,
-            closed_at::TEXT AS closed_at,
+            closed_at,
             closed_by_user_id,
             closed_by_user_name,
             closing_cash_amount,
@@ -76,8 +76,8 @@ pub async fn get_cashier_session(
             voided_transaction_count,
             cash_difference_amount,
             balance_status,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM cashier_sessions
         WHERE id = $1
         "#,
@@ -176,10 +176,10 @@ pub async fn upsert_cashier_session(
             status,
             cashier_user_id,
             cashier_user_name,
-            opened_at::TEXT AS opened_at,
+            opened_at,
             opening_cash_amount,
             opening_note,
-            closed_at::TEXT AS closed_at,
+            closed_at,
             closed_by_user_id,
             closed_by_user_name,
             closing_cash_amount,
@@ -193,8 +193,8 @@ pub async fn upsert_cashier_session(
             voided_transaction_count,
             cash_difference_amount,
             balance_status,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)

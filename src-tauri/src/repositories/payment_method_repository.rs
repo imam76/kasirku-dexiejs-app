@@ -13,9 +13,9 @@ const PAYMENT_METHOD_COLUMNS: &str = r#"
     is_system,
     is_active,
     sort_order,
-    created_at::TEXT AS created_at,
-    updated_at::TEXT AS updated_at,
-    deleted_at::TEXT AS deleted_at
+    created_at,
+    updated_at,
+    deleted_at
 "#;
 
 pub async fn list_payment_methods(pool: &PgPool) -> Result<Vec<PaymentMethodDto>, sqlx::Error> {

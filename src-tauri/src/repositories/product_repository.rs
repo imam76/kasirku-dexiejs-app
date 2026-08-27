@@ -25,9 +25,9 @@ pub async fn list_products(
             wholesale_prices,
             sellable_units,
             unit_mappings,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM products
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -60,9 +60,9 @@ pub async fn get_product(pool: &PgPool, id: String) -> Result<Option<ProductDto>
             wholesale_prices,
             sellable_units,
             unit_mappings,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM products
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -94,9 +94,9 @@ async fn get_product_including_deleted(
             wholesale_prices,
             sellable_units,
             unit_mappings,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM products
         WHERE id = $1
         "#,
@@ -169,9 +169,9 @@ pub async fn upsert_product(
             wholesale_prices,
             sellable_units,
             unit_mappings,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -229,9 +229,9 @@ pub async fn delete_product(pool: &PgPool, id: String) -> Result<Option<ProductD
             wholesale_prices,
             sellable_units,
             unit_mappings,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(id.clone())

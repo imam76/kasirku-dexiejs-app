@@ -8,6 +8,7 @@ import {
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
 import type { AccountNormalBalance, AccountType, ChartOfAccount } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface ChartOfAccountReadSyncResult {
   fetched: number;
@@ -45,12 +46,12 @@ const mapRemoteChartOfAccountToLocal = (
   is_system: remoteAccount.is_system,
   is_active: remoteAccount.deleted_at ? false : remoteAccount.is_active,
   description: optionalString(remoteAccount.description),
-  created_at: remoteAccount.created_at,
-  updated_at: remoteAccount.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteAccount.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteAccount.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteAccount.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteAccount.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (account: ChartOfAccount) => (

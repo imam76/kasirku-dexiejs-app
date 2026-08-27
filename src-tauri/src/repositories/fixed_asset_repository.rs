@@ -19,8 +19,8 @@ SELECT id, asset_code, name, category, location, description, registration_type,
        depreciation_expense_account_code, depreciation_expense_account_name,
        department_id, department_code, department_name, project_id, project_code,
        project_name, is_active, version, created_by, created_by_name, updated_by,
-       updated_by_name, created_at::TEXT AS created_at, updated_at::TEXT AS updated_at,
-       deleted_at::TEXT AS deleted_at
+       updated_by_name, created_at, updated_at,
+       deleted_at
 FROM fixed_assets
 "#;
 
@@ -29,9 +29,9 @@ SELECT id, run_number, period_id, period_name, period_start::TEXT AS period_star
        period_end::TEXT AS period_end, posting_date::TEXT AS posting_date, status,
        asset_count, total_depreciation, journal_entry_id, reversal_journal_entry_id,
        reversal_reason, notes, version, created_by, created_by_name, posted_by,
-       posted_by_name, posted_at::TEXT AS posted_at, reversed_by, reversed_by_name,
-       reversed_at::TEXT AS reversed_at, created_at::TEXT AS created_at,
-       updated_at::TEXT AS updated_at, deleted_at::TEXT AS deleted_at
+       posted_by_name, posted_at, reversed_by, reversed_by_name,
+       reversed_at, created_at,
+       updated_at, deleted_at
 FROM fixed_asset_depreciation_runs
 "#;
 
@@ -45,7 +45,7 @@ SELECT id, run_id, asset_id, asset_code, asset_name, asset_category,
        depreciation_expense_account_id, depreciation_expense_account_code,
        depreciation_expense_account_name, department_id, department_code,
        department_name, project_id, project_code, project_name,
-       created_at::TEXT AS created_at
+       created_at
 FROM fixed_asset_depreciation_run_lines
 "#;
 

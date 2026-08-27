@@ -15,9 +15,9 @@ pub async fn list_departments(pool: &PgPool) -> Result<Vec<DepartmentDto>, sqlx:
             parent_department_name,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM departments
         WHERE deleted_at IS NULL
         ORDER BY name ASC
@@ -44,9 +44,9 @@ pub async fn get_department(
             parent_department_name,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM departments
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -73,9 +73,9 @@ async fn get_department_including_deleted(
             parent_department_name,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM departments
         WHERE id = $1
         "#,
@@ -132,9 +132,9 @@ pub async fn upsert_department(
             parent_department_name,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -180,9 +180,9 @@ pub async fn delete_department(
             name,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(id.clone())

@@ -6,6 +6,7 @@ import {
   isTauriRuntime,
   type RemoteCompanyProfileSettingDto,
 } from './postgresAdapter';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export const DEFAULT_COMPANY_PROFILE_SETTING_ID = 'default';
 
@@ -50,8 +51,8 @@ const mapRemoteCompanyProfileSettingToLocal = (
   logo_file_name: optionalRemoteString(remote.logoFileName),
   logo_mime_type: optionalRemoteString(remote.logoMimeType),
   logo_size: remote.logoSize ?? undefined,
-  created_at: remote.createdAt,
-  updated_at: remote.updatedAt,
+  created_at: toCanonicalIsoTimestamp(remote.createdAt),
+  updated_at: toCanonicalIsoTimestamp(remote.updatedAt),
 });
 
 const mapLocalCompanyProfileSettingToRemote = (

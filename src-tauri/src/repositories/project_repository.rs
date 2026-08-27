@@ -19,9 +19,9 @@ pub async fn list_projects(pool: &PgPool) -> Result<Vec<ProjectDto>, sqlx::Error
             budget_amount,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM projects
         WHERE deleted_at IS NULL
         ORDER BY created_at DESC
@@ -49,9 +49,9 @@ pub async fn get_project(pool: &PgPool, id: String) -> Result<Option<ProjectDto>
             budget_amount,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM projects
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -82,9 +82,9 @@ async fn get_project_including_deleted(
             budget_amount,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM projects
         WHERE id = $1
         "#,
@@ -168,9 +168,9 @@ pub async fn upsert_project(pool: &PgPool, input: ProjectDto) -> Result<ProjectD
             budget_amount,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -226,9 +226,9 @@ pub async fn delete_project(pool: &PgPool, id: String) -> Result<Option<ProjectD
             budget_amount,
             description,
             is_active,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(id.clone())

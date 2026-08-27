@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -13,7 +14,7 @@ pub struct PaymentMethodDto {
     pub is_system: bool,
     pub is_active: bool,
     pub sort_order: i32,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }

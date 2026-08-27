@@ -5,6 +5,7 @@ import {
   type RemotePaymentMethodDto,
 } from '@/services/postgresAdapter';
 import type { PaymentMethodMaster } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface PaymentMethodReadSyncResult {
   fetched: number;
@@ -37,12 +38,12 @@ const mapRemotePaymentMethodToLocal = (
   is_system: remote.is_system,
   is_active: remote.deleted_at ? false : remote.is_active,
   sort_order: remote.sort_order,
-  created_at: remote.created_at,
-  updated_at: remote.updated_at,
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (method: PaymentMethodMaster) => (

@@ -22,9 +22,9 @@ pub async fn list_chart_of_accounts(
             is_system,
             is_active,
             description,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM chart_of_accounts
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -57,9 +57,9 @@ pub async fn get_chart_of_account(
             is_system,
             is_active,
             description,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM chart_of_accounts
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -88,9 +88,9 @@ async fn get_chart_of_account_including_deleted(
             is_system,
             is_active,
             description,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM chart_of_accounts
         WHERE id = $1
         "#,
@@ -156,9 +156,9 @@ pub async fn upsert_chart_of_account(
             is_system,
             is_active,
             description,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -213,9 +213,9 @@ pub async fn delete_chart_of_account(
             is_system,
             is_active,
             description,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(id.clone())

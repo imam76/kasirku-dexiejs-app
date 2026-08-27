@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { isTauriRuntime, warehousePostgresAdapter, type RemoteWarehouseDto } from '@/services/postgresAdapter';
 import type { Warehouse } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface WarehouseReadSyncResult {
   fetched: number;
@@ -29,12 +30,12 @@ const mapRemoteWarehouseToLocal = (
   phone: remoteWarehouse.phone ?? undefined,
   notes: remoteWarehouse.notes ?? undefined,
   is_active: remoteWarehouse.deleted_at ? false : remoteWarehouse.is_active,
-  created_at: remoteWarehouse.created_at,
-  updated_at: remoteWarehouse.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteWarehouse.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteWarehouse.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteWarehouse.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteWarehouse.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (warehouse: Warehouse) => (

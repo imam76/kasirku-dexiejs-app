@@ -15,8 +15,8 @@ pub async fn get_company_profile_setting(
             logo_file_name,
             logo_mime_type,
             logo_size,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM company_profile_setting
         WHERE id = $1
         "#,
@@ -58,8 +58,8 @@ pub async fn upsert_company_profile_setting(
             logo_file_name,
             logo_mime_type,
             logo_size,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)

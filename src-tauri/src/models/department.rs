@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -22,7 +23,7 @@ pub struct DepartmentDto {
     pub parent_department_name: Option<String>,
     pub description: Option<String>,
     pub is_active: bool,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }

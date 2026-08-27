@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -7,11 +8,11 @@ pub struct AccountingFiscalYearDto {
     pub start_date: String,
     pub end_date: String,
     pub status: String,
-    pub closed_at: Option<String>,
+    pub closed_at: Option<DateTime<Utc>>,
     pub closed_by: Option<String>,
     pub closed_by_name: Option<String>,
     pub closing_journal_entry_id: Option<String>,
-    pub reopened_at: Option<String>,
+    pub reopened_at: Option<DateTime<Utc>>,
     pub reopened_by: Option<String>,
     pub reopened_by_name: Option<String>,
     pub reopen_reason: Option<String>,
@@ -21,7 +22,7 @@ pub struct AccountingFiscalYearDto {
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
     pub updated_by_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }

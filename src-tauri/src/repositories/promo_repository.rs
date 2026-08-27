@@ -17,17 +17,17 @@ pub async fn list_promos(
             applies_to,
             product_ids,
             categories,
-            start_at::TEXT AS start_at,
-            end_at::TEXT AS end_at,
+            start_at,
+            end_at,
             min_qty,
             min_total,
             voucher_code,
             active,
             priority,
             created_by,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM promos
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -52,17 +52,17 @@ pub async fn get_promo(pool: &PgPool, id: String) -> Result<Option<PromoDto>, sq
             applies_to,
             product_ids,
             categories,
-            start_at::TEXT AS start_at,
-            end_at::TEXT AS end_at,
+            start_at,
+            end_at,
             min_qty,
             min_total,
             voucher_code,
             active,
             priority,
             created_by,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM promos
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -86,17 +86,17 @@ async fn get_promo_including_deleted(
             applies_to,
             product_ids,
             categories,
-            start_at::TEXT AS start_at,
-            end_at::TEXT AS end_at,
+            start_at,
+            end_at,
             min_qty,
             min_total,
             voucher_code,
             active,
             priority,
             created_by,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM promos
         WHERE id = $1
         "#,
@@ -160,17 +160,17 @@ pub async fn upsert_promo(pool: &PgPool, input: PromoDto) -> Result<PromoDto, sq
             applies_to,
             product_ids,
             categories,
-            start_at::TEXT AS start_at,
-            end_at::TEXT AS end_at,
+            start_at,
+            end_at,
             min_qty,
             min_total,
             voucher_code,
             active,
             priority,
             created_by,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)
@@ -220,17 +220,17 @@ pub async fn delete_promo(pool: &PgPool, id: String) -> Result<Option<PromoDto>,
             applies_to,
             product_ids,
             categories,
-            start_at::TEXT AS start_at,
-            end_at::TEXT AS end_at,
+            start_at,
+            end_at,
             min_qty,
             min_total,
             voucher_code,
             active,
             priority,
             created_by,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(id.clone())

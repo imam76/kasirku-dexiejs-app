@@ -8,6 +8,7 @@ import {
 } from '@/services/postgresAdapter';
 import { toTimestamp } from '@/services/shared/remoteRefreshCursor';
 import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 import type {
   AccountingFiscalYear,
   AccountingFiscalYearStatus,
@@ -100,11 +101,11 @@ const mapRemoteFiscalYearToLocal = (
   start_date: remote.start_date,
   end_date: remote.end_date,
   status: isFiscalYearStatus(remote.status) ? remote.status : 'OPEN',
-  closed_at: optionalString(remote.closed_at),
+  closed_at: toCanonicalOptionalIsoTimestamp(remote.closed_at),
   closed_by: optionalString(remote.closed_by),
   closed_by_name: optionalString(remote.closed_by_name),
   closing_journal_entry_id: optionalString(remote.closing_journal_entry_id),
-  reopened_at: optionalString(remote.reopened_at),
+  reopened_at: toCanonicalOptionalIsoTimestamp(remote.reopened_at),
   reopened_by: optionalString(remote.reopened_by),
   reopened_by_name: optionalString(remote.reopened_by_name),
   reopen_reason: optionalString(remote.reopen_reason),
@@ -114,12 +115,12 @@ const mapRemoteFiscalYearToLocal = (
   created_by_name: optionalString(remote.created_by_name),
   updated_by: optionalString(remote.updated_by),
   updated_by_name: optionalString(remote.updated_by_name),
-  created_at: remote.created_at,
-  updated_at: remote.updated_at,
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 const mapRemoteFiscalYearClosingRunToLocal = (
@@ -140,8 +141,8 @@ const mapRemoteFiscalYearClosingRunToLocal = (
   total_contra_revenue_amount: optionalNumber(remote.total_contra_revenue_amount) ?? 0,
   total_expense_amount: optionalNumber(remote.total_expense_amount) ?? 0,
   closing_journal_entry_id: optionalString(remote.closing_journal_entry_id),
-  posted_at: optionalString(remote.posted_at),
-  reversed_at: optionalString(remote.reversed_at),
+  posted_at: toCanonicalOptionalIsoTimestamp(remote.posted_at),
+  reversed_at: toCanonicalOptionalIsoTimestamp(remote.reversed_at),
   reversed_by: optionalString(remote.reversed_by),
   reversed_by_name: optionalString(remote.reversed_by_name),
   reversal_journal_entry_id: optionalString(remote.reversal_journal_entry_id),
@@ -152,12 +153,12 @@ const mapRemoteFiscalYearClosingRunToLocal = (
   created_by_name: optionalString(remote.created_by_name),
   updated_by: optionalString(remote.updated_by),
   updated_by_name: optionalString(remote.updated_by_name),
-  created_at: remote.created_at,
-  updated_at: remote.updated_at,
+  created_at: toCanonicalIsoTimestamp(remote.created_at),
+  updated_at: toCanonicalIsoTimestamp(remote.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remote.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remote.updated_at),
 });
 
 export const mergeRemoteAccountingFiscalYearsIntoDexie = async (

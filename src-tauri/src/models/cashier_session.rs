@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -7,10 +8,10 @@ pub struct CashierSessionDto {
     pub status: String,
     pub cashier_user_id: Option<String>,
     pub cashier_user_name: Option<String>,
-    pub opened_at: String,
+    pub opened_at: DateTime<Utc>,
     pub opening_cash_amount: f64,
     pub opening_note: Option<String>,
-    pub closed_at: Option<String>,
+    pub closed_at: Option<DateTime<Utc>>,
     pub closed_by_user_id: Option<String>,
     pub closed_by_user_name: Option<String>,
     pub closing_cash_amount: Option<f64>,
@@ -24,6 +25,6 @@ pub struct CashierSessionDto {
     pub voided_transaction_count: Option<i32>,
     pub cash_difference_amount: Option<f64>,
     pub balance_status: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

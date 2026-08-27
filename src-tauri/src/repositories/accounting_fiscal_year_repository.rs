@@ -15,11 +15,11 @@ pub async fn list_accounting_fiscal_years(
             start_date::TEXT AS start_date,
             end_date::TEXT AS end_date,
             status,
-            closed_at::TEXT AS closed_at,
+            closed_at,
             closed_by,
             closed_by_name,
             closing_journal_entry_id,
-            reopened_at::TEXT AS reopened_at,
+            reopened_at,
             reopened_by,
             reopened_by_name,
             reopen_reason,
@@ -29,9 +29,9 @@ pub async fn list_accounting_fiscal_years(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM accounting_fiscal_years
         WHERE ($1::TIMESTAMPTZ IS NULL OR (updated_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
         ORDER BY updated_at, id
@@ -57,11 +57,11 @@ pub async fn get_accounting_fiscal_year(
             start_date::TEXT AS start_date,
             end_date::TEXT AS end_date,
             status,
-            closed_at::TEXT AS closed_at,
+            closed_at,
             closed_by,
             closed_by_name,
             closing_journal_entry_id,
-            reopened_at::TEXT AS reopened_at,
+            reopened_at,
             reopened_by,
             reopened_by_name,
             reopen_reason,
@@ -71,9 +71,9 @@ pub async fn get_accounting_fiscal_year(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM accounting_fiscal_years
         WHERE id = $1
         "#,
@@ -171,11 +171,11 @@ pub async fn upsert_accounting_fiscal_year(
             start_date::TEXT AS start_date,
             end_date::TEXT AS end_date,
             status,
-            closed_at::TEXT AS closed_at,
+            closed_at,
             closed_by,
             closed_by_name,
             closing_journal_entry_id,
-            reopened_at::TEXT AS reopened_at,
+            reopened_at,
             reopened_by,
             reopened_by_name,
             reopen_reason,
@@ -185,9 +185,9 @@ pub async fn upsert_accounting_fiscal_year(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)

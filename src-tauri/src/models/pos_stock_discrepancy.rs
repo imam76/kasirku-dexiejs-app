@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -24,10 +25,10 @@ pub struct PosStockDiscrepancyDto {
     pub status: String,
     pub reviewed_by: Option<String>,
     pub reviewed_by_name: Option<String>,
-    pub reviewed_at: Option<String>,
+    pub reviewed_at: Option<DateTime<Utc>>,
     pub investigation_cause: Option<String>,
     pub investigation_note: Option<String>,
     pub stock_opname_id: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

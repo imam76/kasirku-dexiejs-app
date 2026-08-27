@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { departmentPostgresAdapter, isTauriRuntime, type RemoteDepartmentDto } from '@/services/postgresAdapter';
 import type { Department } from '@/types';
+import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface DepartmentReadSyncResult {
   fetched: number;
@@ -32,12 +33,12 @@ const mapRemoteDepartmentToLocal = (
   parent_department_name: remoteDepartment.parent_department_name ?? undefined,
   description: remoteDepartment.description ?? undefined,
   is_active: remoteDepartment.deleted_at ? false : remoteDepartment.is_active,
-  created_at: remoteDepartment.created_at,
-  updated_at: remoteDepartment.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteDepartment.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteDepartment.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteDepartment.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteDepartment.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (department: Department) => (
