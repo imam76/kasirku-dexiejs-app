@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -38,13 +39,13 @@ pub struct TransactionDto {
     pub payment_posting_account_code: Option<String>,
     pub payment_posting_account_name: Option<String>,
     pub status: Option<String>,
-    pub voided_at: Option<String>,
+    pub voided_at: Option<DateTime<Utc>>,
     pub void_reason: Option<String>,
     pub receipt_status: Option<String>,
-    pub receipt_printed_at: Option<String>,
+    pub receipt_printed_at: Option<DateTime<Utc>>,
     pub receipt_print_error: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -58,7 +59,7 @@ pub struct TransactionItemDto {
     pub original_price: Option<f64>,
     pub is_price_edited: Option<bool>,
     pub price_edited_by: Option<String>,
-    pub price_edited_at: Option<String>,
+    pub price_edited_at: Option<DateTime<Utc>>,
     pub purchase_price: f64,
     pub quantity: f64,
     pub unit: String,
@@ -73,10 +74,10 @@ pub struct TransactionItemDto {
     pub subtotal: f64,
     pub profit: f64,
     pub hpp_status: Option<String>,
-    pub hpp_reconciled_at: Option<String>,
+    pub hpp_reconciled_at: Option<DateTime<Utc>>,
     pub hpp_variance_amount: Option<f64>,
     pub profit_status: Option<String>,
-    pub created_at: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -18,6 +18,10 @@ import type {
   FinanceTransactionType,
   PaymentMethod,
 } from '@/types';
+import {
+  toCanonicalIsoTimestamp,
+  toCanonicalOptionalIsoTimestamp,
+} from '@/utils/timestamps';
 
 export interface FinanceTransactionReadSyncResult {
   fetched: number;
@@ -97,7 +101,7 @@ const mapRemoteFinanceTransactionToLocal = (
   category: remoteTransaction.category,
   amount: optionalNumber(remoteTransaction.amount) ?? 0,
   description: remoteTransaction.description,
-  created_at: remoteTransaction.created_at,
+  created_at: toCanonicalIsoTimestamp(remoteTransaction.created_at),
   reference_id: optionalString(remoteTransaction.reference_id),
   account_id: optionalString(remoteTransaction.account_id),
   account_code: optionalString(remoteTransaction.account_code),
@@ -121,7 +125,7 @@ const mapRemoteFinanceTransactionToLocal = (
     ? remoteTransaction.field_cash_movement_kind
     : undefined,
   cash_bank_reconciliation_id: optionalString(remoteTransaction.cash_bank_reconciliation_id),
-  cash_bank_reconciled_at: optionalString(remoteTransaction.cash_bank_reconciled_at),
+  cash_bank_reconciled_at: toCanonicalOptionalIsoTimestamp(remoteTransaction.cash_bank_reconciled_at),
   cash_bank_reconciled_by: optionalString(remoteTransaction.cash_bank_reconciled_by),
   cash_bank_reconciled_by_name: optionalString(remoteTransaction.cash_bank_reconciled_by_name),
   version: toPositiveVersion(remoteTransaction.version),
@@ -129,11 +133,11 @@ const mapRemoteFinanceTransactionToLocal = (
   created_by_name: optionalString(remoteTransaction.created_by_name),
   updated_by: optionalString(remoteTransaction.updated_by),
   updated_by_name: optionalString(remoteTransaction.updated_by_name),
-  updated_at: remoteTransaction.updated_at,
+  updated_at: toCanonicalIsoTimestamp(remoteTransaction.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteTransaction.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteTransaction.updated_at),
 });
 
 const hasLocalUnsyncedChanges = (transaction: FinanceTransaction) => (

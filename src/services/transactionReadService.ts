@@ -22,6 +22,10 @@ import type {
   TransactionItem,
   TransactionStatus,
 } from '@/types';
+import {
+  toCanonicalIsoTimestamp,
+  toCanonicalOptionalIsoTimestamp,
+} from '@/utils/timestamps';
 
 export interface TransactionReadSyncResult {
   fetched: number;
@@ -110,17 +114,17 @@ const mapRemoteTransactionToLocal = (
   payment_posting_account_code: optionalString(remoteTransaction.payment_posting_account_code),
   payment_posting_account_name: optionalString(remoteTransaction.payment_posting_account_name),
   status: isTransactionStatus(remoteTransaction.status) ? remoteTransaction.status : undefined,
-  voided_at: optionalString(remoteTransaction.voided_at),
+  voided_at: toCanonicalOptionalIsoTimestamp(remoteTransaction.voided_at),
   void_reason: optionalString(remoteTransaction.void_reason),
   receipt_status: isReceiptStatus(remoteTransaction.receipt_status) ? remoteTransaction.receipt_status : undefined,
-  receipt_printed_at: optionalString(remoteTransaction.receipt_printed_at),
+  receipt_printed_at: toCanonicalOptionalIsoTimestamp(remoteTransaction.receipt_printed_at),
   receipt_print_error: optionalString(remoteTransaction.receipt_print_error),
-  created_at: remoteTransaction.created_at,
-  updated_at: remoteTransaction.updated_at,
+  created_at: toCanonicalIsoTimestamp(remoteTransaction.created_at),
+  updated_at: toCanonicalIsoTimestamp(remoteTransaction.updated_at),
   sync_status: 'synced',
   sync_error: undefined,
   last_synced_at: syncedAt,
-  remote_updated_at: remoteTransaction.updated_at,
+  remote_updated_at: toCanonicalIsoTimestamp(remoteTransaction.updated_at),
 });
 
 const mapRemoteTransactionItemToLocal = (
@@ -135,7 +139,7 @@ const mapRemoteTransactionItemToLocal = (
   original_price: optionalNumber(remoteItem.original_price),
   is_price_edited: optionalBoolean(remoteItem.is_price_edited),
   price_edited_by: optionalString(remoteItem.price_edited_by),
-  price_edited_at: optionalString(remoteItem.price_edited_at),
+  price_edited_at: toCanonicalOptionalIsoTimestamp(remoteItem.price_edited_at),
   purchase_price: remoteItem.purchase_price,
   quantity: remoteItem.quantity,
   unit: remoteItem.unit as ProductUnit,
@@ -150,10 +154,10 @@ const mapRemoteTransactionItemToLocal = (
   subtotal: remoteItem.subtotal,
   profit: remoteItem.profit,
   hpp_status: remoteItem.hpp_status ?? undefined,
-  hpp_reconciled_at: optionalString(remoteItem.hpp_reconciled_at),
+  hpp_reconciled_at: toCanonicalOptionalIsoTimestamp(remoteItem.hpp_reconciled_at),
   hpp_variance_amount: optionalNumber(remoteItem.hpp_variance_amount),
   profit_status: remoteItem.profit_status as TransactionItem['profit_status'],
-  created_at: remoteItem.created_at,
+  created_at: toCanonicalIsoTimestamp(remoteItem.created_at),
 });
 
 const hasLocalUnsyncedChanges = (transaction: Transaction) => (

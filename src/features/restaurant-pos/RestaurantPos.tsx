@@ -364,7 +364,18 @@ export default function RestaurantPos() {
       setOrderDrawerOpen(false);
       setVoucherCode('');
       message.success(t('restaurantPos.paymentSuccess', { order: activeOrder.order_number }));
-      ['transactions-history', 'journalEntries', 'trialBalance', 'incomeStatement', 'balanceSheet']
+      [
+        'transactions-history',
+        'posSalesReport',
+        'transactionDetailReport',
+        'financeTransactions',
+        'incomeReport',
+        'cashFlowReport',
+        'journalEntries',
+        'trialBalance',
+        'incomeStatement',
+        'balanceSheet',
+      ]
         .forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
       void printReceiptAfterTransaction({
         ...result.transaction,

@@ -468,6 +468,11 @@ export const useTransaction = (draftScope?: string) => {
       });
 
       queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
+      queryClient.invalidateQueries({ queryKey: ['posSalesReport'] });
+      queryClient.invalidateQueries({ queryKey: ['transactionDetailReport'] });
+      queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['incomeReport'] });
+      queryClient.invalidateQueries({ queryKey: ['cashFlowReport'] });
       queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
       queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
       queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });

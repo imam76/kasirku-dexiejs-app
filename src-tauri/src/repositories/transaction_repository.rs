@@ -41,13 +41,13 @@ macro_rules! transaction_select {
             payment_posting_account_code,
             payment_posting_account_name,
             status,
-            voided_at::TEXT AS voided_at,
+            voided_at,
             void_reason,
             receipt_status,
-            receipt_printed_at::TEXT AS receipt_printed_at,
+            receipt_printed_at,
             receipt_print_error,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         FROM pos_transactions
         "#
     };
@@ -66,7 +66,7 @@ macro_rules! transaction_item_select {
             original_price,
             is_price_edited,
             price_edited_by,
-            price_edited_at::TEXT AS price_edited_at,
+            price_edited_at,
             purchase_price,
             quantity,
             unit,
@@ -81,10 +81,10 @@ macro_rules! transaction_item_select {
             subtotal,
             profit,
             hpp_status,
-            hpp_reconciled_at::TEXT AS hpp_reconciled_at,
+            hpp_reconciled_at,
             hpp_variance_amount,
             profit_status,
-            created_at::TEXT AS created_at
+            created_at
         FROM pos_transaction_items
         "#
     };
@@ -365,13 +365,13 @@ async fn upsert_transaction(
             payment_posting_account_code,
             payment_posting_account_name,
             status,
-            voided_at::TEXT AS voided_at,
+            voided_at,
             void_reason,
             receipt_status,
-            receipt_printed_at::TEXT AS receipt_printed_at,
+            receipt_printed_at,
             receipt_print_error,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at
+            created_at,
+            updated_at
         "#,
     )
     .bind(input.id)

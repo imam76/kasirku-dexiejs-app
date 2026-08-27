@@ -33,7 +33,7 @@ pub async fn list_finance_transactions(
             field_employee_name,
             field_cash_movement_kind,
             cash_bank_reconciliation_id,
-            cash_bank_reconciled_at::TEXT AS cash_bank_reconciled_at,
+            cash_bank_reconciled_at,
             cash_bank_reconciled_by,
             cash_bank_reconciled_by_name,
             version,
@@ -41,9 +41,9 @@ pub async fn list_finance_transactions(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM finance_transactions
         WHERE ($1::TIMESTAMPTZ IS NULL OR updated_at > $1::TIMESTAMPTZ)
         ORDER BY updated_at, id
@@ -87,7 +87,7 @@ pub async fn get_finance_transaction(
             field_employee_name,
             field_cash_movement_kind,
             cash_bank_reconciliation_id,
-            cash_bank_reconciled_at::TEXT AS cash_bank_reconciled_at,
+            cash_bank_reconciled_at,
             cash_bank_reconciled_by,
             cash_bank_reconciled_by_name,
             version,
@@ -95,9 +95,9 @@ pub async fn get_finance_transaction(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         FROM finance_transactions
         WHERE id = $1
         "#,
@@ -253,7 +253,7 @@ pub async fn upsert_finance_transaction(
             field_employee_name,
             field_cash_movement_kind,
             cash_bank_reconciliation_id,
-            cash_bank_reconciled_at::TEXT AS cash_bank_reconciled_at,
+            cash_bank_reconciled_at,
             cash_bank_reconciled_by,
             cash_bank_reconciled_by_name,
             version,
@@ -261,9 +261,9 @@ pub async fn upsert_finance_transaction(
             created_by_name,
             updated_by,
             updated_by_name,
-            created_at::TEXT AS created_at,
-            updated_at::TEXT AS updated_at,
-            deleted_at::TEXT AS deleted_at
+            created_at,
+            updated_at,
+            deleted_at
         "#,
     )
     .bind(input.id)

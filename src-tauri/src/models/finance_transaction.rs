@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -26,7 +27,7 @@ pub struct FinanceTransactionDto {
     pub field_employee_name: Option<String>,
     pub field_cash_movement_kind: Option<String>,
     pub cash_bank_reconciliation_id: Option<String>,
-    pub cash_bank_reconciled_at: Option<String>,
+    pub cash_bank_reconciled_at: Option<DateTime<Utc>>,
     pub cash_bank_reconciled_by: Option<String>,
     pub cash_bank_reconciled_by_name: Option<String>,
     pub version: i32,
@@ -34,7 +35,7 @@ pub struct FinanceTransactionDto {
     pub created_by_name: Option<String>,
     pub updated_by: Option<String>,
     pub updated_by_name: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
