@@ -165,6 +165,12 @@ export default function LoginProfile({
           {t('root.logout')}
         </Button>
       </div>
+
+      <Divider className="my-3" />
+
+      <Text type="secondary" className="block text-center text-xs">
+        {t('root.profile.appVersion', { version: __APP_VERSION__ })}
+      </Text>
     </div>
   );
 
