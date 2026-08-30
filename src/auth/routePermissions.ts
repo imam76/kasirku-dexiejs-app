@@ -81,6 +81,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   ],
   '/finance': ['FINANCE_ACCESS', 'ACCOUNTING_PERIOD_MANAGE'],
   '/finance/cash-flow': 'FINANCE_ACCESS',
+  '/finance/budget': 'FINANCE_ACCESS',
   '/finance/cash-bank-reconciliation': 'FINANCE_ACCESS',
   '/finance/receivables': 'FINANCE_ACCESS',
   '/finance/receivables/overpayments': 'FINANCE_ACCESS',

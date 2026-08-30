@@ -15,6 +15,7 @@ import { refreshCashBankReconciliationsFromPostgres } from '@/services/cashBankR
 import { refreshCashierSessionsFromPostgres } from '@/services/cashierSessionReadService';
 import { refreshChartOfAccountsFromPostgres } from '@/services/chartOfAccountReadService';
 import { refreshClosingRunsFromPostgres } from '@/services/closingRunReadService';
+import { refreshBudgetsFromPostgres } from '@/services/budgetReadService';
 import { getCompanyProfileSetting } from '@/services/companyProfileSettingService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
 import { refreshCooperativeAreasFromPostgres } from '@/services/cooperativeAreaReadService';
@@ -323,6 +324,7 @@ export const REALTIME_TABLE_TO_ENTITY: Record<string, RealtimeEntityMapping> = {
   currency_rates: { refreshFns: [refreshCurrencyRatesFromPostgres], queryKeys: ['currencyRates'] },
   departments: { refreshFns: [refreshDepartmentsFromPostgres], queryKeys: ['departments'] },
   projects: { refreshFns: [refreshProjectsFromPostgres], queryKeys: ['projects'] },
+  budgets: { refreshFns: [refreshBudgetsFromPostgres], queryKeys: ['budgets'] },
   taxes: { refreshFns: [refreshTaxesFromPostgres], queryKeys: ['taxes'] },
   warehouses: { refreshFns: [refreshWarehousesFromPostgres], queryKeys: ['warehouses'] },
   payment_methods: { refreshFns: [refreshPaymentMethodsFromPostgres], queryKeys: noQueryKeys },

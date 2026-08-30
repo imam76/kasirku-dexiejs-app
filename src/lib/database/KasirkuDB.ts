@@ -24,6 +24,7 @@ import type {
   Contact,
   Department,
   Project,
+  Budget,
   Tax,
   Warehouse,
   Currency,
@@ -146,6 +147,7 @@ export class KasirkuDB extends Dexie {
   contacts!: Table<Contact>;
   departments!: Table<Department>;
   projects!: Table<Project>;
+  budgets!: Table<Budget>;
   taxes!: Table<Tax>;
   warehouses!: Table<Warehouse>;
   currencies!: Table<Currency>;

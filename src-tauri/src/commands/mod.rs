@@ -3,6 +3,7 @@ pub mod accounting_period_commands;
 pub mod accounting_setting_commands;
 pub mod app_setup_config_commands;
 pub mod auth_commands;
+pub mod budget_commands;
 pub mod cash_bank_reconciliation_commands;
 pub mod cashier_session_commands;
 pub mod chart_of_account_commands;

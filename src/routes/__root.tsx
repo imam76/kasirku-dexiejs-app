@@ -72,7 +72,7 @@ type NavGroup = { label: string; icon: LucideIcon; key: string; children: NavLin
 type NavLink = NavLeaf | NavGroup
 
 /** Halaman mobile-crud yang me-render breadcrumb-nya sendiri di dalam header fixed, jadi breadcrumb global di bawah ini harus disembunyikan untuk path tersebut. */
-const EMBEDDED_MOBILE_HEADER_PATHS = new Set(['/master-data/products', '/master-data/contacts'])
+const EMBEDDED_MOBILE_HEADER_PATHS = new Set(['/master-data/products', '/master-data/contacts', '/finance/budget'])
 const isEmbeddedMobileDocumentListPath = (pathname: string) => {
   const salesMatch = /^\/(?:finance\/)?sales\/([a-z]+)$/.exec(pathname)
   if (salesMatch) return getSalesDocumentTypeFromPathSegment(salesMatch[1]) !== undefined

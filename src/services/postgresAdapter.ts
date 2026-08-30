@@ -578,6 +578,22 @@ export interface RemoteProjectDto {
   deleted_at?: string | null;
 }
 
+export interface RemoteBudgetDto {
+  id: string;
+  name: string;
+  budget_type: string;
+  category: string;
+  period_type: string;
+  period_key: string;
+  planned_amount: number;
+  warning_threshold_percent: number;
+  notes?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
 type WithoutLocalSyncMetadata<T> = Omit<
   T,
   'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'
@@ -2645,6 +2661,28 @@ export const projectPostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteProjectDto | null>('postgres_delete_project', { id });
+  },
+};
+
+export const budgetPostgresAdapter = {
+  async list() {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteBudgetDto[]>('postgres_list_budgets');
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteBudgetDto | null>('postgres_get_budget', { id });
+  },
+
+  async upsert(input: RemoteBudgetDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteBudgetDto>('postgres_upsert_budget', { input });
+  },
+
+  async delete(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteBudgetDto | null>('postgres_delete_budget', { id });
   },
 };
 

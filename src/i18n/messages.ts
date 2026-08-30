@@ -2,6 +2,7 @@ import { appMessages } from './app';
 import { commonMessages } from './common';
 import { cooperativeMessages } from './cooperativeMessages';
 import { navigationMessages } from './navigationMessages';
+import { budgetMessages } from './budgetMessages';
 import { stockMessages } from './stockMessages';
 import { stockInMessages } from './stockInMessages';
 import { stockOpnameMessages } from './stockOpnameMessages';
@@ -15,6 +16,7 @@ export const messages = {
     ...commonMessages.id,
     ...navigationMessages.id,
     ...appMessages.id,
+    ...budgetMessages.id,
     ...stockMessages.id,
     ...stockInMessages.id,
     ...stockOpnameMessages.id,
@@ -181,6 +183,7 @@ export const messages = {
     'finance.index.title': 'Keuangan',
     'finance.index.subtitle': 'Kelola arus kas, piutang, hutang, akun, dan buku besar toko dari satu area',
     'finance.index.cashFlowDesc': 'Pantau saldo kas/bank, pemasukan, pengeluaran, dan riwayat uang toko',
+    'finance.index.budgetDesc': 'Kelola target anggaran per kategori dan periode, bandingkan dengan realisasi',
     'finance.index.chartOfAccountsDesc': 'Kelola daftar akun dan mapping kategori finance',
     'finance.index.generalLedgerDesc': 'Lihat jurnal, buku besar, trial balance, laba rugi, dan neraca',
     'finance.index.salesDesc': 'Kelola quotation, order, delivery, dan invoice penjualan',
@@ -2196,6 +2199,7 @@ export const messages = {
     ...commonMessages.en,
     ...navigationMessages.en,
     ...appMessages.en,
+    ...budgetMessages.en,
     ...stockMessages.en,
     ...stockInMessages.en,
     ...stockOpnameMessages.en,
@@ -2362,6 +2366,7 @@ export const messages = {
     'finance.index.title': 'Finance',
     'finance.index.subtitle': 'Manage store cash and bank, receivables, payables, accounts, and general ledger from one area',
     'finance.index.cashFlowDesc': 'Track cash/bank balances, income, expenses, and store money history',
+    'finance.index.budgetDesc': 'Manage budget targets per category and period, compare against actuals',
     'finance.index.chartOfAccountsDesc': 'Manage account list and finance category mapping',
     'finance.index.generalLedgerDesc': 'View journal entries, ledger, trial balance, income statement, and balance sheet',
     'finance.index.salesDesc': 'Manage sales quotation, order, delivery, and invoice documents',

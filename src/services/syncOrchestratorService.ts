@@ -37,6 +37,7 @@ import { refreshProductionOrdersFromPostgres } from '@/services/productionReadSe
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshPurchaseCostReconciliationsFromPostgres } from '@/services/purchaseCostReconciliationReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
+import { refreshBudgetsFromPostgres } from '@/services/budgetReadService';
 import { refreshFixedAssetsFromPostgres, refreshFixedAssetRunsFromPostgres } from '@/services/fixedAssetReadService';
 import {
   refreshInventoryLotConsumptionsFromPostgres,
@@ -167,6 +168,7 @@ export const refreshAllDataFromPostgres = async () => {
     enabledModules: await refreshEnabledModulesFromPostgres(),
     generalLedgerSetting: await refreshGeneralLedgerSettingFromPostgres(),
     projects: await refreshProjectsFromPostgres(),
+    budgets: await refreshBudgetsFromPostgres(),
     fixedAssets: await refreshFixedAssetsFromPostgres(),
     fixedAssetDepreciationRuns: await refreshFixedAssetRunsFromPostgres(),
     taxes: await refreshTaxesFromPostgres(),

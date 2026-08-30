@@ -1,4 +1,4 @@
-import { BankOutlined, BookOutlined, FileTextOutlined, LockOutlined } from '@ant-design/icons'
+import { BankOutlined, BookOutlined, FileTextOutlined, LockOutlined, PieChartOutlined } from '@ant-design/icons'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Empty } from 'antd'
 import { canAccessPath } from '@/auth/routePermissions'
@@ -34,6 +34,13 @@ function Finance() {
       icon: BankOutlined,
       color: 'text-cyan-700',
       desc: 'Cocokkan saldo kas/bank dengan statement.',
+    },
+    {
+      to: '/finance/budget',
+      label: t('nav.finance.budget'),
+      icon: PieChartOutlined,
+      color: 'text-amber-600',
+      desc: t('finance.index.budgetDesc'),
     },
     {
       to: '/finance/receivables',

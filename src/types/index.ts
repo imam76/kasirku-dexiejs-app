@@ -616,6 +616,7 @@ export type ContactSyncStatus = EntitySyncStatus;
 export type DepartmentSyncStatus = EntitySyncStatus;
 export type ProductSyncStatus = EntitySyncStatus;
 export type ProjectSyncStatus = EntitySyncStatus;
+export type BudgetSyncStatus = EntitySyncStatus;
 export type PurchaseDocumentSyncStatus = EntitySyncStatus;
 export type PurchaseCostReconciliationSyncStatus = EntitySyncStatus;
 export type SalesDocumentSyncStatus = EntitySyncStatus;
@@ -3883,6 +3884,28 @@ export interface FinanceBalance {
   id: string; // 'current'
   amount: number;
   updated_at: string;
+}
+
+export type BudgetPeriodType = 'MONTHLY' | 'YEARLY';
+export type BudgetTransactionType = 'EXPENSE' | 'INCOME';
+
+export interface Budget {
+  id: string;
+  name: string;
+  budget_type: BudgetTransactionType;
+  category: string;
+  period_type: BudgetPeriodType;
+  period_key: string; // 'YYYY-MM' for MONTHLY, 'YYYY' for YEARLY
+  planned_amount: number;
+  warning_threshold_percent: number;
+  notes?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  sync_status?: BudgetSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export type InventoryLotSourceType =

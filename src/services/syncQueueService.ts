@@ -49,6 +49,7 @@ import { mergeRemoteProductsIntoDexie } from '@/services/productReadService';
 import { mergeRemoteProductionOrderBundlesIntoDexie } from '@/services/productionReadService';
 import { mergeRemotePurchaseDocumentBundlesIntoDexie } from '@/services/purchaseDocumentReadService';
 import { mergeRemoteProjectsIntoDexie } from '@/services/projectReadService';
+import { mergeRemoteBudgetsIntoDexie } from '@/services/budgetReadService';
 import {
   mergeRemoteFixedAssetsIntoDexie,
   mergeRemoteFixedAssetRunBundlesIntoDexie,
@@ -111,6 +112,7 @@ import {
   purchaseDocumentPostgresAdapter,
   purchaseCostReconciliationPostgresAdapter,
   projectPostgresAdapter,
+  budgetPostgresAdapter,
   fixedAssetPostgresAdapter,
   fixedAssetDepreciationRunPostgresAdapter,
   rolePermissionPostgresAdapter,
@@ -185,6 +187,7 @@ import {
   type RemotePurchaseCostReconciliationDto,
   type RemotePurchaseCostReconciliationItemDto,
   type RemoteProjectDto,
+  type RemoteBudgetDto,
   type RemotePromoDto,
   type RemoteLotteryDto,
   type RemoteFixedAssetDto,
@@ -214,7 +217,7 @@ import {
   mergeRemoteAccountingFiscalYearsIntoDexie,
   mergeRemoteFiscalYearClosingRunsIntoDexie,
 } from '@/services/fiscalYearReadService';
-import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, PosStockDiscrepancy, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, Promo, Lottery, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Transaction, TransactionItem, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
+import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, Budget, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, PosStockDiscrepancy, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, Promo, Lottery, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Transaction, TransactionItem, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
 import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryComponent } from '@/types';
 import type { InventoryLot, InventoryLotConsumption, PurchaseCostReconciliation, PurchaseCostReconciliationItem } from '@/types';
 import type { LeaveRequest } from '@/types';
@@ -268,6 +271,7 @@ const PAYROLL_RUN_ENTITY = 'payrollRuns';
 const PRODUCT_ENTITY = 'products';
 const PRODUCTION_ORDER_ENTITY = 'productionOrders';
 const PROJECT_ENTITY = 'projects';
+const BUDGET_ENTITY = 'budgets';
 const PROMO_ENTITY = 'promos';
 const LOTTERY_ENTITY = 'lotteries';
 const TRANSACTION_ENTITY = 'transactions';
@@ -1134,6 +1138,21 @@ const mapProjectToRemoteDto = (project: Project): RemoteProjectDto => ({
   is_active: project.is_active,
   created_at: project.created_at,
   updated_at: project.updated_at,
+});
+
+const mapBudgetToRemoteDto = (budget: Budget): RemoteBudgetDto => ({
+  id: budget.id,
+  name: budget.name,
+  budget_type: budget.budget_type,
+  category: budget.category,
+  period_type: budget.period_type,
+  period_key: budget.period_key,
+  planned_amount: budget.planned_amount,
+  warning_threshold_percent: budget.warning_threshold_percent,
+  notes: budget.notes,
+  is_active: budget.is_active,
+  created_at: budget.created_at,
+  updated_at: budget.updated_at,
 });
 
 const mapFixedAssetToRemoteDto = (asset: FixedAsset): RemoteFixedAssetDto => {
@@ -2837,6 +2856,24 @@ const isRemoteProjectDto = (payload: unknown): payload is RemoteProjectDto => {
   );
 };
 
+const isRemoteBudgetDto = (payload: unknown): payload is RemoteBudgetDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteBudgetDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.budget_type === 'string' &&
+    typeof candidate.category === 'string' &&
+    typeof candidate.period_type === 'string' &&
+    typeof candidate.period_key === 'string' &&
+    typeof candidate.planned_amount === 'number' &&
+    typeof candidate.is_active === 'boolean' &&
+    typeof candidate.created_at === 'string' &&
+    typeof candidate.updated_at === 'string'
+  );
+};
+
 const isRemoteFixedAssetDto = (payload: unknown): payload is RemoteFixedAssetDto => {
   if (!payload || typeof payload !== 'object') return false;
   const candidate = payload as Partial<RemoteFixedAssetDto>;
@@ -3967,6 +4004,17 @@ const updateProjectSyncMetadata = async (
   await db.projects.update(projectId, syncMetadata);
 };
 
+const updateBudgetSyncMetadata = async (
+  budgetId: string,
+  sourceUpdatedAt: string,
+  syncMetadata: Partial<Pick<Budget, 'sync_status' | 'sync_error' | 'last_synced_at' | 'remote_updated_at'>>,
+) => {
+  const currentBudget = await db.budgets.get(budgetId);
+  if (!currentBudget || currentBudget.updated_at !== sourceUpdatedAt) return;
+
+  await db.budgets.update(budgetId, syncMetadata);
+};
+
 const updateFixedAssetSyncMetadata = async (
   assetId: string,
   sourceUpdatedAt: string,
@@ -4540,6 +4588,13 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
 
   if (queueItem.entity === PROJECT_ENTITY && isRemoteProjectDto(queueItem.payload)) {
     await updateProjectSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
+  if (queueItem.entity === BUDGET_ENTITY && isRemoteBudgetDto(queueItem.payload)) {
+    await updateBudgetSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
       sync_error: errorMessage,
     });
@@ -5144,6 +5199,18 @@ const processProjectQueueItem = async (queueItem: SyncQueueItem) => {
   return projectPostgresAdapter.upsert(queueItem.payload);
 };
 
+const processBudgetQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    return budgetPostgresAdapter.delete(queueItem.entity_id);
+  }
+
+  if (!isRemoteBudgetDto(queueItem.payload)) {
+    throw new Error('Payload anggaran sync queue tidak valid.');
+  }
+
+  return budgetPostgresAdapter.upsert(queueItem.payload);
+};
+
 const processFixedAssetQueueItem = async (queueItem: SyncQueueItem) => {
   if (!isRemoteFixedAssetDto(queueItem.payload)) throw new Error('Payload aset tetap sync queue tidak valid.');
   return fixedAssetPostgresAdapter.upsert(queueItem.payload);
@@ -5439,6 +5506,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteProduct: RemoteProductDto | null = null;
     let remoteProductionOrderBundle: RemoteProductionOrderBundleDto | null = null;
     let remoteProject: RemoteProjectDto | null = null;
+    let remoteBudget: RemoteBudgetDto | null = null;
     let remotePromo: RemotePromoDto | null = null;
     let remoteLottery: RemoteLotteryDto | null = null;
     let remoteFixedAsset: RemoteFixedAssetDto | null = null;
@@ -5544,6 +5612,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteProductionOrderBundle = await processProductionOrderQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROJECT_ENTITY) {
       remoteProject = await processProjectQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === BUDGET_ENTITY) {
+      remoteBudget = await processBudgetQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === PROMO_ENTITY) {
       remotePromo = await processPromoQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === LOTTERY_ENTITY) {
@@ -6384,6 +6454,18 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteProject.updated_at,
       });
       await mergeRemoteProjectsIntoDexie([remoteProject], syncedAt);
+      return;
+    }
+
+    if (remoteBudget && isRemoteBudgetDto(currentQueueItem.payload)) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateBudgetSyncMetadata(currentQueueItem.entity_id, currentQueueItem.payload.updated_at, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+        remote_updated_at: remoteBudget.updated_at,
+      });
+      await mergeRemoteBudgetsIntoDexie([remoteBudget], syncedAt);
       return;
     }
 
@@ -8707,6 +8789,29 @@ export const enqueueProjectSync = async (
     entity_id: project.id,
     operation,
     payload: mapProjectToRemoteDto(project),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  };
+
+  await db.syncQueue.add(queueItem);
+  void processPendingSyncQueue();
+
+  return queueItem;
+};
+
+export const enqueueBudgetSync = async (
+  budget: Budget,
+  operation: SyncQueueOperation,
+) => {
+  const now = new Date().toISOString();
+  const queueItem: SyncQueueItem = {
+    id: crypto.randomUUID(),
+    entity: BUDGET_ENTITY,
+    entity_id: budget.id,
+    operation,
+    payload: mapBudgetToRemoteDto(budget),
     status: 'pending',
     attempts: 0,
     created_at: now,
