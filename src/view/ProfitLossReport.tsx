@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Alert, App, Button, Card, DatePicker, Select, Space, Typography } from 'antd';
-import { FileExcelOutlined, FilePdfOutlined, ReloadOutlined } from '@ant-design/icons';
+import { FileExcelOutlined, FilePdfOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import autoTable from 'jspdf-autotable';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import CompanyReportHeader from '@/components/report/CompanyReportHeader';
 import ExportActions from '@/components/ExportActions';
 import { Loading } from '@/components/Loading';
+import { MobileCrudFilterSheet, MobileCrudFloatingActions } from '@/components/mobile-crud';
 import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import dayjs from '@/lib/dayjs';
@@ -42,6 +43,17 @@ type PrintableReportRow =
   | { type: 'account'; code: string; label: string; amount: number }
   | { type: 'total'; label: string; amount: number; emphasized?: boolean };
 
+type PrintableAccountRow = Extract<PrintableReportRow, { type: 'account' }>;
+type PrintableTotalRow = Extract<PrintableReportRow, { type: 'total' }>;
+
+interface MobileReportSection {
+  type: 'section';
+  label: string;
+  rows: Array<PrintableAccountRow | PrintableTotalRow>;
+}
+
+type MobileReportGroup = MobileReportSection | PrintableAccountRow | PrintableTotalRow;
+
 const emptyIncomeStatement: IncomeStatementReport = {
   revenue: 0,
   contra_revenue: 0,
@@ -62,6 +74,161 @@ const hasSectionAmount = (section: IncomeStatementSection | undefined) => (
   Boolean(section && (section.rows.length > 0 || section.total !== 0))
 );
 
+const getMobileReportGroups = (rows: PrintableReportRow[]): MobileReportGroup[] => {
+  const groups: MobileReportGroup[] = [];
+  let activeSection: MobileReportSection | undefined;
+
+  rows.forEach((row) => {
+    if (row.type === 'section') {
+      activeSection = { ...row, rows: [] };
+      groups.push(activeSection);
+      return;
+    }
+
+    if (activeSection) {
+      activeSection.rows.push(row);
+      if (row.type === 'total') activeSection = undefined;
+      return;
+    }
+
+    groups.push(row);
+  });
+
+  return groups;
+};
+
+interface MobileProfitLossPresenterProps {
+  accountLabel: string;
+  periodLabel: string;
+  periodText: string;
+  printableRows: PrintableReportRow[];
+  selectedAccountText?: string;
+  summaryLines: ReportLine[];
+}
+
+function MobileProfitLossPresenter({
+  accountLabel,
+  periodLabel,
+  periodText,
+  printableRows,
+  selectedAccountText,
+  summaryLines,
+}: MobileProfitLossPresenterProps) {
+  const groups = getMobileReportGroups(printableRows);
+
+  return (
+    <div data-testid="profit-loss-report-mobile" className="min-w-0 space-y-4">
+      <div className="grid min-w-0 grid-cols-1 gap-3">
+        {summaryLines.map((line) => (
+          <div
+            key={line.key}
+            data-testid={`profit-loss-summary-${line.key}`}
+            className="min-w-0 rounded-xl border border-blue-100 bg-blue-50 p-4 shadow-sm"
+          >
+            <div className="break-words text-xs font-semibold uppercase tracking-wide text-blue-700">
+              {line.label}
+            </div>
+            <div className={`mt-1 break-words text-xl font-bold ${line.amount < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+              Rp {formatCurrency(line.amount)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="min-w-0 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+        <div className="break-words text-xs text-gray-500">
+          {periodLabel} {periodText}
+        </div>
+        {selectedAccountText ? (
+          <div className="mt-1 break-words text-xs text-gray-500">
+            {accountLabel}: {selectedAccountText}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="min-w-0 space-y-3">
+        {groups.map((group, groupIndex) => {
+          if (group.type === 'section') {
+            return (
+              <section
+                key={`${group.type}-${group.label}-${groupIndex}`}
+                className="min-w-0 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm"
+              >
+                <div className="break-words border-b border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-[#0072bc]">
+                  {group.label}
+                </div>
+                <div className="min-w-0 divide-y divide-gray-100 px-4">
+                  {group.rows.map((row, rowIndex) => {
+                    if (row.type === 'account') {
+                      return (
+                        <div
+                          key={`${row.type}-${row.code}-${rowIndex}`}
+                          className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 py-3"
+                        >
+                          <div className="min-w-0">
+                            <div className="break-all text-xs font-semibold text-[#00a6c8]">{row.code}</div>
+                            <div className="break-words text-sm font-medium text-gray-900">{row.label}</div>
+                          </div>
+                          <div className={`break-words text-right text-sm font-medium ${getSignedAmountClass(row.amount)}`}>
+                            Rp {formatCurrency(row.amount)}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={`${row.type}-${row.label}-${rowIndex}`}
+                        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 py-3 text-sm font-semibold"
+                      >
+                        <div className="min-w-0 break-words text-emerald-700">{row.label}</div>
+                        <div className={`break-words text-right ${row.amount < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                          Rp {formatCurrency(row.amount)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          }
+
+          if (group.type === 'account') {
+            return (
+              <div
+                key={`${group.type}-${group.code}-${groupIndex}`}
+                className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm"
+              >
+                <div className="min-w-0">
+                  <div className="break-all text-xs font-semibold text-[#00a6c8]">{group.code}</div>
+                  <div className="break-words text-sm font-medium text-gray-900">{group.label}</div>
+                </div>
+                <div className={`break-words text-right text-sm font-medium ${getSignedAmountClass(group.amount)}`}>
+                  Rp {formatCurrency(group.amount)}
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div
+              key={`${group.type}-${group.label}-${groupIndex}`}
+              className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 rounded-xl border border-gray-100 bg-white p-4 text-sm font-semibold shadow-sm"
+            >
+              <div className={`min-w-0 break-words ${group.emphasized ? 'text-[#0072bc]' : 'text-emerald-700'}`}>
+                {group.label}
+              </div>
+              <div className={`break-words text-right ${group.amount < 0 ? 'text-red-600' : group.emphasized ? 'text-[#0072bc]' : 'text-emerald-700'}`}>
+                Rp {formatCurrency(group.amount)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function ProfitLossReport() {
   const { message } = App.useApp();
   const { t } = useI18n();
@@ -74,6 +241,7 @@ export default function ProfitLossReport() {
   ]);
   const [selectedHelper, setSelectedHelper] = useState<string | undefined>('today');
   const [accountFilter, setAccountFilter] = useState<string>();
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 
   const generalLedgerModule = useLiveQuery(
     () => db.enabledModules.get('GENERAL_LEDGER'),
@@ -120,6 +288,7 @@ export default function ProfitLossReport() {
       label: `${account.code} - ${account.name}`,
     }));
   const selectedAccount = accounts.find((account) => account.id === accountFilter);
+  const activeFilterCount = Number(Boolean(accountFilter)) + Number(selectedHelper !== 'today');
   const periodText = `${startDate || t('report.allPeriod')} s/d ${endDate || t('report.allPeriod')}`;
   const sectionLabels = useMemo(() => ({
     REVENUE: t('generalLedger.income.revenue'),
@@ -331,15 +500,15 @@ export default function ProfitLossReport() {
   if (isLoading) return <Loading />;
 
   return (
-    <div className="min-h-screen bg-[#FDFDFD] p-4 sm:p-6">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div data-testid="profit-loss-report" className="min-h-screen min-w-0 bg-[#FDFDFD] p-4 sm:p-6">
+      <div className={`mb-6 flex gap-4 ${isMobile ? 'flex-col' : 'items-center justify-between'}`}>
         <div>
           <Title level={4} className="!mb-1 !font-bold text-gray-900">{t('report.profitLoss.title')}</Title>
           <p className="text-xs text-gray-500 sm:text-sm">{t('report.profitLoss.subtitle')}</p>
         </div>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+        <div className={isMobile ? 'grid w-full grid-cols-2 gap-2' : 'flex flex-wrap gap-2'}>
           <Button
-            className="flex-1 items-center justify-center gap-1.5 sm:flex-none"
+            className={isMobile ? 'flex w-full items-center justify-center gap-1.5' : 'items-center justify-center gap-1.5'}
             icon={<ReloadOutlined className="text-[12px]" />}
             onClick={() => reportQuery.refetch()}
             loading={reportQuery.isFetching}
@@ -348,7 +517,7 @@ export default function ProfitLossReport() {
             {t('common.refresh')}
           </Button>
           <ExportActions
-            buttonClassName="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm"
+            buttonClassName={`${isMobile ? 'w-full' : ''} flex items-center justify-center gap-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] border-none shadow-sm`}
             disabled={!canShowReport || !report}
             formats={[
               {
@@ -375,57 +544,130 @@ export default function ProfitLossReport() {
         />
       </div>
 
-      <div className="mb-8 rounded-lg border border-gray-100 bg-white p-5 shadow-sm">
-        <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">{t('report.parameterTitle')}</div>
-        <div className="space-y-5">
-          <div className="flex flex-col gap-1.5">
-            <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('generalLedger.filterAccount')}</span>
-            <Select
-              placeholder={t('finance.allAccounts')}
-              className="w-full"
-              value={accountFilter}
-              onChange={setAccountFilter}
-              allowClear
-              showSearch
-              options={accountOptions}
-              optionFilterProp="label"
-              size="large"
-            />
-          </div>
+      {isMobile ? (
+        <>
+          <MobileCrudFloatingActions
+            actions={[
+              {
+                key: 'filter',
+                icon: <FilterOutlined className="text-[22px]" />,
+                label: t('common.filter'),
+                badge: { count: activeFilterCount, color: '#fa8c16' },
+                testId: 'profit-loss-filter-fab',
+                onClick: () => setIsFilterSheetOpen(true),
+              },
+            ]}
+          />
+          <MobileCrudFilterSheet
+            open={isFilterSheetOpen}
+            title={t('common.filter')}
+            onClose={() => setIsFilterSheetOpen(false)}
+            onReset={handleReset}
+            resetDisabled={activeFilterCount === 0}
+            resetLabel={t('common.reset')}
+            applyLabel={t('common.apply')}
+            onApply={() => setIsFilterSheetOpen(false)}
+            testId="profit-loss-filter-sheet"
+          >
+            <div className="space-y-5">
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('generalLedger.filterAccount')}</span>
+                <Select
+                  placeholder={t('finance.allAccounts')}
+                  className="w-full"
+                  value={accountFilter}
+                  onChange={setAccountFilter}
+                  allowClear
+                  showSearch
+                  options={accountOptions}
+                  optionFilterProp="label"
+                  size="large"
+                />
+              </div>
 
-          <div className="flex flex-col gap-2.5">
-            <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.dateRange')}</span>
-            <div className="flex flex-wrap gap-2">
-              {[
-                ['today', t('report.today')],
-                ['yesterday', t('report.yesterday')],
-                ['this-week', t('report.thisWeek')],
-                ['this-month', t('report.thisMonth')],
-                ['last-month', t('report.lastMonth')],
-              ].map(([key, label]) => (
-                <Button
-                  key={key}
-                  size={isMobile ? 'small' : 'middle'}
-                  className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === key ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`}
-                  onClick={() => handleHelperChange(key)}
-                >
-                  {label}
-                </Button>
-              ))}
+              <div className="flex min-w-0 flex-col gap-2.5">
+                <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.dateRange')}</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    ['today', t('report.today')],
+                    ['yesterday', t('report.yesterday')],
+                    ['this-week', t('report.thisWeek')],
+                    ['this-month', t('report.thisMonth')],
+                    ['last-month', t('report.lastMonth')],
+                  ].map(([key, label]) => (
+                    <Button
+                      key={key}
+                      className={`w-full rounded-full px-3 text-[12px] font-medium transition-all ${selectedHelper === key ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`}
+                      onClick={() => handleHelperChange(key)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                <DatePicker.RangePicker
+                  value={dateRange}
+                  onChange={handleDateRangeChange}
+                  className="min-w-0 w-full"
+                  style={{ maxWidth: '100%' }}
+                  size="large"
+                />
+              </div>
             </div>
-            <DatePicker.RangePicker
-              value={dateRange}
-              onChange={handleDateRangeChange}
-              className="w-full"
-              size="large"
-            />
-          </div>
+          </MobileCrudFilterSheet>
+        </>
+      ) : (
+        <div className="mb-8 rounded-lg border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400">{t('report.parameterTitle')}</div>
+          <div className="space-y-5">
+            <div className="flex flex-col gap-1.5">
+              <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('generalLedger.filterAccount')}</span>
+              <Select
+                placeholder={t('finance.allAccounts')}
+                className="w-full"
+                value={accountFilter}
+                onChange={setAccountFilter}
+                allowClear
+                showSearch
+                options={accountOptions}
+                optionFilterProp="label"
+                size="large"
+              />
+            </div>
 
-          <div className="flex justify-end">
-            <Button onClick={handleReset}>{t('common.reset')}</Button>
+            <div className="flex flex-col gap-2.5">
+              <span className="ml-0.5 text-[13px] font-medium text-gray-700">{t('report.dateRange')}</span>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  ['today', t('report.today')],
+                  ['yesterday', t('report.yesterday')],
+                  ['this-week', t('report.thisWeek')],
+                  ['this-month', t('report.thisMonth')],
+                  ['last-month', t('report.lastMonth')],
+                ].map(([key, label]) => (
+                  <Button
+                    key={key}
+                    size={isMobile ? 'small' : 'middle'}
+                    className={`rounded-full px-4 text-[12px] font-medium transition-all ${selectedHelper === key ? 'bg-[#2563EB] text-white border-[#2563EB]' : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-[#2563EB]'}`}
+                    onClick={() => handleHelperChange(key)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <DatePicker.RangePicker
+                value={dateRange}
+                onChange={handleDateRangeChange}
+                className="min-w-0 w-full"
+                size="large"
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <Button className={isMobile ? 'w-full' : undefined} onClick={handleReset}>{t('common.reset')}</Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {!canShowReport ? (
         <Alert
@@ -468,69 +710,80 @@ export default function ProfitLossReport() {
               )}
             />
           ) : null}
-          <Card className="shadow-sm">
-          <Space direction="vertical" size="large" className="w-full">
-            <div className="flex flex-col gap-1 border-b border-gray-100 pb-4">
-              <Text type="secondary">{t('report.periodWithColon')} {periodText}</Text>
-              {selectedAccount ? (
-                <Text type="secondary">{t('generalLedger.filterAccount')}: {selectedAccount.code} - {selectedAccount.name}</Text>
-              ) : null}
-            </div>
-
-            <div className="overflow-x-auto">
-              <div className="min-w-[720px]">
-                <div className="grid grid-cols-[160px_1fr_180px] border-b border-gray-200 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  <div>{t('generalLedger.account')}</div>
-                  <div>{t('report.description')}</div>
-                  <div className="text-right">{t('report.amount')}</div>
+          {isMobile ? (
+            <MobileProfitLossPresenter
+              accountLabel={t('generalLedger.filterAccount')}
+              periodLabel={t('report.periodWithColon')}
+              periodText={periodText}
+              printableRows={printableRows}
+              selectedAccountText={selectedAccount ? `${selectedAccount.code} - ${selectedAccount.name}` : undefined}
+              summaryLines={reportLines.filter((line) => line.emphasized)}
+            />
+          ) : (
+            <Card data-testid="profit-loss-report-desktop" className="shadow-sm">
+              <Space direction="vertical" size="large" className="w-full">
+                <div className="flex flex-col gap-1 border-b border-gray-100 pb-4">
+                  <Text type="secondary">{t('report.periodWithColon')} {periodText}</Text>
+                  {selectedAccount ? (
+                    <Text type="secondary">{t('generalLedger.filterAccount')}: {selectedAccount.code} - {selectedAccount.name}</Text>
+                  ) : null}
                 </div>
 
-                <div className="divide-y divide-gray-100">
-                  {printableRows.map((row, index) => {
-                    if (row.type === 'section') {
-                      return (
-                        <div key={`${row.type}-${row.label}-${index}`} className="grid grid-cols-[160px_1fr_180px] pt-5 pb-2 text-sm font-semibold text-[#0072bc]">
-                          <div className="col-span-3">{row.label}</div>
-                        </div>
-                      );
-                    }
+                <div className="overflow-x-auto">
+                  <div className="min-w-[720px]">
+                    <div className="grid grid-cols-[160px_1fr_180px] border-b border-gray-200 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                      <div>{t('generalLedger.account')}</div>
+                      <div>{t('report.description')}</div>
+                      <div className="text-right">{t('report.amount')}</div>
+                    </div>
 
-                    if (row.type === 'account') {
-                      return (
-                        <div key={`${row.type}-${row.code}-${index}`} className="grid grid-cols-[160px_1fr_180px] py-2 text-sm text-gray-800">
-                          <div className="pl-8 text-[#00a6c8]">{row.code}</div>
-                          <div className="font-medium text-gray-900">{row.label}</div>
-                          <div className="text-right">Rp {formatCurrency(row.amount)}</div>
-                        </div>
-                      );
-                    }
+                    <div className="divide-y divide-gray-100">
+                      {printableRows.map((row, index) => {
+                        if (row.type === 'section') {
+                          return (
+                            <div key={`${row.type}-${row.label}-${index}`} className="grid grid-cols-[160px_1fr_180px] pt-5 pb-2 text-sm font-semibold text-[#0072bc]">
+                              <div className="col-span-3">{row.label}</div>
+                            </div>
+                          );
+                        }
 
-                    return (
-                      <div key={`${row.type}-${row.label}-${index}`} className="grid grid-cols-[160px_1fr_180px] py-2 text-sm font-semibold">
-                        <div />
-                        <div className={row.emphasized ? 'text-[#0072bc]' : 'text-emerald-600'}>{row.label}</div>
-                        <div className={`text-right ${row.label === t('generalLedger.income.netIncome') ? getSignedAmountClass(row.amount) : row.emphasized ? 'text-[#0072bc]' : 'text-emerald-600'}`}>
-                          Rp {formatCurrency(row.amount)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+                        if (row.type === 'account') {
+                          return (
+                            <div key={`${row.type}-${row.code}-${index}`} className="grid grid-cols-[160px_1fr_180px] py-2 text-sm text-gray-800">
+                              <div className="pl-8 text-[#00a6c8]">{row.code}</div>
+                              <div className="font-medium text-gray-900">{row.label}</div>
+                              <div className="text-right">Rp {formatCurrency(row.amount)}</div>
+                            </div>
+                          );
+                        }
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {reportLines.filter((line) => line.emphasized).map((line) => (
-                <div key={line.key} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                  <Text type="secondary" className="text-xs">{line.label}</Text>
-                  <div className={`mt-1 text-lg font-bold ${line.key === 'net_income' ? getSignedAmountClass(line.amount) : 'text-gray-900'}`}>
-                    Rp {formatCurrency(line.amount)}
+                        return (
+                          <div key={`${row.type}-${row.label}-${index}`} className="grid grid-cols-[160px_1fr_180px] py-2 text-sm font-semibold">
+                            <div />
+                            <div className={row.emphasized ? 'text-[#0072bc]' : 'text-emerald-600'}>{row.label}</div>
+                            <div className={`text-right ${row.label === t('generalLedger.income.netIncome') ? getSignedAmountClass(row.amount) : row.emphasized ? 'text-[#0072bc]' : 'text-emerald-600'}`}>
+                              Rp {formatCurrency(row.amount)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </Space>
-          </Card>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {reportLines.filter((line) => line.emphasized).map((line) => (
+                    <div key={line.key} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                      <Text type="secondary" className="text-xs">{line.label}</Text>
+                      <div className={`mt-1 text-lg font-bold ${line.key === 'net_income' ? getSignedAmountClass(line.amount) : 'text-gray-900'}`}>
+                        Rp {formatCurrency(line.amount)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Space>
+            </Card>
+          )}
         </Space>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { FilePdfOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons';
+import { FilePdfOutlined, FileTextOutlined, FilterOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { App, Button, Card, Checkbox, DatePicker, Select, Typography } from 'antd';
@@ -7,6 +7,7 @@ import autoTable from 'jspdf-autotable';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ExportActions from '@/components/ExportActions';
 import { Loading } from '@/components/Loading';
+import { MobileCrudFilterSheet, MobileCrudFloatingActions } from '@/components/mobile-crud';
 import { useCashFlowReport } from '@/hooks/useCashFlowReport';
 import { useCompanyProfileSetting } from '@/hooks/useCompanyProfileSetting';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
@@ -158,6 +159,198 @@ const CashFlowGroupSection = ({ group, formatCategory, money }: CashFlowGroupSec
   );
 };
 
+interface CashFlowMobileReportProps {
+  companyName: string;
+  periodText: string;
+  currencyCode: string;
+  printDateText: string;
+  classificationText: string;
+  totals: CashFlowReportData['totals'];
+  groups: CashFlowReportGroup[];
+  formatCategory: (category: string) => string;
+  money: (value: number) => string;
+}
+
+interface CashFlowMobileMetricProps {
+  label: string;
+  value: string;
+  negative?: boolean;
+}
+
+const CashFlowMobileMetric = ({ label, value, negative = false }: CashFlowMobileMetricProps) => (
+  <div
+    style={{
+      background: '#f9fafb',
+      border: '1px solid #e5e7eb',
+      borderRadius: 8,
+      minWidth: 0,
+      padding: '10px 12px',
+    }}
+  >
+    <div style={{ color: '#4b5563', fontSize: 12 }}>{label}</div>
+    <div
+      style={{
+        color: negative ? '#dc2626' : '#111827',
+        fontSize: 14,
+        fontWeight: 700,
+        marginTop: 2,
+        overflowWrap: 'anywhere',
+      }}
+    >
+      {value}
+    </div>
+  </div>
+);
+
+const CashFlowMobileGroupSection = ({ group, formatCategory, money }: CashFlowGroupSectionProps) => (
+  <section
+    style={{
+      border: '1px solid #d1d5db',
+      borderRadius: 10,
+      marginBottom: 16,
+      minWidth: 0,
+      overflow: 'hidden',
+    }}
+  >
+    <div style={{ background: '#f3f4f6', borderBottom: '1px solid #d1d5db', padding: 12 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, overflowWrap: 'anywhere' }}>{getAccountLabel(group)}</div>
+      <div style={{ color: '#6b7280', fontSize: 12, marginTop: 2 }}>{group.transactions.length} transaksi</div>
+      <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+        <CashFlowMobileMetric label="Kas Masuk" value={money(group.cashIn)} />
+        <CashFlowMobileMetric label="Kas Keluar" value={money(group.cashOut)} />
+        <CashFlowMobileMetric label="Net" value={money(group.net)} negative={group.net < 0} />
+      </div>
+    </div>
+
+    {group.transactions.length === 0 ? (
+      <div style={{ color: '#6b7280', fontSize: 13, padding: 16, textAlign: 'center' }}>Zero balance</div>
+    ) : (
+      <div style={{ display: 'grid', gap: 10, padding: 10 }}>
+        {group.transactions.map((transaction) => {
+          const signedAmount = getCashFlowSignedAmount(transaction);
+          const isCashOut = signedAmount < 0;
+
+          return (
+            <article
+              key={transaction.id}
+              style={{
+                border: '1px solid #e5e7eb',
+                borderRadius: 8,
+                minWidth: 0,
+                padding: 12,
+              }}
+            >
+              <div style={{ display: 'grid', gap: 8 }}>
+                <div>
+                  <div style={{ color: '#6b7280', fontSize: 11 }}>Tanggal</div>
+                  <div style={{ fontSize: 13, marginTop: 1, overflowWrap: 'anywhere' }}>{formatDate(transaction.created_at)}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#6b7280', fontSize: 11 }}>Klasifikasi</div>
+                  <div style={{ fontSize: 13, marginTop: 1, overflowWrap: 'anywhere' }}>{formatCategory(transaction.category)}</div>
+                </div>
+                <div>
+                  <div style={{ color: '#6b7280', fontSize: 11 }}>Deskripsi</div>
+                  <div style={{ fontSize: 13, marginTop: 1, overflowWrap: 'anywhere', whiteSpace: 'normal' }}>
+                    {transaction.description || '-'}
+                  </div>
+                </div>
+                <div style={{ borderTop: '1px solid #e5e7eb', display: 'grid', gap: 8, paddingTop: 10 }}>
+                  <div>
+                    <div style={{ color: '#6b7280', fontSize: 11 }}>Arah Kas</div>
+                    <div style={{ color: isCashOut ? '#dc2626' : '#166534', fontSize: 13, fontWeight: 700, marginTop: 1 }}>
+                      {isCashOut ? 'Kas Keluar' : 'Kas Masuk'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#6b7280', fontSize: 11 }}>Nominal</div>
+                    <div
+                      style={{
+                        color: isCashOut ? '#dc2626' : '#111827',
+                        fontSize: 14,
+                        fontWeight: 700,
+                        marginTop: 1,
+                        overflowWrap: 'anywhere',
+                      }}
+                    >
+                      {money(Math.abs(signedAmount))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    )}
+  </section>
+);
+
+const CashFlowMobileReport = ({
+  companyName,
+  periodText,
+  currencyCode,
+  printDateText,
+  classificationText,
+  totals,
+  groups,
+  formatCategory,
+  money,
+}: CashFlowMobileReportProps) => (
+  <div
+    data-testid="cash-flow-report-mobile"
+    style={{
+      background: '#ffffff',
+      border: '1px solid #e5e7eb',
+      borderRadius: 10,
+      boxSizing: 'border-box',
+      color: '#111827',
+      fontFamily: 'Arial, sans-serif',
+      maxWidth: '100%',
+      minWidth: 0,
+      overflowX: 'hidden',
+      padding: 12,
+      width: '100%',
+    }}
+  >
+    <div style={{ borderBottom: '2px solid #111827', display: 'grid', gap: 10, marginBottom: 16, paddingBottom: 12 }}>
+      <div>
+        <div style={{ fontSize: 16, fontWeight: 700, overflowWrap: 'anywhere' }}>{companyName}</div>
+        <div style={{ color: '#4b5563', fontSize: 13, marginTop: 2 }}>Laporan Keuangan</div>
+      </div>
+      <div style={{ fontSize: 12, lineHeight: 1.6, overflowWrap: 'anywhere' }}>
+        <div>Periode: {periodText}</div>
+        <div>Mata Uang: {currencyCode}</div>
+        <div>Tanggal Cetak: {printDateText}</div>
+      </div>
+    </div>
+
+    <div style={{ marginBottom: 16, textAlign: 'center' }}>
+      <div style={{ fontSize: 17, fontWeight: 700, textTransform: 'uppercase' }}>Laporan Arus Kas</div>
+      <div style={{ color: '#4b5563', fontSize: 13, marginTop: 4, overflowWrap: 'anywhere' }}>{classificationText}</div>
+    </div>
+
+    <section style={{ display: 'grid', gap: 8, marginBottom: 16 }}>
+      <CashFlowMobileMetric label="Total Kas Masuk" value={money(totals.cashIn)} />
+      <CashFlowMobileMetric label="Total Kas Keluar" value={money(totals.cashOut)} />
+      <CashFlowMobileMetric label="Net" value={money(totals.net)} negative={totals.net < 0} />
+    </section>
+
+    {groups.length === 0 ? (
+      <div style={{ border: '1px solid #d1d5db', borderRadius: 8, padding: 16, textAlign: 'center' }}>
+        Belum ada transaksi arus kas untuk filter ini.
+      </div>
+    ) : groups.map((group) => (
+      <CashFlowMobileGroupSection
+        key={group.key}
+        group={group}
+        formatCategory={formatCategory}
+        money={money}
+      />
+    ))}
+  </div>
+);
+
 export default function CashFlowReport() {
   const { message, modal } = App.useApp();
   const queryClient = useQueryClient();
@@ -170,6 +363,13 @@ export default function CashFlowReport() {
   const [currencyCode, setCurrencyCode] = useState(baseCurrencyCode);
   const [classification, setClassification] = useState<CashFlowReportClassification>(CASH_FLOW_ALL_CLASSIFICATION);
   const [showZeroBalance, setShowZeroBalance] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const activeFilterCount = [
+    dateShortcut !== 'THIS_MONTH',
+    currencyCode !== baseCurrencyCode,
+    classification !== CASH_FLOW_ALL_CLASSIFICATION,
+    showZeroBalance,
+  ].filter(Boolean).length;
   const money = (value: number) => `${baseCurrencySymbol} ${formatCurrency(value || 0)}`;
   const filters = useMemo<CashFlowReportFilters>(() => ({
     startDate: dateRange[0].startOf('day').toISOString(),
@@ -481,6 +681,14 @@ export default function CashFlowReport() {
     if (value !== 'CUSTOM') setDateRange(getDateRange(value));
   };
 
+  const handleResetFilters = () => {
+    setDateShortcut('THIS_MONTH');
+    setDateRange(getDateRange('THIS_MONTH'));
+    setCurrencyCode(baseCurrencyCode);
+    setClassification(CASH_FLOW_ALL_CLASSIFICATION);
+    setShowZeroBalance(false);
+  };
+
   if (reportQuery.isLoading) return <Loading />;
 
   if (reportQuery.error) {
@@ -496,14 +704,15 @@ export default function CashFlowReport() {
   }
 
   return (
-    <div className="space-y-4 p-3 sm:p-4 md:p-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
+    <div className={`space-y-4 p-3 sm:p-4 md:p-6${isMobile ? ' min-w-0 overflow-x-hidden' : ''}`}>
+      <div className={isMobile ? 'flex flex-col gap-3' : 'flex items-center justify-between gap-3'}>
+        <div className="min-w-0">
           <Title level={2} className="!mb-1">Laporan Arus Kas</Title>
           <Text type="secondary">Pantau arus kas masuk dan keluar per akun kas/bank.</Text>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className={isMobile ? 'flex w-full flex-col gap-2' : 'flex flex-wrap gap-2'}>
           <Button
+            className={isMobile ? 'w-full' : undefined}
             icon={<ReloadOutlined />}
             onClick={() => recalculateMutation.mutate()}
             loading={recalculateMutation.isPending}
@@ -512,6 +721,7 @@ export default function CashFlowReport() {
           </Button>
           <ExportActions
             buttonType="default"
+            buttonClassName={isMobile ? 'w-full' : undefined}
             disabled={groups.length === 0}
             formats={[
               { key: 'pdf', label: 'PDF', icon: <FilePdfOutlined />, onExport: handleExportPdf },
@@ -522,116 +732,224 @@ export default function CashFlowReport() {
         </div>
       </div>
 
-      <Card className="shadow-sm" styles={{ body: { padding: isMobile ? 12 : undefined } }}>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[260px_170px_220px_260px_180px]">
-          <div>
-            <Text strong>Periode</Text>
-            <DatePicker.RangePicker
-              className="mt-2 w-full"
-              value={dateRange}
-              format="YYYY-MM-DD"
-              presets={[
-                { label: 'Bulan Ini', value: getDateRange('THIS_MONTH') },
-                { label: 'Bulan Lalu', value: getDateRange('LAST_MONTH') },
-                { label: 'Tahun Ini', value: getDateRange('THIS_YEAR') },
-              ]}
-              onChange={(value) => {
-                if (!value?.[0] || !value?.[1]) return;
-                setDateShortcut('CUSTOM');
-                setDateRange([value[0], value[1]]);
-              }}
-            />
-          </div>
-          <div>
-            <Text strong>Shortcut</Text>
-            <Select
-              className="mt-2 w-full"
-              value={dateShortcut}
-              options={[
-                { value: 'THIS_MONTH', label: 'Bulan Ini' },
-                { value: 'LAST_MONTH', label: 'Bulan Lalu' },
-                { value: 'THIS_YEAR', label: 'Tahun Ini' },
-                { value: 'CUSTOM', label: 'Custom' },
-              ]}
-              onChange={handleShortcutChange}
-            />
-          </div>
-          <div>
-            <Text strong>Mata Uang</Text>
-            <Select
-              className="mt-2 w-full"
-              value={currencyCode}
-              options={[{ value: baseCurrencyCode, label: `${baseCurrencyCode} - ${baseCurrency.name}` }]}
-              onChange={setCurrencyCode}
-            />
-          </div>
-          <div>
-            <Text strong>Klasifikasi</Text>
-            <Select
-              showSearch
-              optionFilterProp="label"
-              className="mt-2 w-full"
-              value={classification}
-              options={classificationOptions}
-              onChange={setClassification}
-            />
-          </div>
-          <div className="flex items-end pb-1">
-            <Checkbox checked={showZeroBalance} onChange={(event) => setShowZeroBalance(event.target.checked)}>
-              Show zero balance
-            </Checkbox>
-          </div>
-        </div>
-      </Card>
-
-      <div style={{ overflowX: 'auto' }}>
-        <div
-          data-testid="cash-flow-report"
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e5e7eb',
-            color: '#111827',
-            fontFamily: 'Arial, sans-serif',
-            minWidth: 980,
-            padding: 24,
-          }}
-        >
-          <div style={{ borderBottom: '2px solid #111827', display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 18, paddingBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{companyName}</div>
-              <div style={{ color: '#4b5563', fontSize: 13, marginTop: 2 }}>Laporan Keuangan</div>
+      {!isMobile ? (
+        <Card className="shadow-sm" styles={{ body: { padding: isMobile ? 12 : undefined } }}>
+          <div className={isMobile ? 'grid grid-cols-1 gap-3' : 'grid grid-cols-[260px_170px_220px_260px_180px] gap-3'}>
+            <div className="min-w-0">
+              <Text strong>Periode</Text>
+              <DatePicker.RangePicker
+                className="mt-2 w-full"
+                style={{ maxWidth: '100%' }}
+                value={dateRange}
+                format="YYYY-MM-DD"
+                presets={[
+                  { label: 'Bulan Ini', value: getDateRange('THIS_MONTH') },
+                  { label: 'Bulan Lalu', value: getDateRange('LAST_MONTH') },
+                  { label: 'Tahun Ini', value: getDateRange('THIS_YEAR') },
+                ]}
+                onChange={(value) => {
+                  if (!value?.[0] || !value?.[1]) return;
+                  setDateShortcut('CUSTOM');
+                  setDateRange([value[0], value[1]]);
+                }}
+              />
             </div>
-            <div style={{ fontSize: 13, lineHeight: 1.6, textAlign: 'right', whiteSpace: 'nowrap' }}>
-              <div>Periode: {periodText}</div>
-              <div>Mata Uang: {currencyCode}</div>
-              <div>Tanggal Cetak: {printDateText}</div>
+            <div className="min-w-0">
+              <Text strong>Shortcut</Text>
+              <Select
+                className="mt-2 w-full"
+                value={dateShortcut}
+                options={[
+                  { value: 'THIS_MONTH', label: 'Bulan Ini' },
+                  { value: 'LAST_MONTH', label: 'Bulan Lalu' },
+                  { value: 'THIS_YEAR', label: 'Tahun Ini' },
+                  { value: 'CUSTOM', label: 'Custom' },
+                ]}
+                onChange={handleShortcutChange}
+              />
+            </div>
+            <div className="min-w-0">
+              <Text strong>Mata Uang</Text>
+              <Select
+                className="mt-2 w-full"
+                value={currencyCode}
+                options={[{ value: baseCurrencyCode, label: `${baseCurrencyCode} - ${baseCurrency.name}` }]}
+                onChange={setCurrencyCode}
+              />
+            </div>
+            <div className="min-w-0">
+              <Text strong>Klasifikasi</Text>
+              <Select
+                showSearch
+                optionFilterProp="label"
+                className="mt-2 w-full"
+                value={classification}
+                options={classificationOptions}
+                onChange={setClassification}
+              />
+            </div>
+            <div className="flex min-w-0 items-end pb-1">
+              <Checkbox checked={showZeroBalance} onChange={(event) => setShowZeroBalance(event.target.checked)}>
+                Show zero balance
+              </Checkbox>
             </div>
           </div>
+        </Card>
+      ) : (
+        <>
+          <MobileCrudFilterSheet
+            open={isFilterOpen}
+            title={t('common.filter')}
+            onClose={() => setIsFilterOpen(false)}
+            onReset={handleResetFilters}
+            resetLabel={t('common.reset')}
+            applyLabel={t('common.apply')}
+            resetDisabled={activeFilterCount === 0}
+            onApply={() => setIsFilterOpen(false)}
+            testId="cash-flow-filter-sheet"
+          >
+            <div className="space-y-3">
+              <div className="min-w-0">
+                <Text strong>Periode</Text>
+                <DatePicker.RangePicker
+                  className="mt-2 w-full"
+                  style={{ maxWidth: '100%' }}
+                  value={dateRange}
+                  format="YYYY-MM-DD"
+                  presets={[
+                    { label: 'Bulan Ini', value: getDateRange('THIS_MONTH') },
+                    { label: 'Bulan Lalu', value: getDateRange('LAST_MONTH') },
+                    { label: 'Tahun Ini', value: getDateRange('THIS_YEAR') },
+                  ]}
+                  onChange={(value) => {
+                    if (!value?.[0] || !value?.[1]) return;
+                    setDateShortcut('CUSTOM');
+                    setDateRange([value[0], value[1]]);
+                  }}
+                />
+              </div>
+              <div className="min-w-0">
+                <Text strong>Shortcut</Text>
+                <Select
+                  className="mt-2 w-full"
+                  value={dateShortcut}
+                  options={[
+                    { value: 'THIS_MONTH', label: 'Bulan Ini' },
+                    { value: 'LAST_MONTH', label: 'Bulan Lalu' },
+                    { value: 'THIS_YEAR', label: 'Tahun Ini' },
+                    { value: 'CUSTOM', label: 'Custom' },
+                  ]}
+                  onChange={handleShortcutChange}
+                />
+              </div>
+              <div className="min-w-0">
+                <Text strong>Mata Uang</Text>
+                <Select
+                  className="mt-2 w-full"
+                  value={currencyCode}
+                  options={[{ value: baseCurrencyCode, label: `${baseCurrencyCode} - ${baseCurrency.name}` }]}
+                  onChange={setCurrencyCode}
+                />
+              </div>
+              <div className="min-w-0">
+                <Text strong>Klasifikasi</Text>
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  className="mt-2 w-full"
+                  value={classification}
+                  options={classificationOptions}
+                  onChange={setClassification}
+                />
+              </div>
+              <div className="min-w-0 py-1">
+                <Checkbox checked={showZeroBalance} onChange={(event) => setShowZeroBalance(event.target.checked)}>
+                  Show zero balance
+                </Checkbox>
+              </div>
+            </div>
+          </MobileCrudFilterSheet>
+          <MobileCrudFloatingActions
+            actions={[
+              {
+                key: 'filter',
+                icon: <FilterOutlined />,
+                label: t('common.filter'),
+                badge: { count: activeFilterCount, color: '#fa8c16' },
+                testId: 'cash-flow-filter-fab',
+                onClick: () => setIsFilterOpen(true),
+              },
+            ]}
+          />
+        </>
+      )}
 
-          <div style={{ marginBottom: 18, textAlign: 'center' }}>
-            <div style={{ fontSize: 18, fontWeight: 700, textTransform: 'uppercase' }}>Laporan Arus Kas</div>
-            <div style={{ color: '#4b5563', fontSize: 13, marginTop: 4 }}>{classificationText}</div>
-          </div>
-
-          <div style={{ border: '1px solid #111827', display: 'grid', gridTemplateColumns: '1fr 180px 180px 180px', marginBottom: 18 }}>
-            <div style={{ fontWeight: 700, padding: '10px 12px' }}>Total</div>
-            <div style={{ fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>{money(totals.cashIn)}</div>
-            <div style={{ fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>{money(totals.cashOut)}</div>
-            <div style={{ color: totals.net < 0 ? '#dc2626' : '#111827', fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>{money(totals.net)}</div>
-          </div>
-
-          {groups.length === 0 ? (
-            <div style={{ border: '1px solid #d1d5db', padding: 16, textAlign: 'center' }}>Belum ada transaksi arus kas untuk filter ini.</div>
-          ) : groups.map((group) => (
-            <CashFlowGroupSection
-              key={group.key}
-              group={group}
-              formatCategory={formatCategory}
-              money={money}
-            />
-          ))}
+      {isMobile ? (
+        <div data-testid="cash-flow-report" style={{ maxWidth: '100%', minWidth: 0, width: '100%' }}>
+          <CashFlowMobileReport
+            companyName={companyName}
+            periodText={periodText}
+            currencyCode={currencyCode}
+            printDateText={printDateText}
+            classificationText={classificationText}
+            totals={totals}
+            groups={groups}
+            formatCategory={formatCategory}
+            money={money}
+          />
         </div>
-      </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <div
+            data-testid="cash-flow-report"
+            style={{
+              background: '#ffffff',
+              border: '1px solid #e5e7eb',
+              color: '#111827',
+              fontFamily: 'Arial, sans-serif',
+              minWidth: 980,
+              padding: 24,
+            }}
+          >
+            <div data-testid="cash-flow-report-desktop">
+              <div style={{ borderBottom: '2px solid #111827', display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 18, paddingBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>{companyName}</div>
+                  <div style={{ color: '#4b5563', fontSize: 13, marginTop: 2 }}>Laporan Keuangan</div>
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.6, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <div>Periode: {periodText}</div>
+                  <div>Mata Uang: {currencyCode}</div>
+                  <div>Tanggal Cetak: {printDateText}</div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 18, textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 700, textTransform: 'uppercase' }}>Laporan Arus Kas</div>
+                <div style={{ color: '#4b5563', fontSize: 13, marginTop: 4 }}>{classificationText}</div>
+              </div>
+
+              <div style={{ border: '1px solid #111827', display: 'grid', gridTemplateColumns: '1fr 180px 180px 180px', marginBottom: 18 }}>
+                <div style={{ fontWeight: 700, padding: '10px 12px' }}>Total</div>
+                <div style={{ fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>{money(totals.cashIn)}</div>
+                <div style={{ fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>{money(totals.cashOut)}</div>
+                <div style={{ color: totals.net < 0 ? '#dc2626' : '#111827', fontWeight: 700, padding: '10px 12px', textAlign: 'right' }}>{money(totals.net)}</div>
+              </div>
+
+              {groups.length === 0 ? (
+                <div style={{ border: '1px solid #d1d5db', padding: 16, textAlign: 'center' }}>Belum ada transaksi arus kas untuk filter ini.</div>
+              ) : groups.map((group) => (
+                <CashFlowGroupSection
+                  key={group.key}
+                  group={group}
+                  formatCategory={formatCategory}
+                  money={money}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
