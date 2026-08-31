@@ -1,6 +1,12 @@
+-- budget_id references budgets(id) at the application level only (validated in
+-- budgetCommitmentService.ts), not a hard DB constraint - matching this project's pattern for
+-- cross-entity references (e.g. financeTransactions.category). budgets and budget_commitments
+-- sync as two independent sync-queue items rather than one atomic bundle, so a hard FK here would
+-- let a transient failure pushing a brand-new budget cascade into a foreign-key-violation failure
+-- for its commitments too.
 CREATE TABLE IF NOT EXISTS budget_commitments (
     id TEXT PRIMARY KEY,
-    budget_id TEXT NOT NULL REFERENCES budgets(id),
+    budget_id TEXT NOT NULL,
     description TEXT NOT NULL,
     amount DOUBLE PRECISION NOT NULL,
     status TEXT NOT NULL DEFAULT 'PLANNED',

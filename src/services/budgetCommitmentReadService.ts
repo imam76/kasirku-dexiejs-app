@@ -8,6 +8,7 @@ export interface BudgetCommitmentReadSyncResult {
   inserted: number;
   updated: number;
   skipped: number;
+  deleted: number;
 }
 
 const EMPTY_BUDGET_COMMITMENT_READ_SYNC_RESULT: BudgetCommitmentReadSyncResult = {
@@ -15,6 +16,7 @@ const EMPTY_BUDGET_COMMITMENT_READ_SYNC_RESULT: BudgetCommitmentReadSyncResult =
   inserted: 0,
   updated: 0,
   skipped: 0,
+  deleted: 0,
 };
 
 let isRefreshingBudgetCommitmentsFromPostgres = false;
@@ -74,15 +76,45 @@ const canReadFromPostgres = () => (
   (typeof navigator === 'undefined' || navigator.onLine)
 );
 
+/**
+ * Prunes local commitments that no longer exist remotely. Only safe to call with a full,
+ * unfiltered snapshot of the remote table (which is what budgetCommitmentPostgresAdapter.list()
+ * always returns - no pagination/date filtering) - a partial/incremental payload would make
+ * "absent from this batch" meaningless as a deletion signal.
+ *
+ * budget_commitments is hard-deleted server-side (no deleted_at tombstone, see
+ * 0091_budget_commitments.sql), so a row removed by another device would otherwise never
+ * disappear from this device's Dexie copy: the upsert-only merge below has no other way to learn
+ * a row is gone. Only rows already confirmed synced are eligible - a local 'pending'/'failed'
+ * commitment is either not pushed yet or has local edits in flight, so its absence from the
+ * remote snapshot says nothing about deletion.
+ */
+const pruneLocalBudgetCommitmentsDeletedRemotely = async (
+  remoteBudgetCommitments: RemoteBudgetCommitmentDto[],
+): Promise<number> => {
+  const remoteIds = new Set(remoteBudgetCommitments.map((commitment) => commitment.id));
+  const localCommitments = await db.budgetCommitments.toArray();
+  const idsToRemove = localCommitments
+    .filter((commitment) => commitment.sync_status === 'synced' && !remoteIds.has(commitment.id))
+    .map((commitment) => commitment.id);
+
+  if (idsToRemove.length > 0) {
+    await db.budgetCommitments.bulkDelete(idsToRemove);
+  }
+
+  return idsToRemove.length;
+};
+
 export const mergeRemoteBudgetCommitmentsIntoDexie = async (
   remoteBudgetCommitments: RemoteBudgetCommitmentDto[],
   syncedAt = new Date().toISOString(),
+  options: { isFullSnapshot?: boolean } = {},
 ): Promise<BudgetCommitmentReadSyncResult> => {
   const result: BudgetCommitmentReadSyncResult = {
     ...EMPTY_BUDGET_COMMITMENT_READ_SYNC_RESULT,
     fetched: remoteBudgetCommitments.length,
   };
-  if (remoteBudgetCommitments.length === 0) return result;
+  if (remoteBudgetCommitments.length === 0 && !options.isFullSnapshot) return result;
 
   const commitmentsToPut: BudgetCommitment[] = [];
 
@@ -105,6 +137,10 @@ export const mergeRemoteBudgetCommitmentsIntoDexie = async (
     if (commitmentsToPut.length > 0) {
       await db.budgetCommitments.bulkPut(commitmentsToPut);
     }
+
+    if (options.isFullSnapshot) {
+      result.deleted = await pruneLocalBudgetCommitmentsDeletedRemotely(remoteBudgetCommitments);
+    }
   });
 
   return result;
@@ -118,7 +154,7 @@ export const refreshBudgetCommitmentsFromPostgres = async (): Promise<BudgetComm
   isRefreshingBudgetCommitmentsFromPostgres = true;
   try {
     const remoteBudgetCommitments = await budgetCommitmentPostgresAdapter.list();
-    return mergeRemoteBudgetCommitmentsIntoDexie(remoteBudgetCommitments);
+    return mergeRemoteBudgetCommitmentsIntoDexie(remoteBudgetCommitments, undefined, { isFullSnapshot: true });
   } finally {
     isRefreshingBudgetCommitmentsFromPostgres = false;
   }

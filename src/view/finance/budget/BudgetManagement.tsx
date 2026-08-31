@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { App, Button, Card, DatePicker, Form, Input, Progress, Segmented, Select, Tag } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { Edit2, Archive, ListChecks, PiggyBank, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Edit2, Archive, ListChecks, Wallet2, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb';
 import {
   MobileCrudPageHeader,
@@ -239,7 +239,7 @@ export default function BudgetManagement() {
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="flex min-w-0 items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-              <PiggyBank aria-hidden size={20} />
+              <Wallet2 aria-hidden size={20} />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[15px] font-bold">{budget.name}</span>
@@ -281,7 +281,7 @@ export default function BudgetManagement() {
         <MobileCrudPageHeader
           testId="mobile-budget-page-header"
           title={t('budget.title')}
-          icon={<PiggyBank aria-hidden className="h-5 w-5 shrink-0" />}
+          icon={<Wallet2 aria-hidden className="h-5 w-5 shrink-0" />}
           breadcrumb={<GlobalBreadcrumb pathname="/finance/budget" compact />}
         />
       ) : null}
@@ -292,7 +292,7 @@ export default function BudgetManagement() {
         styles={isMobile ? { body: { padding: 0 } } : undefined}
         title={!isMobile ? (
           <div className="flex items-center gap-2">
-            <PiggyBank className="h-5 w-5" />
+            <Wallet2 className="h-5 w-5" />
             {t('budget.title')}
           </div>
         ) : undefined}
