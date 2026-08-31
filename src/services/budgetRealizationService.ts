@@ -45,23 +45,29 @@ const getBudgetStatus = (
   return 'SAFE';
 };
 
-export const getBudgetRealization = (
-  budget: Budget,
+export const getBudgetMatchingTransactions = (
+  budget: Pick<Budget, 'budget_type' | 'category' | 'period_type' | 'period_key'>,
   transactions: FinanceTransaction[],
-  commitments: BudgetCommitment[],
-): BudgetRealization => {
+): FinanceTransaction[] => {
   const { start, end } = getBudgetPeriodRange(budget);
   const isEligibleTransaction = budget.budget_type === 'EXPENSE'
     ? isExpenseReportFinanceTransaction
     : isIncomeReportFinanceTransaction;
 
-  const actualAmount = transactions.reduce((total, transaction) => {
-    if (transaction.category !== budget.category) return total;
-    if (!isEligibleTransaction(transaction)) return total;
-    if (!isWithinPeriod(transaction.created_at, start, end)) return total;
+  return transactions.filter((transaction) => (
+    transaction.category === budget.category
+    && isEligibleTransaction(transaction)
+    && isWithinPeriod(transaction.created_at, start, end)
+  ));
+};
 
-    return total + transaction.amount;
-  }, 0);
+export const getBudgetRealization = (
+  budget: Budget,
+  transactions: FinanceTransaction[],
+  commitments: BudgetCommitment[],
+): BudgetRealization => {
+  const actualAmount = getBudgetMatchingTransactions(budget, transactions)
+    .reduce((total, transaction) => total + transaction.amount, 0);
 
   const committedAmount = commitments.reduce((total, commitment) => {
     if (commitment.budget_id !== budget.id) return total;

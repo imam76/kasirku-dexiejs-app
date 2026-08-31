@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { App, Button, Empty, Form, Tag, Tooltip, Typography } from 'antd';
-import { Edit2, Plus, Trash2 } from 'lucide-react';
+import { Edit2, Plus, Printer, Trash2 } from 'lucide-react';
 import { ResponsiveCrudEditor, MobileCrudList, type MobileCrudAction } from '@/components/mobile-crud';
 import { useBudgetCommitments } from '@/hooks/useBudgetCommitments';
+import { useCashBankTransfer } from '@/hooks/useCashBankTransfer';
 import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { BudgetRealization } from '@/services/budgetRealizationService';
 import type { Budget, BudgetCommitment } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
+import FinanceTransactionModal, { type FinanceTransactionFormValues } from '@/view/finance/FinanceTransactionModal';
 import BudgetCommitmentFormModal, { type BudgetCommitmentFormValues } from './BudgetCommitmentFormModal';
 import BudgetCommitmentTable from './BudgetCommitmentTable';
+import BudgetReportModal from './BudgetReportModal';
 import { BUDGET_COMMITMENT_STATUS_COLOR, BUDGET_COMMITMENT_STATUS_LABEL_KEY } from './budgetFormatters';
 
 const { Text } = Typography;
@@ -34,6 +37,11 @@ export default function BudgetCommitmentDrawer({
   const isMobile = useIsMobile();
   const [form] = Form.useForm<BudgetCommitmentFormValues>();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [realizeTarget, setRealizeTarget] = useState<{
+    commitment: BudgetCommitment;
+    initialValues: Partial<FinanceTransactionFormValues>;
+  } | null>(null);
 
   const {
     commitments,
@@ -43,10 +51,12 @@ export default function BudgetCommitmentDrawer({
     resetForm,
     submitForm,
     deleteCommitment,
-    markRealized,
+    realizeWithTransaction,
+    isRealizing,
     cancelCommitment,
     isSubmitting,
   } = useBudgetCommitments(budget?.id);
+  const { cashBankAccounts } = useCashBankTransfer();
 
   const closeForm = () => {
     setIsFormOpen(false);
@@ -83,9 +93,34 @@ export default function BudgetCommitmentDrawer({
     }
   };
 
-  const handleMarkRealized = async (commitment: BudgetCommitment) => {
+  const handleMarkRealized = (commitment: BudgetCommitment) => {
+    if (!budget) return;
+    // Snapshot the prefill values once, at click time, into state - FinanceTransactionModal
+    // re-applies `initialValues` whenever the reference changes, so deriving this reactively from
+    // the `budget`/commitments live-query data would reset in-progress edits if either happens to
+    // re-render (with an unchanged but newly-referenced value) while the modal is open.
+    setRealizeTarget({
+      commitment,
+      initialValues: {
+        amount: commitment.amount,
+        category: budget.category,
+        description: commitment.description,
+      },
+    });
+  };
+
+  const closeRealizeModal = () => setRealizeTarget(null);
+
+  const handleRealizeSubmit = async (values: FinanceTransactionFormValues) => {
+    if (!realizeTarget || !budget) return;
     try {
-      await markRealized(commitment);
+      await realizeWithTransaction({
+        commitment: realizeTarget.commitment,
+        transactionType: budget.budget_type,
+        transaction: values,
+      });
+      message.success(t('budget.commitment.realizeSuccess'));
+      closeRealizeModal();
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('budget.commitment.markRealizedFailed'));
     }
@@ -188,13 +223,18 @@ export default function BudgetCommitmentDrawer({
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Text type="secondary" className="text-xs">{t('budget.commitment.title')}</Text>
-            {addDisabled ? (
-              <Tooltip title={t('budget.commitment.disabledForInactiveBudget')}>
-                <span>{addButton}</span>
-              </Tooltip>
-            ) : addButton}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button icon={<Printer size={16} />} onClick={() => setIsReportOpen(true)}>
+                {t('budget.report.button')}
+              </Button>
+              {addDisabled ? (
+                <Tooltip title={t('budget.commitment.disabledForInactiveBudget')}>
+                  <span>{addButton}</span>
+                </Tooltip>
+              ) : addButton}
+            </div>
           </div>
 
           {isMobile ? (
@@ -269,6 +309,24 @@ export default function BudgetCommitmentDrawer({
         isSubmitting={isSubmitting}
         onCancel={closeForm}
         onSubmit={handleSubmit}
+      />
+
+      <FinanceTransactionModal
+        open={Boolean(realizeTarget)}
+        type={budget.budget_type}
+        accounts={cashBankAccounts}
+        initialValues={realizeTarget?.initialValues}
+        title={realizeTarget ? t('budget.commitment.realizeModalTitle', { description: realizeTarget.commitment.description }) : undefined}
+        onCancel={closeRealizeModal}
+        onSubmit={handleRealizeSubmit}
+        submitting={isRealizing}
+      />
+
+      <BudgetReportModal
+        open={isReportOpen}
+        budget={budget}
+        commitments={commitments}
+        onClose={() => setIsReportOpen(false)}
       />
     </>
   );

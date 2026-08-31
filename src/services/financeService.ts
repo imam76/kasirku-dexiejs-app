@@ -25,6 +25,7 @@ interface AddFinanceTransactionInput {
   payment_method?: PaymentMethod;
   payment_channel?: string;
   cash_account_id?: string;
+  reference_id?: string;
 }
 
 export const addFinanceTransaction = async ({
@@ -35,6 +36,7 @@ export const addFinanceTransaction = async ({
   payment_method,
   payment_channel,
   cash_account_id,
+  reference_id,
 }: AddFinanceTransactionInput) => {
   const currentUser = await getCurrentSessionUser();
   requireRolePermission(currentUser?.role, 'FINANCE_ACCESS');
@@ -87,6 +89,7 @@ export const addFinanceTransaction = async ({
       amount,
       description,
       created_at: now,
+      reference_id,
       payment_method: paymentMethod,
       payment_channel,
       cash_account_id: cashAccount.id,

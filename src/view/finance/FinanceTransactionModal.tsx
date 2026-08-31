@@ -22,6 +22,10 @@ interface FinanceTransactionModalProps {
   onCancel: () => void;
   onSubmit: (values: FinanceTransactionFormValues) => Promise<void>;
   submitting?: boolean;
+  /** Overrides the type-based defaults below (e.g. prefilling from a budget commitment being realized). */
+  initialValues?: Partial<FinanceTransactionFormValues>;
+  /** Overrides the type-based title below. */
+  title?: string;
 }
 
 const getDefaultCashAccountId = (
@@ -44,6 +48,8 @@ export default function FinanceTransactionModal({
   onCancel,
   onSubmit,
   submitting = false,
+  initialValues,
+  title,
 }: FinanceTransactionModalProps) {
   const { t } = useI18n();
   const [form] = Form.useForm<FinanceTransactionFormValues>();
@@ -74,8 +80,8 @@ export default function FinanceTransactionModal({
       defaultValues.description = '';
     }
 
-    form.setFieldsValue(defaultValues);
-  }, [accounts, form, open, t, type]);
+    form.setFieldsValue({ ...defaultValues, ...initialValues });
+  }, [accounts, form, open, t, type, initialValues]);
 
   const handlePaymentMethodChange = (paymentMethod: PaymentMethod) => {
     form.setFieldsValue({
@@ -94,11 +100,11 @@ export default function FinanceTransactionModal({
 
   return (
     <Modal
-      title={
+      title={title ?? (
         type === 'OPENING_BALANCE' ? t('finance.addBalanceCapital') :
           type === 'INCOME' ? t('finance.addManualIncome') :
             t('finance.recordExpense')
-      }
+      )}
       open={open}
       onCancel={onCancel}
       footer={null}

@@ -116,7 +116,26 @@ export const budgetMessages = {
         'budget.commitment.markRealizedFailed': 'Gagal menandai komitmen sebagai direalisasikan.',
         'budget.commitment.cancelFailed': 'Gagal membatalkan komitmen.',
 
+        'budget.commitment.realizeModalTitle': 'Realisasikan: {description}',
+        'budget.commitment.realizeSuccess': 'Transaksi dicatat dan komitmen ditandai direalisasikan.',
+
         'budget.commitment.mobile.actionsAria': 'Aksi komitmen {description}',
+
+        'budget.report.button': 'Cetak Laporan',
+        'budget.report.subtitle': 'Laporan realisasi anggaran',
+        'budget.report.title': 'Laporan Anggaran',
+        'budget.report.projectedStatusLabel': 'Status Proyeksi',
+        'budget.report.realizedTransactionsTitle': 'Transaksi Terealisasi',
+        'budget.report.plannedCommitmentsTitle': 'Belum Terealisasi (Direncanakan)',
+        'budget.report.cancelledCommitmentsTitle': 'Komitmen Dibatalkan',
+        'budget.report.noRealizedTransactions': 'Belum ada transaksi terealisasi untuk anggaran ini.',
+        'budget.report.noPlannedCommitments': 'Tidak ada komitmen yang masih direncanakan.',
+        'budget.report.exportPdfSuccess': 'Laporan anggaran berhasil diekspor sebagai PDF.',
+        'budget.report.exportPdfFailed': 'Gagal mengekspor laporan anggaran sebagai PDF.',
+        'budget.report.exportHtmlSuccess': 'Laporan anggaran berhasil diekspor sebagai HTML.',
+        'budget.report.exportHtmlFailed': 'Gagal mengekspor laporan anggaran sebagai HTML.',
+        'budget.report.exportExcelSuccess': 'Laporan anggaran berhasil diekspor sebagai Excel.',
+        'budget.report.exportExcelFailed': 'Gagal mengekspor laporan anggaran sebagai Excel.',
     },
     en: {
         'budget.title': 'Budget',
@@ -235,6 +254,25 @@ export const budgetMessages = {
         'budget.commitment.markRealizedFailed': 'Failed to mark commitment as realized.',
         'budget.commitment.cancelFailed': 'Failed to cancel commitment.',
 
+        'budget.commitment.realizeModalTitle': 'Realize: {description}',
+        'budget.commitment.realizeSuccess': 'Transaction recorded and commitment marked realized.',
+
         'budget.commitment.mobile.actionsAria': 'Actions for commitment {description}',
+
+        'budget.report.button': 'Print Report',
+        'budget.report.subtitle': 'Budget realization report',
+        'budget.report.title': 'Budget Report',
+        'budget.report.projectedStatusLabel': 'Projected Status',
+        'budget.report.realizedTransactionsTitle': 'Realized Transactions',
+        'budget.report.plannedCommitmentsTitle': 'Not Yet Realized (Planned)',
+        'budget.report.cancelledCommitmentsTitle': 'Cancelled Commitments',
+        'budget.report.noRealizedTransactions': 'No realized transactions for this budget yet.',
+        'budget.report.noPlannedCommitments': 'No commitments still planned.',
+        'budget.report.exportPdfSuccess': 'Budget report exported as PDF successfully.',
+        'budget.report.exportPdfFailed': 'Failed to export budget report as PDF.',
+        'budget.report.exportHtmlSuccess': 'Budget report exported as HTML successfully.',
+        'budget.report.exportHtmlFailed': 'Failed to export budget report as HTML.',
+        'budget.report.exportExcelSuccess': 'Budget report exported as Excel successfully.',
+        'budget.report.exportExcelFailed': 'Failed to export budget report as Excel.',
     },
 };
