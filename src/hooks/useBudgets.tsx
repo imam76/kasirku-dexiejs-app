@@ -10,6 +10,7 @@ import {
   type BudgetUpsertInput,
 } from '@/services/budgetService';
 import { getBudgetRealization, type BudgetRealization } from '@/services/budgetRealizationService';
+import { useAllBudgetCommitments } from '@/hooks/useBudgetCommitments';
 import type { Budget, BudgetPeriodType, BudgetTransactionType } from '@/types';
 
 export type BudgetTypeFilter = BudgetTransactionType | 'ALL';
@@ -28,7 +29,7 @@ export const useBudgets = () => {
   const queryClient = useQueryClient();
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [searchText, setSearchText] = useState('');
-  const [periodTypeFilter, setPeriodTypeFilter] = useState<BudgetPeriodTypeFilter>('MONTHLY');
+  const [periodTypeFilter, setPeriodTypeFilter] = useState<BudgetPeriodTypeFilter>('ALL');
   const [periodKeyFilter, setPeriodKeyFilter] = useState(getCurrentMonthPeriodKey());
   const [typeFilter, setTypeFilter] = useState<BudgetTypeFilter>('ALL');
   const [activeFilter, setActiveFilter] = useState<BudgetActiveFilter>('active');
@@ -45,14 +46,17 @@ export const useBudgets = () => {
     queryFn: async () => db.financeTransactions.orderBy('created_at').reverse().toArray(),
   });
 
+  const queriedCommitments = useAllBudgetCommitments();
+  const commitments = useMemo(() => queriedCommitments ?? [], [queriedCommitments]);
+
   const budgetsWithRealization = useMemo<BudgetRealization[]>(
     () => budgets
       .slice()
       .sort((a, b) => (
         a.period_key === b.period_key ? a.name.localeCompare(b.name) : b.period_key.localeCompare(a.period_key)
       ))
-      .map((budget) => getBudgetRealization(budget, transactions)),
-    [budgets, transactions],
+      .map((budget) => getBudgetRealization(budget, transactions, commitments)),
+    [budgets, transactions, commitments],
   );
 
   const changePeriodTypeFilter = (nextPeriodType: BudgetPeriodTypeFilter) => {

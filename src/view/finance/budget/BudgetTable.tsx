@@ -1,12 +1,17 @@
 import { Button, Progress, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Archive, Edit2, RotateCcw } from 'lucide-react';
+import { Archive, Edit2, ListChecks, RotateCcw } from 'lucide-react';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
 import { useI18n } from '@/hooks/useI18n';
 import type { Budget } from '@/types';
 import type { BudgetRealization } from '@/services/budgetRealizationService';
 import { formatCurrency } from '@/utils/formatters';
-import { BUDGET_STATUS_COLOR, BUDGET_STATUS_LABEL_KEY, formatBudgetPeriodLabel } from './budgetFormatters';
+import {
+  BUDGET_STATUS_COLOR,
+  BUDGET_STATUS_LABEL_KEY,
+  PROJECTED_BUDGET_STATUS_LABEL_KEY,
+  formatBudgetPeriodLabel,
+} from './budgetFormatters';
 
 const { Text } = Typography;
 
@@ -16,6 +21,7 @@ interface BudgetTableProps {
   onEdit: (budget: Budget) => void;
   onArchive: (budget: Budget) => void;
   onRestore: (budget: Budget) => void;
+  onViewCommitments: (budget: Budget) => void;
 }
 
 export default function BudgetTable({
@@ -24,6 +30,7 @@ export default function BudgetTable({
   onEdit,
   onArchive,
   onRestore,
+  onViewCommitments,
 }: BudgetTableProps) {
   const { t } = useI18n();
 
@@ -90,9 +97,16 @@ export default function BudgetTable({
       title: t('budget.table.status'),
       key: 'status',
       render: (_value, realization) => (
-        <Tag color={BUDGET_STATUS_COLOR[realization.status]}>
-          {t(BUDGET_STATUS_LABEL_KEY[realization.status])}
-        </Tag>
+        <Space orientation="vertical" size={4}>
+          <Tag color={BUDGET_STATUS_COLOR[realization.status]}>
+            {t(BUDGET_STATUS_LABEL_KEY[realization.status])}
+          </Tag>
+          {realization.committed_amount > 0 ? (
+            <Tag color={BUDGET_STATUS_COLOR[realization.projected_status]}>
+              {t('budget.projectedStatus.badge', { status: t(PROJECTED_BUDGET_STATUS_LABEL_KEY[realization.projected_status]) })}
+            </Tag>
+          ) : null}
+        </Space>
       ),
     },
     {
@@ -102,6 +116,9 @@ export default function BudgetTable({
         <Space wrap>
           <Button type="text" icon={<Edit2 size={16} />} onClick={() => onEdit(realization.budget)}>
             {t('budget.edit')}
+          </Button>
+          <Button type="text" icon={<ListChecks size={16} />} onClick={() => onViewCommitments(realization.budget)}>
+            {t('budget.commitment.view')}
           </Button>
           {realization.budget.is_active ? (
             <Button danger type="text" icon={<Archive size={16} />} onClick={() => onArchive(realization.budget)}>

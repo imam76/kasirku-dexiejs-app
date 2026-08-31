@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { App, Button, Card, DatePicker, Form, Input, Progress, Segmented, Select, Tag } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { Edit2, Archive, PiggyBank, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Edit2, Archive, ListChecks, PiggyBank, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb';
 import {
   MobileCrudPageHeader,
@@ -11,7 +11,6 @@ import {
 import dayjs from '@/lib/dayjs';
 import { getFinanceCategoryLabel } from '@/i18n/finance';
 import {
-  getCurrentMonthPeriodKey,
   useBudgets,
   type BudgetActiveFilter,
   type BudgetPeriodTypeFilter,
@@ -24,9 +23,15 @@ import type { Budget } from '@/types';
 import type { BudgetRealization } from '@/services/budgetRealizationService';
 import type { BudgetUpsertInput } from '@/services/budgetService';
 import { formatCurrency } from '@/utils/formatters';
+import BudgetCommitmentDrawer from './BudgetCommitmentDrawer';
 import BudgetFormModal, { type BudgetFormValues } from './BudgetFormModal';
 import BudgetTable from './BudgetTable';
-import { BUDGET_STATUS_COLOR, BUDGET_STATUS_LABEL_KEY, formatBudgetPeriodLabel } from './budgetFormatters';
+import {
+  BUDGET_STATUS_COLOR,
+  BUDGET_STATUS_LABEL_KEY,
+  PROJECTED_BUDGET_STATUS_LABEL_KEY,
+  formatBudgetPeriodLabel,
+} from './budgetFormatters';
 
 export default function BudgetManagement() {
   const { message, modal } = App.useApp();
@@ -35,9 +40,11 @@ export default function BudgetManagement() {
   const [form] = Form.useForm<BudgetFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [viewingCommitmentsBudget, setViewingCommitmentsBudget] = useState<Budget | null>(null);
   const {
     budgets,
     isLoading,
+    budgetsWithRealization,
     filteredBudgetsWithRealization,
     editingBudget,
     searchText,
@@ -65,12 +72,12 @@ export default function BudgetManagement() {
     typeFilter !== 'ALL',
     activeFilter !== 'active',
     statusFilter !== 'ALL',
-    periodTypeFilter !== 'MONTHLY' || periodKeyFilter !== getCurrentMonthPeriodKey(),
+    periodTypeFilter !== 'ALL',
   ].filter(Boolean).length;
 
   const resetFilters = () => {
     setSearchText('');
-    setPeriodTypeFilter('MONTHLY');
+    setPeriodTypeFilter('ALL');
     setTypeFilter('ALL');
     setActiveFilter('active');
     setStatusFilter('ALL');
@@ -241,9 +248,16 @@ export default function BudgetManagement() {
               </span>
             </span>
           </div>
-          <Tag className="m-0 shrink-0" color={BUDGET_STATUS_COLOR[realization.status]}>
-            {t(BUDGET_STATUS_LABEL_KEY[realization.status])}
-          </Tag>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <Tag className="m-0" color={BUDGET_STATUS_COLOR[realization.status]}>
+              {t(BUDGET_STATUS_LABEL_KEY[realization.status])}
+            </Tag>
+            {realization.committed_amount > 0 ? (
+              <Tag className="m-0" color={BUDGET_STATUS_COLOR[realization.projected_status]}>
+                {t('budget.projectedStatus.badge', { status: t(PROJECTED_BUDGET_STATUS_LABEL_KEY[realization.projected_status]) })}
+              </Tag>
+            ) : null}
+          </div>
         </div>
 
         <Progress
@@ -298,6 +312,7 @@ export default function BudgetManagement() {
                 onEdit={openEditModal}
                 onArchive={handleArchive}
                 onRestore={handleRestore}
+                onViewCommitments={setViewingCommitmentsBudget}
               />
             </>
           )}
@@ -341,6 +356,12 @@ export default function BudgetManagement() {
                 label: t('budget.edit'),
                 icon: <Edit2 aria-hidden size={19} />,
                 onSelect: (item) => openEditModal(item.budget),
+              },
+              {
+                key: 'viewCommitments',
+                label: t('budget.commitment.view'),
+                icon: <ListChecks aria-hidden size={19} />,
+                onSelect: (item) => setViewingCommitmentsBudget(item.budget),
               },
               realization.budget.is_active ? {
                 key: 'archive',
@@ -387,6 +408,17 @@ export default function BudgetManagement() {
           isSubmitting={isSubmitting}
           onCancel={closeModal}
           onSubmit={handleSubmit}
+        />
+
+        <BudgetCommitmentDrawer
+          open={Boolean(viewingCommitmentsBudget)}
+          budget={viewingCommitmentsBudget}
+          realization={
+            viewingCommitmentsBudget
+              ? budgetsWithRealization.find((realization) => realization.budget.id === viewingCommitmentsBudget.id) ?? null
+              : null
+          }
+          onClose={() => setViewingCommitmentsBudget(null)}
         />
       </Card>
     </>

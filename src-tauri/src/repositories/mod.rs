@@ -5,6 +5,7 @@ pub mod app_instance_repository;
 pub mod app_setup_config_repository;
 pub mod auth_repository;
 pub mod budget_repository;
+pub mod budget_commitment_repository;
 pub mod cash_bank_reconciliation_repository;
 pub mod cashier_session_repository;
 pub mod chart_of_account_repository;

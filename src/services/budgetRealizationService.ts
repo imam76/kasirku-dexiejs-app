@@ -1,12 +1,16 @@
 import { isExpenseReportFinanceTransaction, isIncomeReportFinanceTransaction } from '@/constants/finance';
-import type { Budget, FinanceTransaction } from '@/types';
+import type { Budget, BudgetCommitment, FinanceTransaction } from '@/types';
 
 export interface BudgetRealization {
   budget: Budget;
   actual_amount: number;
+  committed_amount: number;
+  available_amount: number;
   remaining_amount: number;
   usage_percent: number;
   status: 'SAFE' | 'WARNING' | 'OVER';
+  projected_usage_percent: number;
+  projected_status: 'SAFE' | 'WARNING' | 'OVER';
 }
 
 const getBudgetPeriodRange = (budget: Pick<Budget, 'period_type' | 'period_key'>) => {
@@ -44,6 +48,7 @@ const getBudgetStatus = (
 export const getBudgetRealization = (
   budget: Budget,
   transactions: FinanceTransaction[],
+  commitments: BudgetCommitment[],
 ): BudgetRealization => {
   const { start, end } = getBudgetPeriodRange(budget);
   const isEligibleTransaction = budget.budget_type === 'EXPENSE'
@@ -58,15 +63,31 @@ export const getBudgetRealization = (
     return total + transaction.amount;
   }, 0);
 
+  const committedAmount = commitments.reduce((total, commitment) => {
+    if (commitment.budget_id !== budget.id) return total;
+    if (commitment.status !== 'PLANNED') return total;
+
+    return total + commitment.amount;
+  }, 0);
+
   const usagePercent = budget.planned_amount > 0
     ? (actualAmount / budget.planned_amount) * 100
     : (actualAmount > 0 ? 100 : 0);
 
+  const projectedAmount = actualAmount + committedAmount;
+  const projectedUsagePercent = budget.planned_amount > 0
+    ? (projectedAmount / budget.planned_amount) * 100
+    : (projectedAmount > 0 ? 100 : 0);
+
   return {
     budget,
     actual_amount: actualAmount,
+    committed_amount: committedAmount,
+    available_amount: budget.planned_amount - actualAmount - committedAmount,
     remaining_amount: budget.planned_amount - actualAmount,
     usage_percent: usagePercent,
     status: getBudgetStatus(usagePercent, budget.warning_threshold_percent),
+    projected_usage_percent: projectedUsagePercent,
+    projected_status: getBudgetStatus(projectedUsagePercent, budget.warning_threshold_percent),
   };
 };

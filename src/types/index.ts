@@ -617,6 +617,7 @@ export type DepartmentSyncStatus = EntitySyncStatus;
 export type ProductSyncStatus = EntitySyncStatus;
 export type ProjectSyncStatus = EntitySyncStatus;
 export type BudgetSyncStatus = EntitySyncStatus;
+export type BudgetCommitmentSyncStatus = EntitySyncStatus;
 export type PurchaseDocumentSyncStatus = EntitySyncStatus;
 export type PurchaseCostReconciliationSyncStatus = EntitySyncStatus;
 export type SalesDocumentSyncStatus = EntitySyncStatus;
@@ -3903,6 +3904,24 @@ export interface Budget {
   created_at: string;
   updated_at: string;
   sync_status?: BudgetSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
+}
+
+export type BudgetCommitmentStatus = 'PLANNED' | 'REALIZED' | 'CANCELLED';
+
+export interface BudgetCommitment {
+  id: string;
+  budget_id: string;
+  description: string;
+  amount: number;
+  status: BudgetCommitmentStatus;
+  notes?: string;
+  resolved_at?: string;
+  created_at: string;
+  updated_at: string;
+  sync_status?: BudgetCommitmentSyncStatus;
   sync_error?: string;
   last_synced_at?: string;
   remote_updated_at?: string;
