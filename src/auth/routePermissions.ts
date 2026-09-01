@@ -44,6 +44,7 @@ const ROUTE_PERMISSIONS: Record<string, RoutePermissionRule> = {
   '/master-data/promos': 'PROMO_MANAGE',
   '/master-data/lotteries': 'LOTTERY_MANAGE',
   '/master-data/contacts': 'CONTACT_MANAGE',
+  '/master-data/memberships': 'CONTACT_MANAGE',
   '/master-data/warehouses': 'WAREHOUSE_MANAGE',
   '/master-data/payment-methods': 'PAYMENT_METHOD_MANAGE',
   '/master-data/currencies': 'CURRENCY_MANAGE',

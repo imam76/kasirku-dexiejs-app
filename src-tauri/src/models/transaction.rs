@@ -14,6 +14,7 @@ pub struct TransactionDto {
     pub cashier_user_id: Option<String>,
     pub cashier_user_name: Option<String>,
     pub member_contact_id: Option<String>,
+    pub member_id: Option<String>,
     pub member_number: Option<String>,
     pub member_name: Option<String>,
     pub member_phone: Option<String>,

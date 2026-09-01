@@ -1,13 +1,13 @@
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { db } from '@/lib/db';
-import { contactSchema } from '@/lib/validations/contact';
+import { membershipQuickCreateSchema } from '@/lib/validations/membership';
 import type { PromoEvaluationResult } from '@/services/promoService';
-import { enqueueContactSync } from '@/services/syncQueueService';
+import { enqueueMembershipSync } from '@/services/syncQueueService';
 import { toBusinessDatePrefix } from '@/utils/businessDate';
 import type {
   AuthUser,
   CartItem,
-  Contact,
+  Membership,
   MembershipPointTransaction,
   MembershipPointTransactionType,
   MembershipSetting,
@@ -30,21 +30,21 @@ export interface MembershipSettingInput {
 }
 
 export interface QuickCreateMemberInput {
-  name: string;
-  phone?: string;
+  phone: string;
+  name?: string;
   email?: string;
 }
 
 export interface MembershipPreviewInput {
   cart: CartItem[];
   promoEvaluation: PromoEvaluationResult;
-  member?: Contact | null;
+  member?: Membership | null;
   redeemPoints?: number;
   setting?: MembershipSetting;
 }
 
 export interface MembershipCheckoutEvaluation {
-  member?: Contact;
+  member?: Membership;
   setting: MembershipSetting;
   redeem_points: number;
   redeem_amount: number;
@@ -55,7 +55,7 @@ export interface MembershipCheckoutEvaluation {
 }
 
 export interface RecordPointInput {
-  member: Contact;
+  member: Membership;
   transactionId: string;
   transactionNumber: string;
   type: MembershipPointTransactionType;
@@ -131,67 +131,60 @@ export const generateMembershipNumber = async (now = new Date()) => {
 
   for (let sequence = 1; sequence <= 9999; sequence += 1) {
     const candidate = `MBR-${dateKey}-${String(sequence).padStart(4, '0')}`;
-    const existing = await db.contacts.where('membership_number').equals(candidate).first();
+    const existing = await db.memberships.where('member_number').equals(candidate).first();
     if (!existing) return candidate;
   }
 
   return `MBR-${dateKey}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 };
 
-export const isActiveRetailMember = (contact?: Contact | null): contact is Contact => (
-  Boolean(contact?.is_active && contact.is_member && (contact.membership_status ?? 'ACTIVE') === 'ACTIVE')
+export const isActiveRetailMember = (member?: Membership | null): member is Membership => (
+  Boolean(member?.is_active && (member.status ?? 'ACTIVE') === 'ACTIVE')
 );
 
-const withPendingSync = (contact: Contact): Contact => ({
-  ...contact,
+const withPendingSync = (member: Membership): Membership => ({
+  ...member,
   sync_status: 'pending',
   sync_error: undefined,
 });
 
-const sanitizeQuickMemberInput = (input: QuickCreateMemberInput) => {
-  return contactSchema.parse({
-    name: input.name,
-    contact_type: 'CUSTOMER',
-    phone: input.phone,
-    email: input.email,
-    is_active: true,
-    is_member: true,
-  });
+export const findMembershipByPhone = async (phone: string): Promise<Membership | undefined> => {
+  const trimmed = phone.trim();
+  if (!trimmed) return undefined;
+  return db.memberships.where('phone').equals(trimmed).first();
 };
 
-export const createRetailMemberFromPos = async (input: QuickCreateMemberInput): Promise<Contact> => {
+export const createRetailMemberFromPos = async (input: QuickCreateMemberInput): Promise<Membership> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'CASHIER_ACCESS');
 
-  const parsed = sanitizeQuickMemberInput(input);
+  const parsed = membershipQuickCreateSchema.parse(input);
   const now = new Date().toISOString();
-  const contact: Contact = withPendingSync({
+  const member: Membership = withPendingSync({
     id: crypto.randomUUID(),
+    member_number: await generateMembershipNumber(new Date(now)),
     name: parsed.name,
-    contact_type: 'CUSTOMER',
     phone: parsed.phone,
     email: parsed.email,
+    status: 'ACTIVE',
+    joined_at: now,
+    points_balance: 0,
     is_active: true,
-    is_member: true,
-    membership_number: await generateMembershipNumber(new Date(now)),
-    membership_status: 'ACTIVE',
-    membership_joined_at: now,
-    membership_points_balance: 0,
     created_at: now,
     updated_at: now,
   });
 
-  await db.contacts.add(contact);
-  await enqueueContactSync(contact, 'create');
+  await db.memberships.add(member);
+  await enqueueMembershipSync(member, 'create');
   await writeActivityLog({
     user: currentUser,
     action: 'MEMBER_CREATED_FROM_POS',
-    entity: 'contacts',
-    entity_id: contact.id,
-    description: `${currentUser?.name ?? 'User'} membuat member ${contact.name} dari POS.`,
+    entity: 'memberships',
+    entity_id: member.id,
+    description: `${currentUser?.name ?? 'User'} membuat member ${member.name ?? member.phone} dari POS.`,
   });
 
-  return contact;
+  return member;
 };
 
 const getRedeemAmountFromPoints = (points: number, setting: MembershipSetting) => (
@@ -273,7 +266,7 @@ export const evaluateMembershipCheckoutSync = ({
     };
   }
 
-  const currentBalance = Math.max(0, Math.floor(Number(activeMember.membership_points_balance || 0)));
+  const currentBalance = Math.max(0, Math.floor(Number(activeMember.points_balance || 0)));
   const maxRedeemByTotal = resolvedSetting.redeem_enabled && resolvedSetting.point_value > 0
     ? Math.floor(promoEvaluation.total_amount / resolvedSetting.point_value)
     : 0;
@@ -312,9 +305,9 @@ export const recordMembershipPointTransaction = async ({
 }: RecordPointInput): Promise<MembershipPointTransaction> => {
   const ledger: MembershipPointTransaction = {
     id: crypto.randomUUID(),
-    contact_id: member.id,
-    membership_number: normalizeMemberNumber(member.membership_number),
-    member_name: member.name,
+    membership_id: member.id,
+    membership_number: normalizeMemberNumber(member.member_number),
+    member_name: member.name ?? member.phone,
     transaction_id: transactionId,
     transaction_number: transactionNumber,
     type,

@@ -4,7 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { App, Input } from 'antd';
 import { db } from '@/lib/db';
 import { useTransactionStore, type TransactionError } from '@/store/transactionStore';
-import { Contact, MembershipSetting, Product } from '@/types';
+import { Membership, MembershipSetting, Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getCartItemPrice } from '@/utils/pricing';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
@@ -46,7 +46,7 @@ export const useTransaction = (draftScope?: string) => {
     searchTerm,
     paymentDrafts,
     voucherCode,
-    memberContactId,
+    memberId,
     redeemPoints,
     showPayment,
     activeDraftScope,
@@ -59,7 +59,7 @@ export const useTransaction = (draftScope?: string) => {
     updatePaymentDraft,
     removePaymentDraft,
     setVoucherCode,
-    setMemberContactId,
+    setMemberId,
     setRedeemPoints,
     setShowPayment,
     switchDraftScope,
@@ -178,22 +178,22 @@ export const useTransaction = (draftScope?: string) => {
     queryFn: getMembershipSetting,
   });
   const activeMembers = useLiveQuery(
-    () => db.contacts
-      .orderBy('name')
-      .filter((contact) => Boolean(contact.is_member && contact.is_active && (contact.membership_status ?? 'ACTIVE') === 'ACTIVE'))
+    () => db.memberships
+      .orderBy('member_number')
+      .filter((membership) => Boolean(membership.is_active && (membership.status ?? 'ACTIVE') === 'ACTIVE'))
       .toArray(),
     [],
-    [] as Contact[],
+    [] as Membership[],
   );
   const selectedMember = useMemo(
-    () => activeMembers.find((member) => member.id === memberContactId) ?? null,
-    [activeMembers, memberContactId],
+    () => activeMembers.find((member) => member.id === memberId) ?? null,
+    [activeMembers, memberId],
   );
   const createMemberMutation = useMutation({
     mutationFn: createRetailMemberFromPos,
     onSuccess: (member) => {
-      setMemberContactId(member.id);
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      setMemberId(member.id);
+      queryClient.invalidateQueries({ queryKey: ['memberships'] });
     },
   });
 
@@ -411,7 +411,7 @@ export const useTransaction = (draftScope?: string) => {
           paymentReference: draft.reference,
         })),
         voucherCode,
-        memberContactId,
+        memberId,
         redeemPoints: Number(redeemPoints || 0),
       });
       const { transaction, items, payments, warnings } = checkoutResult;
@@ -478,6 +478,7 @@ export const useTransaction = (draftScope?: string) => {
       queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
       queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['memberships'] });
       queryClient.invalidateQueries({ queryKey: ['membershipSetting'] });
       reset();
 
@@ -584,7 +585,7 @@ export const useTransaction = (draftScope?: string) => {
     paymentPreview,
     paymentMethods,
     voucherCode,
-    memberContactId,
+    memberId,
     redeemPoints,
     showPayment,
     heldDrafts,
@@ -599,7 +600,7 @@ export const useTransaction = (draftScope?: string) => {
     activeMembers,
     selectedMember,
     membershipSetting,
-    createMember: createMemberMutation.mutateAsync as (input: QuickCreateMemberInput) => Promise<Contact>,
+    createMember: createMemberMutation.mutateAsync as (input: QuickCreateMemberInput) => Promise<Membership>,
     isCreatingMember: createMemberMutation.isPending,
     addToCart,
     updateQuantity,
@@ -619,7 +620,7 @@ export const useTransaction = (draftScope?: string) => {
     updatePaymentDraft,
     removePaymentDraft,
     setVoucherCode,
-    setMemberContactId,
+    setMemberId,
     setRedeemPoints,
     setShowPayment,
     discardDraftScope,

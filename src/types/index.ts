@@ -520,11 +520,6 @@ export interface Contact {
   tax_number?: string;
   notes?: string;
   is_active: boolean;
-  is_member?: boolean;
-  membership_number?: string;
-  membership_status?: RetailMembershipStatus;
-  membership_joined_at?: string;
-  membership_points_balance?: number;
   created_at: string;
   updated_at: string;
   sync_status?: ContactSyncStatus;
@@ -545,7 +540,7 @@ export interface MembershipSetting {
 
 export interface MembershipPointTransaction {
   id: string;
-  contact_id: string;
+  membership_id: string;
   membership_number?: string;
   member_name: string;
   transaction_id?: string;
@@ -558,6 +553,25 @@ export interface MembershipPointTransaction {
   created_at: string;
   created_by?: string;
   created_by_name?: string;
+}
+
+export interface Membership {
+  id: string;
+  contact_id?: string;
+  member_number: string;
+  name?: string;
+  phone: string;
+  email?: string;
+  status: RetailMembershipStatus;
+  joined_at: string;
+  points_balance: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  sync_status?: MembershipSyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
+  remote_updated_at?: string;
 }
 
 export interface Warehouse {
@@ -613,6 +627,7 @@ export type RestaurantSessionSyncStatus = EntitySyncStatus;
 export type TransactionSyncStatus = EntitySyncStatus;
 export type PromoSyncStatus = EntitySyncStatus;
 export type ContactSyncStatus = EntitySyncStatus;
+export type MembershipSyncStatus = EntitySyncStatus;
 export type DepartmentSyncStatus = EntitySyncStatus;
 export type ProductSyncStatus = EntitySyncStatus;
 export type ProjectSyncStatus = EntitySyncStatus;
@@ -2102,7 +2117,9 @@ export interface Transaction {
   restaurant_order_id?: string;
   cashier_user_id?: string;
   cashier_user_name?: string;
+  /** @deprecated Legacy field from when membership lived on Contact - kept for historical transactions, no longer populated. Use member_id. */
   member_contact_id?: string;
+  member_id?: string;
   member_number?: string;
   member_name?: string;
   member_phone?: string;

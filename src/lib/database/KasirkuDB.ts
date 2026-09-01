@@ -84,6 +84,7 @@ import type {
   CooperativeFieldCashSession,
   MembershipPointTransaction,
   MembershipSetting,
+  Membership,
   PayrollRun,
   PayrollRunItem,
   EmployeeCashAdvance,
@@ -207,6 +208,7 @@ export class KasirkuDB extends Dexie {
   employeeCashAdvanceRepayments!: Table<EmployeeCashAdvanceRepayment>;
   membershipPointTransactions!: Table<MembershipPointTransaction>;
   membershipSettings!: Table<MembershipSetting>;
+  memberships!: Table<Membership>;
   paymentMethods!: Table<PaymentMethodMaster>;
   posTransactionPayments!: Table<PosTransactionPayment>;
   fixedAssets!: Table<FixedAsset>;

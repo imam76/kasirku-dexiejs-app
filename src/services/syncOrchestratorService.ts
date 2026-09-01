@@ -1,5 +1,6 @@
 import { refreshActivityLogsFromPostgres, refreshAuthUsersFromPostgres, refreshRolesFromPostgres } from '@/auth/authReadService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
+import { refreshMembershipsFromPostgres } from '@/services/membershipReadService';
 import { refreshCooperativeAreasFromPostgres } from '@/services/cooperativeAreaReadService';
 import { refreshCooperativeDataFromPostgres } from '@/services/cooperativeReadService';
 import { refreshWorkforceStateFromPostgres } from '@/services/workforceReadService';
@@ -62,6 +63,7 @@ import {
   enqueuePendingFiscalYearClosingRunsForSync,
   enqueuePendingChartOfAccountsForSync,
   enqueuePendingContactsForSync,
+  enqueuePendingMembershipsForSync,
   enqueuePendingCooperativeDataForSync,
   enqueuePendingEmployeesForSync,
   enqueuePendingHrDataForSync,
@@ -110,6 +112,7 @@ export const enqueueAllPendingLocalChangesForSync = async () => {
   await enqueuePendingTaxesForSync();
   await enqueuePendingPaymentMethodsForSync();
   await enqueuePendingContactsForSync();
+  await enqueuePendingMembershipsForSync();
   await enqueuePendingProductsForSync();
   await enqueuePendingCooperativeDataForSync();
   await enqueuePendingEmployeesForSync();
@@ -174,6 +177,7 @@ export const refreshAllDataFromPostgres = async () => {
     taxes: await refreshTaxesFromPostgres(),
     paymentMethods: await refreshPaymentMethodsFromPostgres(),
     contacts: await refreshContactsFromPostgres(),
+    memberships: await refreshMembershipsFromPostgres(),
     warehouses: await refreshWarehousesFromPostgres(),
     cooperativeAreas: await refreshCooperativeAreasFromPostgres(),
     employees: await refreshEmployeesFromPostgres(),

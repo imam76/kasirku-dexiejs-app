@@ -22,6 +22,7 @@ pub mod hr;
 pub mod inventory_lot;
 pub mod journal_entry;
 pub mod marketplace;
+pub mod membership;
 pub mod opening_balance;
 pub mod payment_method;
 pub mod payroll;

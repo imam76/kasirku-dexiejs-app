@@ -2,7 +2,7 @@ import { AutoComplete, Button, Form, Input, InputNumber, Modal, Select, Tag, Too
 import { ChevronDown, ChevronUp, Sparkles, TicketPercent, UserCheck, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
-import type { Contact, MembershipSetting, Promo } from '@/types';
+import type { Membership, MembershipSetting, Promo } from '@/types';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import { formatCurrency } from '@/utils/formatters';
@@ -11,26 +11,26 @@ import { buildPosVoucherOptions, isAppliedPosVoucher } from '@/utils/posVoucher'
 const MEMBERSHIP_PANEL_STORAGE_KEY = 'frayukti-pos-membership-panel-open';
 
 interface MembershipCheckoutPanelProps {
-  members: Contact[];
-  selectedMember: Contact | null;
-  memberContactId?: string;
+  members: Membership[];
+  selectedMember: Membership | null;
+  memberId?: string;
   voucherCode: string;
   redeemPoints: string;
   membershipSetting: MembershipSetting;
   promoPreview: PromoEvaluationResult;
   membershipPreview: MembershipCheckoutEvaluation;
   voucherPromos: Promo[];
-  onMemberChange: (memberContactId?: string) => void;
+  onMemberChange: (memberId?: string) => void;
   onVoucherCodeChange: (voucherCode: string) => void;
   onRedeemPointsChange: (points: string) => void;
-  onCreateMember: (input: QuickCreateMemberInput) => Promise<Contact>;
+  onCreateMember: (input: QuickCreateMemberInput) => Promise<Membership>;
   isCreatingMember: boolean;
 }
 
 export default function MembershipCheckoutPanel({
   members,
   selectedMember,
-  memberContactId,
+  memberId,
   voucherCode,
   redeemPoints,
   membershipSetting,
@@ -48,18 +48,18 @@ export default function MembershipCheckoutPanel({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(() => {
     if (typeof window === 'undefined') {
-      return Boolean(memberContactId || voucherCode.trim());
+      return Boolean(memberId || voucherCode.trim());
     }
 
     const savedValue = localStorage.getItem(MEMBERSHIP_PANEL_STORAGE_KEY);
-    return savedValue ? savedValue === 'true' : Boolean(memberContactId || voucherCode.trim());
+    return savedValue ? savedValue === 'true' : Boolean(memberId || voucherCode.trim());
   });
   const voucherValue = voucherCode.trim();
-  const shouldForceExpanded = Boolean(memberContactId || voucherValue);
+  const shouldForceExpanded = Boolean(memberId || voucherValue);
   const isPanelExpanded = isExpanded || shouldForceExpanded;
-  const pointBalance = Math.max(0, Math.floor(Number(selectedMember?.membership_points_balance || 0)));
+  const pointBalance = Math.max(0, Math.floor(Number(selectedMember?.points_balance || 0)));
   const selectedMemberSummary = selectedMember
-    ? `${selectedMember.membership_number ?? '-'} - ${selectedMember.name}`
+    ? `${selectedMember.member_number} - ${selectedMember.name ?? selectedMember.phone}`
     : undefined;
   const voucherDiscounts = promoPreview.discount_breakdown;
   const hasVoucherDiscount = voucherDiscounts.some((discount) => discount.amount > 0);
@@ -148,7 +148,7 @@ export default function MembershipCheckoutPanel({
               allowClear
               showSearch
               className="w-full"
-              value={memberContactId}
+              value={memberId}
               placeholder="Pilih member"
               optionFilterProp="label"
               onChange={(value) => {
@@ -157,8 +157,8 @@ export default function MembershipCheckoutPanel({
               }}
               options={members.map((member) => ({
                 value: member.id,
-                label: `${member.membership_number ?? '-'} - ${member.name}`,
-                searchText: `${member.membership_number ?? ''} ${member.name} ${member.phone ?? ''}`,
+                label: `${member.member_number} - ${member.name ?? member.phone}`,
+                searchText: `${member.member_number} ${member.name ?? ''} ${member.phone}`,
               }))}
               filterOption={(input, option) => String(option?.searchText ?? option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
             />
@@ -166,8 +166,8 @@ export default function MembershipCheckoutPanel({
             {selectedMember && (
               <div className="space-y-2 text-xs text-gray-700">
                 <div className="flex min-w-0 items-center gap-2 pt-1">
-                  <Tag color="blue" className="m-0 shrink-0">{selectedMember.membership_number ?? '-'}</Tag>
-                  <span className="min-w-0 flex-1 truncate text-xs" title={selectedMember.name}>{selectedMember.name}</span>
+                  <Tag color="blue" className="m-0 shrink-0">{selectedMember.member_number}</Tag>
+                  <span className="min-w-0 flex-1 truncate text-xs" title={selectedMember.name ?? selectedMember.phone}>{selectedMember.name ?? selectedMember.phone}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-md border border-gray-100 bg-gray-50 px-2 py-1.5">
@@ -260,14 +260,14 @@ export default function MembershipCheckoutPanel({
           className="mt-4"
         >
           <Form.Item
-            name="name"
-            label="Nama"
-            rules={[{ required: true, whitespace: true, message: 'Nama member wajib diisi.' }]}
+            name="phone"
+            label="Telepon"
+            rules={[{ required: true, whitespace: true, message: 'Nomor telepon wajib diisi.' }]}
           >
-            <Input placeholder="Nama member" />
-          </Form.Item>
-          <Form.Item name="phone" label="Telepon">
             <Input placeholder="Nomor telepon" />
+          </Form.Item>
+          <Form.Item name="name" label="Nama">
+            <Input placeholder="Nama member" />
           </Form.Item>
           <Form.Item name="email" label="Email" rules={[{ type: 'email', message: 'Format email tidak valid.' }]}>
             <Input placeholder="email@contoh.com" />

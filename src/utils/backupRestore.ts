@@ -83,6 +83,7 @@ export const backupDatabase = async () => {
       promos: await db.promos.toArray(),
       lotteries: (await db.lotteries.toArray()).map(normalizeStoredLottery),
       contacts: await db.contacts.toArray(),
+      memberships: await db.memberships.toArray(),
       departments: await db.departments.toArray(),
       projects: await db.projects.toArray(),
       budgets: await db.budgets.toArray(),
@@ -208,6 +209,7 @@ export const restoreDatabase = async (file: File) => {
           db.promos,
           db.lotteries,
           db.contacts,
+          db.memberships,
           db.departments,
           db.projects,
           db.budgets,
@@ -288,6 +290,7 @@ export const restoreDatabase = async (file: File) => {
           await db.promos.clear();
           await db.lotteries.clear();
           await db.contacts.clear();
+          await db.memberships.clear();
           await db.departments.clear();
           await db.projects.clear();
           await db.budgets.clear();
@@ -378,6 +381,7 @@ export const restoreDatabase = async (file: File) => {
             );
           }
           if (data.contacts?.length) await db.contacts.bulkAdd(data.contacts);
+          if (data.memberships?.length) await db.memberships.bulkAdd(data.memberships);
           if (data.departments?.length) await db.departments.bulkAdd(data.departments);
           if (data.projects?.length) await db.projects.bulkAdd(data.projects);
           if (data.budgets?.length) await db.budgets.bulkAdd(data.budgets);

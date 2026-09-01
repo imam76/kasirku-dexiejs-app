@@ -16,9 +16,11 @@ import type {
 import { normalizeStoredTimestamp } from '@/utils/timestamps';
 import type { KasirkuDB } from '../../KasirkuDB';
 
+type LegacyMembershipContact = Contact & { membership_joined_at?: string };
+
 export function registerMigrationV122(db: KasirkuDB) {
   db.version(122).stores({}).upgrade(async (migration) => {
-    await migration.table<Contact>('contacts').toCollection().modify((contact) => {
+    await migration.table<LegacyMembershipContact>('contacts').toCollection().modify((contact) => {
       contact.created_at = normalizeStoredTimestamp(contact.created_at) ?? contact.created_at;
       contact.updated_at = normalizeStoredTimestamp(contact.updated_at) ?? contact.updated_at;
       contact.membership_joined_at = normalizeStoredTimestamp(contact.membership_joined_at);

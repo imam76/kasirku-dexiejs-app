@@ -156,7 +156,7 @@ export default function Transaction() {
     paymentPreview,
     paymentMethods,
     voucherCode,
-    memberContactId,
+    memberId,
     redeemPoints,
     showPayment,
     heldDrafts,
@@ -190,7 +190,7 @@ export default function Transaction() {
     updatePaymentDraft,
     removePaymentDraft,
     setVoucherCode,
-    setMemberContactId,
+    setMemberId,
     setRedeemPoints,
     setShowPayment,
     discardDraftScope,
@@ -1277,7 +1277,7 @@ export default function Transaction() {
           paymentPreview={paymentPreview}
           paymentMethods={paymentMethods}
           voucherCode={voucherCode}
-          memberContactId={memberContactId}
+          memberId={memberId}
           redeemPoints={redeemPoints}
           promoPreview={promoPreview}
           membershipPreview={membershipPreview}
@@ -1290,7 +1290,7 @@ export default function Transaction() {
           removePaymentDraft={removePaymentDraft}
           handleAddPayment={handleAddPayment}
           setVoucherCode={setVoucherCode}
-          setMemberContactId={setMemberContactId}
+          setMemberId={setMemberId}
           setRedeemPoints={setRedeemPoints}
           createMember={createMember}
           isCreatingMember={isCreatingMember}
@@ -1347,7 +1347,7 @@ export default function Transaction() {
         paymentPreview={paymentPreview}
         paymentMethods={paymentMethods}
         voucherCode={voucherCode}
-        memberContactId={memberContactId}
+        memberId={memberId}
         redeemPoints={redeemPoints}
         promoPreview={promoPreview}
         membershipPreview={membershipPreview}
@@ -1360,7 +1360,7 @@ export default function Transaction() {
         removePaymentDraft={removePaymentDraft}
         handleAddPayment={handleAddPayment}
         setVoucherCode={setVoucherCode}
-        setMemberContactId={setMemberContactId}
+        setMemberId={setMemberId}
         setRedeemPoints={setRedeemPoints}
         createMember={createMember}
         isCreatingMember={isCreatingMember}

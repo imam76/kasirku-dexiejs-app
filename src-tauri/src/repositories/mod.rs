@@ -25,6 +25,7 @@ pub mod inventory_lot_repository;
 pub mod inventory_opening_balance_repository;
 pub mod journal_entry_repository;
 pub mod marketplace_repository;
+pub mod membership_repository;
 pub mod opening_balance_repository;
 pub mod payment_method_repository;
 pub mod payroll_repository;

@@ -1,6 +1,6 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { CartItem, CashierSession, Contact, FinanceTransaction, PosStockDiscrepancy, PosTransactionPayment, Product, RestaurantSession, StockMutation, Transaction, TransactionItem, AuthUser, SyncQueueItem } from '@/types';
+import type { CartItem, CashierSession, Membership, FinanceTransaction, PosStockDiscrepancy, PosTransactionPayment, Product, RestaurantSession, StockMutation, Transaction, TransactionItem, AuthUser, SyncQueueItem } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
@@ -29,7 +29,7 @@ import {
   isActiveRetailMember,
   recordMembershipPointTransaction,
 } from '@/services/membershipService';
-import { buildInventoryLotConsumptionOutboxItem, buildInventoryLotOutboxItem, buildTransactionBundleOutboxItem, enqueueContactSync, enqueueStockAffectedProductsForSync, enqueueTransactionBundleSync, processPendingSyncQueue } from '@/services/syncQueueService';
+import { buildInventoryLotConsumptionOutboxItem, buildInventoryLotOutboxItem, buildTransactionBundleOutboxItem, enqueueMembershipSync, enqueueStockAffectedProductsForSync, enqueueTransactionBundleSync, processPendingSyncQueue } from '@/services/syncQueueService';
 import { getStoredHostIdentity } from '@/services/hostIdentityService';
 import { getProductSellableUnits } from '@/utils/productUnits';
 
@@ -41,7 +41,7 @@ export interface CheckoutInput {
   cart: CartItem[];
   payments: CheckoutPaymentInput[];
   voucherCode?: string;
-  memberContactId?: string;
+  memberId?: string;
   redeemPoints?: number;
   sessionContext?: PosCheckoutSessionContext;
   restaurantOrderId?: string;
@@ -568,7 +568,7 @@ export const checkout = async ({
   cart,
   payments: paymentInputs,
   voucherCode,
-  memberContactId,
+  memberId,
   redeemPoints,
   sessionContext = { kind: 'CASHIER' },
   restaurantOrderId,
@@ -605,7 +605,7 @@ export const checkout = async ({
   let stockMutations: StockMutation[] = [];
   let touchedProductIds = new Set<string>();
   let financeTransactions: FinanceTransaction[] = [];
-  let updatedMemberForSync: Contact | undefined;
+  let updatedMemberForSync: Membership | undefined;
   let checkoutDiscrepancies: PosStockDiscrepancy[] = [];
 
   const result = await db.transaction(
@@ -630,7 +630,7 @@ export const checkout = async ({
       db.inventoryLots,
       db.inventoryLotConsumptions,
       db.cashierSessions,
-      db.contacts,
+      db.memberships,
       db.membershipPointTransactions,
       db.membershipSettings,
       db.posStockDiscrepancies,
@@ -638,8 +638,8 @@ export const checkout = async ({
       db.syncQueue,
     ],
     async () => {
-      const member = memberContactId ? await db.contacts.get(memberContactId) : undefined;
-      if (memberContactId && !isActiveRetailMember(member)) {
+      const member = memberId ? await db.memberships.get(memberId) : undefined;
+      if (memberId && !isActiveRetailMember(member)) {
         throw new Error('Member tidak ditemukan atau tidak aktif.');
       }
 
@@ -669,7 +669,7 @@ export const checkout = async ({
       const finalPayment = paymentRecords.reduce((sum, payment) => sum + payment.tendered_amount, 0);
       const change = paymentRecords.reduce((sum, payment) => sum + payment.change_amount, 0);
       const memberStartingBalance = membershipEvaluation.member
-        ? Math.max(0, Math.floor(Number(membershipEvaluation.member.membership_points_balance || 0)))
+        ? Math.max(0, Math.floor(Number(membershipEvaluation.member.points_balance || 0)))
         : 0;
       const memberBalanceAfter = membershipEvaluation.member
         ? memberStartingBalance - membershipEvaluation.redeem_points + membershipEvaluation.earned_points
@@ -699,9 +699,9 @@ export const checkout = async ({
         restaurant_order_id: restaurantOrderId,
         cashier_user_id: currentUser?.id,
         cashier_user_name: currentUser?.name,
-        member_contact_id: membershipEvaluation.member?.id,
-        member_number: membershipEvaluation.member?.membership_number,
-        member_name: membershipEvaluation.member?.name,
+        member_id: membershipEvaluation.member?.id,
+        member_number: membershipEvaluation.member?.member_number,
+        member_name: membershipEvaluation.member?.name ?? membershipEvaluation.member?.phone,
         member_phone: membershipEvaluation.member?.phone,
         membership_points_earned: membershipEvaluation.earned_points,
         membership_points_redeemed: membershipEvaluation.redeem_points,
@@ -786,13 +786,13 @@ export const checkout = async ({
 
         updatedMemberForSync = {
           ...membershipEvaluation.member,
-          membership_points_balance: memberBalanceAfter,
+          points_balance: memberBalanceAfter,
           updated_at: createdAt,
           sync_status: 'pending',
           sync_error: undefined,
         };
 
-        await db.contacts.put(updatedMemberForSync);
+        await db.memberships.put(updatedMemberForSync);
       }
 
       await recordProfit(transaction, items, createdAt);
@@ -850,7 +850,7 @@ export const checkout = async ({
     await enqueueFinanceTransactionsSync(financeTransactions, 'create');
   }
   if (updatedMemberForSync) {
-    await enqueueContactSync(updatedMemberForSync, 'update');
+    await enqueueMembershipSync(updatedMemberForSync, 'update');
   }
   void processPendingSyncQueue();
 

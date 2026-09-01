@@ -1,5 +1,5 @@
 import { DollarSign, ShoppingBag, Trash2 } from 'lucide-react';
-import { CartItem as CartItemType, Contact, MembershipSetting, Promo } from '@/types';
+import { CartItem as CartItemType, Membership, MembershipSetting, Promo } from '@/types';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
@@ -26,22 +26,22 @@ interface CartSidebarProps {
   paymentPreview: PosPaymentAllocationResult;
   paymentMethods: PosPaymentMethodOption[];
   voucherCode: string;
-  memberContactId?: string;
+  memberId?: string;
   redeemPoints: string;
   promoPreview: PromoEvaluationResult;
   membershipPreview: MembershipCheckoutEvaluation;
   activePromos: Promo[];
-  activeMembers: Contact[];
-  selectedMember: Contact | null;
+  activeMembers: Membership[];
+  selectedMember: Membership | null;
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
   updatePaymentDraft: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
   removePaymentDraft: (clientId: string) => void;
   handleAddPayment: () => void;
   setVoucherCode: (voucherCode: string) => void;
-  setMemberContactId: (memberContactId?: string) => void;
+  setMemberId: (memberId?: string) => void;
   setRedeemPoints: (points: string) => void;
-  createMember: (input: QuickCreateMemberInput) => Promise<Contact>;
+  createMember: (input: QuickCreateMemberInput) => Promise<Membership>;
   isCreatingMember: boolean;
   handleCheckout: () => Promise<boolean>;
   handleRecordExpense: () => Promise<boolean>;
@@ -64,7 +64,7 @@ export default function CartSidebar({
   paymentPreview,
   paymentMethods,
   voucherCode,
-  memberContactId,
+  memberId,
   promoPreview,
   membershipPreview,
   activePromos,
@@ -74,7 +74,7 @@ export default function CartSidebar({
   removePaymentDraft,
   handleAddPayment,
   setVoucherCode,
-  setMemberContactId,
+  setMemberId,
   handleCheckout,
   handleRecordExpense,
   onCheckoutSuccess,
@@ -156,13 +156,13 @@ export default function CartSidebar({
         paymentPreview={paymentPreview}
         paymentMethods={paymentMethods}
         voucherCode={voucherCode}
-        memberContactId={memberContactId}
+        memberId={memberId}
         activePromos={activePromos}
         activeMembers={activeMembers}
         promoPreview={promoPreview}
         membershipPreview={membershipPreview}
         onVoucherCodeChange={setVoucherCode}
-        onMemberChange={setMemberContactId}
+        onMemberChange={setMemberId}
         onAddPayment={handleAddPayment}
         onUpdatePayment={updatePaymentDraft}
         onRemovePayment={removePaymentDraft}

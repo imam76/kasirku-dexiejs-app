@@ -1,9 +1,9 @@
-import type { Contact } from '@/types';
+import type { Membership } from '@/types';
 import { Pencil, Sparkles, TicketPercent, UserRound } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatters';
 
 interface PosCheckoutDetailsSummaryProps {
-  selectedMember: Contact | null;
+  selectedMember: Membership | null;
   voucherCode: string;
   discountAmount?: number;
   onEdit: () => void;
@@ -31,8 +31,8 @@ export default function PosCheckoutDetailsSummary({
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[10px] font-bold uppercase tracking-wide text-blue-100">Member</div>
-        <div className="truncate text-sm font-black text-white" title={selectedMember?.name ?? '-'}>
-          {selectedMember?.name ?? 'Member belum dipilih'}
+        <div className="truncate text-sm font-black text-white" title={selectedMember ? (selectedMember.name ?? selectedMember.phone) : '-'}>
+          {selectedMember ? (selectedMember.name ?? selectedMember.phone) : 'Member belum dipilih'}
         </div>
       </div>
       <div className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-md bg-white/10 px-2 py-1 text-[11px] font-bold ring-1 ring-inset ring-white/15">

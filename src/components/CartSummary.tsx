@@ -1,4 +1,4 @@
-import type { Contact, MembershipSetting, Promo } from '@/types';
+import type { Membership, MembershipSetting, Promo } from '@/types';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
@@ -19,22 +19,22 @@ export interface CartSummaryProps {
   paymentPreview: PosPaymentAllocationResult;
   paymentMethods: PosPaymentMethodOption[];
   voucherCode: string;
-  memberContactId?: string;
+  memberId?: string;
   redeemPoints: string;
   promoPreview: PromoEvaluationResult;
   membershipPreview: MembershipCheckoutEvaluation;
   activePromos: Promo[];
-  activeMembers: Contact[];
-  selectedMember: Contact | null;
+  activeMembers: Membership[];
+  selectedMember: Membership | null;
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
   updatePaymentDraft: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
   removePaymentDraft: (clientId: string) => void;
   handleAddPayment: () => void;
   setVoucherCode: (voucherCode: string) => void;
-  setMemberContactId: (memberContactId?: string) => void;
+  setMemberId: (memberId?: string) => void;
   setRedeemPoints: (points: string) => void;
-  createMember: (input: QuickCreateMemberInput) => Promise<Contact>;
+  createMember: (input: QuickCreateMemberInput) => Promise<Membership>;
   isCreatingMember: boolean;
   handleCheckout: () => Promise<boolean>;
   handleRecordExpense: () => Promise<boolean>;
@@ -45,7 +45,7 @@ export interface CartSummaryProps {
 
 export default function CartSummary(props: CartSummaryProps) {
   const { t } = useI18n();
-  const hasMemberOrVoucher = Boolean(props.memberContactId || props.voucherCode.trim());
+  const hasMemberOrVoucher = Boolean(props.memberId || props.voucherCode.trim());
   const subtotal = props.promoPreview.subtotal_before_discount;
   const discountAmount = Math.max(0, subtotal - props.total);
   const hasValidVoucher = isAppliedPosVoucher(props.voucherCode, props.promoPreview.applied_promos_snapshot);
@@ -56,14 +56,14 @@ export default function CartSummary(props: CartSummaryProps) {
     <MembershipCheckoutPanel
       members={props.activeMembers}
       selectedMember={props.selectedMember}
-      memberContactId={props.memberContactId}
+      memberId={props.memberId}
       voucherCode={props.voucherCode}
       redeemPoints={props.redeemPoints}
       membershipSetting={props.membershipSetting}
       promoPreview={props.promoPreview}
       membershipPreview={props.membershipPreview}
       voucherPromos={props.activePromos}
-      onMemberChange={props.setMemberContactId}
+      onMemberChange={props.setMemberId}
       onVoucherCodeChange={props.setVoucherCode}
       onRedeemPointsChange={props.setRedeemPoints}
       onCreateMember={props.createMember}

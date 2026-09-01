@@ -18,11 +18,10 @@ import {
   ResponsiveCrudCollection,
   type MobileCrudAction,
 } from '@/components/mobile-crud';
-import { useContacts, type ContactMembershipFilter, type ContactStatusFilter, type ContactTypeFilter } from '@/hooks/useContacts';
+import { useContacts, type ContactStatusFilter, type ContactTypeFilter } from '@/hooks/useContacts';
 import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Contact } from '@/types';
-import { formatCurrency } from '@/utils/formatters';
 import ContactFormModal, { type ContactFormValues } from './ContactFormModal';
 import ContactTable from './ContactTable';
 import { contactTypeOptions } from './contactOptions';
@@ -46,8 +45,6 @@ export default function ContactManagement() {
     setTypeFilter,
     statusFilter,
     setStatusFilter,
-    membershipFilter,
-    setMembershipFilter,
     handleEdit,
     resetForm,
     submitForm,
@@ -63,7 +60,6 @@ export default function ContactManagement() {
     Boolean(searchText.trim()),
     typeFilter !== 'ALL',
     statusFilter !== 'active',
-    membershipFilter !== 'all',
   ].filter(Boolean).length;
   const contactTypeLabelMap = useMemo(() => new Map(
     contactTypeOptions.map((option) => [option.value, t(option.labelKey)]),
@@ -73,7 +69,6 @@ export default function ContactManagement() {
     setSearchText('');
     setTypeFilter('ALL');
     setStatusFilter('active');
-    setMembershipFilter('all');
   };
 
   const closeModal = () => {
@@ -85,7 +80,7 @@ export default function ContactManagement() {
   const openAddModal = () => {
     resetForm();
     form.resetFields();
-    form.setFieldsValue({ contact_type: 'CUSTOMER', is_active: true, is_member: false, membership_status: 'ACTIVE' });
+    form.setFieldsValue({ contact_type: 'CUSTOMER', is_active: true });
     setIsModalOpen(true);
   };
 
@@ -102,10 +97,6 @@ export default function ContactManagement() {
       tax_number: contact.tax_number,
       notes: contact.notes,
       is_active: contact.is_active,
-      is_member: contact.is_member,
-      membership_number: contact.membership_number,
-      membership_status: contact.membership_status ?? 'ACTIVE',
-      membership_joined_at: contact.membership_joined_at,
     });
     setIsModalOpen(true);
   };
@@ -149,7 +140,7 @@ export default function ContactManagement() {
   };
 
   const renderFilterControls = (mobile = false) => (
-    <div className={mobile ? 'space-y-3' : 'grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_220px_180px_180px]'}>
+    <div className={mobile ? 'space-y-3' : 'grid grid-cols-1 gap-3 md:grid-cols-[minmax(240px,1fr)_220px_180px]'}>
       <Input.Search
         allowClear
         size={mobile ? 'large' : 'middle'}
@@ -175,16 +166,6 @@ export default function ContactManagement() {
           { value: 'active', label: t('contacts.filter.active') },
           { value: 'inactive', label: t('contacts.filter.inactive') },
           { value: 'all', label: t('contacts.filter.allStatuses') },
-        ]}
-      />
-      <Select<ContactMembershipFilter>
-        size={mobile ? 'large' : 'middle'}
-        value={membershipFilter}
-        onChange={setMembershipFilter}
-        options={[
-          { value: 'all', label: t('contacts.filter.membershipAll') },
-          { value: 'members', label: t('contacts.filter.members') },
-          { value: 'non_members', label: t('contacts.filter.nonMembers') },
         ]}
       />
     </div>
@@ -276,11 +257,6 @@ export default function ContactManagement() {
                   <Tag className="m-0" color={selectedContact.is_active ? 'green' : 'default'}>
                     {selectedContact.is_active ? t('contacts.status.active') : t('contacts.status.inactive')}
                   </Tag>
-                  {selectedContact.is_member ? (
-                    <Tag className="m-0" color={selectedContact.membership_status === 'INACTIVE' ? 'default' : 'blue'}>
-                      {selectedContact.membership_number || t('contacts.mobile.member')}
-                    </Tag>
-                  ) : null}
                 </div>
 
                 <div className="space-y-2 rounded-xl bg-gray-50 p-3 text-sm dark:bg-gray-800">
@@ -292,15 +268,6 @@ export default function ContactManagement() {
                     <span className="text-gray-500">{t('contacts.mobile.noContactInfo')}</span>
                   ) : null}
                 </div>
-
-                {selectedContact.is_member ? (
-                  <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-3 text-sm dark:border-blue-900 dark:bg-blue-950/30">
-                    <span className="font-semibold">{t('contacts.mobile.member')}</span>
-                    <span className="ml-2 text-blue-700 dark:text-blue-300">
-                      {t('contacts.mobile.points', { points: formatCurrency(selectedContact.membership_points_balance ?? 0) })}
-                    </span>
-                  </div>
-                ) : null}
 
                 <div className="grid grid-cols-2 gap-2">
                   <Button
@@ -336,7 +303,7 @@ export default function ContactManagement() {
             items: filteredContacts,
             getKey: (contact) => contact.id,
             loading: isLoading,
-            resetKey: JSON.stringify([searchText, typeFilter, statusFilter, membershipFilter]),
+            resetKey: JSON.stringify([searchText, typeFilter, statusFilter]),
             resultSummary: t('contacts.filter.summary', { shown: filteredContacts.length, total: contacts.length }),
             emptyText: activeFilterCount > 0 ? t('contacts.filter.noResults') : t('contacts.empty'),
             emptyAction: activeFilterCount === 0 ? (
@@ -393,11 +360,6 @@ export default function ContactManagement() {
                   <Tag className="m-0" color={contact.is_active ? 'green' : 'default'}>
                     {contact.is_active ? t('contacts.status.active') : t('contacts.status.inactive')}
                   </Tag>
-                  {contact.is_member ? (
-                    <Tag className="m-0" color={contact.membership_status === 'INACTIVE' ? 'default' : 'blue'}>
-                      {t('contacts.mobile.member')}
-                    </Tag>
-                  ) : null}
                 </div>
 
                 <div className="grid grid-cols-1 gap-1.5 text-xs text-gray-500 dark:text-gray-400">

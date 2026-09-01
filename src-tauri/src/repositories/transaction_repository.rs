@@ -16,6 +16,7 @@ macro_rules! transaction_select {
             cashier_user_id,
             cashier_user_name,
             member_contact_id,
+            member_id,
             member_number,
             member_name,
             member_phone,
@@ -247,6 +248,7 @@ async fn upsert_transaction(
             cashier_user_id,
             cashier_user_name,
             member_contact_id,
+            member_id,
             member_number,
             member_name,
             member_phone,
@@ -284,8 +286,8 @@ async fn upsert_transaction(
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
             $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
             $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-            $31, $32, $33, $34, $35, $36, $37::TIMESTAMPTZ, $38, $39,
-            $40::TIMESTAMPTZ, $41, $42::TIMESTAMPTZ, $43::TIMESTAMPTZ
+            $31, $32, $33, $34, $35, $36, $37, $38::TIMESTAMPTZ, $39, $40,
+            $41::TIMESTAMPTZ, $42, $43::TIMESTAMPTZ, $44::TIMESTAMPTZ
         )
         ON CONFLICT (id) DO UPDATE SET
             transaction_number = EXCLUDED.transaction_number,
@@ -298,6 +300,7 @@ async fn upsert_transaction(
             cashier_user_id = EXCLUDED.cashier_user_id,
             cashier_user_name = EXCLUDED.cashier_user_name,
             member_contact_id = EXCLUDED.member_contact_id,
+            member_id = EXCLUDED.member_id,
             member_number = EXCLUDED.member_number,
             member_name = EXCLUDED.member_name,
             member_phone = EXCLUDED.member_phone,
@@ -342,6 +345,7 @@ async fn upsert_transaction(
             cashier_user_id,
             cashier_user_name,
             member_contact_id,
+            member_id,
             member_number,
             member_name,
             member_phone,
@@ -387,6 +391,7 @@ async fn upsert_transaction(
     .bind(input.cashier_user_id)
     .bind(input.cashier_user_name)
     .bind(input.member_contact_id)
+    .bind(input.member_id)
     .bind(input.member_number)
     .bind(input.member_name)
     .bind(input.member_phone)

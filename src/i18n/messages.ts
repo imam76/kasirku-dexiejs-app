@@ -3,6 +3,7 @@ import { commonMessages } from './common';
 import { cooperativeMessages } from './cooperativeMessages';
 import { navigationMessages } from './navigationMessages';
 import { budgetMessages } from './budgetMessages';
+import { membershipMessages } from './membershipMessages';
 import { stockMessages } from './stockMessages';
 import { stockInMessages } from './stockInMessages';
 import { stockOpnameMessages } from './stockOpnameMessages';
@@ -17,6 +18,7 @@ export const messages = {
     ...navigationMessages.id,
     ...appMessages.id,
     ...budgetMessages.id,
+    ...membershipMessages.id,
     ...stockMessages.id,
     ...stockInMessages.id,
     ...stockOpnameMessages.id,
@@ -1573,6 +1575,7 @@ export const messages = {
     'home.promosDesc': 'Kelola aturan diskon, voucher, dan periode promo',
     'home.lotteriesDesc': 'Atur batas minimal dan maksimal pembelian untuk nomor undian',
     'home.contactsDesc': 'Kelola customer, supplier, dan pihak eksternal',
+    'home.membershipsDesc': 'Kelola member retail dan poin loyalitas',
     'home.warehousesDesc': 'Kelola gudang yang dipakai di dokumen sales dan purchase',
     'home.paymentMethodsDesc': 'Kelola cara pembayaran dan mapping akun penerimaan atau clearing',
     'home.currenciesDesc': 'Kelola mata uang dan kurs BI untuk dokumen sales dan purchase',
@@ -2200,6 +2203,7 @@ export const messages = {
     ...navigationMessages.en,
     ...appMessages.en,
     ...budgetMessages.en,
+    ...membershipMessages.en,
     ...stockMessages.en,
     ...stockInMessages.en,
     ...stockOpnameMessages.en,
@@ -3756,6 +3760,7 @@ export const messages = {
     'home.promosDesc': 'Manage discount, voucher, and promo period rules',
     'home.lotteriesDesc': 'Set the minimum and maximum purchase amount for lottery numbers',
     'home.contactsDesc': 'Manage customers, suppliers, and external parties',
+    'home.membershipsDesc': 'Manage retail members and loyalty points',
     'home.warehousesDesc': 'Manage warehouses used in sales and purchase documents',
     'home.paymentMethodsDesc': 'Manage payment options and receipt or clearing account mappings',
     'home.currenciesDesc': 'Manage currencies and BI rates for sales and purchase documents',

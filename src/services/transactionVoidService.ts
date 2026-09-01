@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import type { Contact, FinanceTransaction, Product, StockMutation, TransactionItem } from '@/types';
+import type { FinanceTransaction, Membership, Product, StockMutation, TransactionItem } from '@/types';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
@@ -10,7 +10,7 @@ import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } fro
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { normalisasiHargaProduk } from '@/utils/pricing';
 import { recordMembershipPointTransaction } from '@/services/membershipService';
-import { enqueueContactSync, enqueueStockAffectedProductsForSync, enqueueTransactionBundleSync } from '@/services/syncQueueService';
+import { enqueueMembershipSync, enqueueStockAffectedProductsForSync, enqueueTransactionBundleSync } from '@/services/syncQueueService';
 
 interface VoidTransactionInput {
   transactionId: string;
@@ -46,7 +46,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   const stockMutations: StockMutation[] = [];
   const touchedProductIds = new Set<string>();
   const deletedFinanceTransactions: FinanceTransaction[] = [];
-  let updatedMemberForSync: Contact | undefined;
+  let updatedMemberForSync: Membership | undefined;
 
   await db.transaction(
     'rw',
@@ -64,7 +64,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
       db.journalEntries,
       db.journalEntryLines,
       db.inventoryLots,
-      db.contacts,
+      db.memberships,
       db.membershipPointTransactions,
     ],
     async () => {
@@ -78,8 +78,9 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         throw new Error('Transaksi sudah dibatalkan');
       }
 
-      const member = transaction.member_contact_id
-        ? await db.contacts.get(transaction.member_contact_id)
+      const memberId = transaction.member_id ?? transaction.member_contact_id;
+      const member = memberId
+        ? await db.memberships.get(memberId)
         : undefined;
 
       const items = await db.transactionItems
@@ -153,7 +154,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         const earnedPoints = Math.max(0, Math.floor(Number(transaction.membership_points_earned || 0)));
         const redeemedPoints = Math.max(0, Math.floor(Number(transaction.membership_points_redeemed || 0)));
         const redeemedAmount = Number(transaction.membership_point_discount_amount || 0);
-        let runningBalance = Number(member.membership_points_balance || 0);
+        let runningBalance = Number(member.points_balance || 0);
 
         if (earnedPoints > 0) {
           runningBalance -= earnedPoints;
@@ -189,13 +190,13 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
 
         updatedMemberForSync = {
           ...member,
-          membership_points_balance: runningBalance,
+          points_balance: runningBalance,
           updated_at: now,
           sync_status: 'pending',
           sync_error: undefined,
         };
 
-        await db.contacts.put(updatedMemberForSync);
+        await db.memberships.put(updatedMemberForSync);
       }
 
       const totalProfit = getTransactionProfit(items);
@@ -258,7 +259,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
     await enqueueFinanceTransactionsSync(deletedFinanceTransactions, 'delete');
   }
   if (updatedMemberForSync) {
-    await enqueueContactSync(updatedMemberForSync, 'update');
+    await enqueueMembershipSync(updatedMemberForSync, 'update');
   }
 
   const voidedTransaction = await db.transactions.get(transactionId);

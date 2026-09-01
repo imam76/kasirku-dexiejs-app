@@ -18,7 +18,7 @@ interface TransactionState {
   searchTerm: string;
   paymentDrafts: PosPaymentDraft[];
   voucherCode: string;
-  memberContactId?: string;
+  memberId?: string;
   redeemPoints: string;
   showPayment: boolean;
   activeDraftScope?: string;
@@ -34,7 +34,7 @@ interface TransactionState {
   updatePaymentDraft: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
   removePaymentDraft: (clientId: string) => void;
   setVoucherCode: (voucherCode: string) => void;
-  setMemberContactId: (memberContactId?: string) => void;
+  setMemberId: (memberId?: string) => void;
   setRedeemPoints: (points: string) => void;
   setShowPayment: (show: boolean) => void;
   switchDraftScope: (scope?: string) => void;
@@ -80,7 +80,7 @@ export interface PosProcessDraftSnapshot {
   searchTerm: string;
   paymentDrafts: PosPaymentDraft[];
   voucherCode: string;
-  memberContactId?: string;
+  memberId?: string;
   redeemPoints: string;
   showPayment: boolean;
 }
@@ -109,7 +109,7 @@ const emptyProcessDraft = (): PosProcessDraftSnapshot => ({
   searchTerm: '',
   paymentDrafts: [],
   voucherCode: '',
-  memberContactId: undefined,
+  memberId: undefined,
   redeemPoints: '',
   showPayment: false,
 });
@@ -120,7 +120,7 @@ const toProcessDraftSnapshot = (state: TransactionState): PosProcessDraftSnapsho
   searchTerm: state.searchTerm,
   paymentDrafts: state.paymentDrafts,
   voucherCode: state.voucherCode,
-  memberContactId: state.memberContactId,
+  memberId: state.memberId,
   redeemPoints: state.redeemPoints,
   showPayment: state.showPayment,
 });
@@ -140,7 +140,7 @@ const readProcessDraft = (scope: string): PosProcessDraftSnapshot => {
       searchTerm: typeof draft.searchTerm === 'string' ? draft.searchTerm : '',
       paymentDrafts: Array.isArray(draft.paymentDrafts) ? draft.paymentDrafts : [],
       voucherCode: typeof draft.voucherCode === 'string' ? draft.voucherCode : '',
-      memberContactId: typeof draft.memberContactId === 'string' ? draft.memberContactId : undefined,
+      memberId: typeof draft.memberId === 'string' ? draft.memberId : undefined,
       redeemPoints: typeof draft.redeemPoints === 'string' ? draft.redeemPoints : '',
       showPayment: draft.showPayment === true,
     };
@@ -207,7 +207,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   searchTerm: '',
   paymentDrafts: [],
   voucherCode: '',
-  memberContactId: undefined,
+  memberId: undefined,
   redeemPoints: '',
   showPayment: false,
   activeDraftScope: undefined,
@@ -228,7 +228,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     paymentDrafts: state.paymentDrafts.filter((draft) => draft.clientId !== clientId),
   })),
   setVoucherCode: (voucherCode) => set({ voucherCode }),
-  setMemberContactId: (memberContactId) => set({ memberContactId, redeemPoints: memberContactId ? get().redeemPoints : '' }),
+  setMemberId: (memberId) => set({ memberId, redeemPoints: memberId ? get().redeemPoints : '' }),
   setRedeemPoints: (redeemPoints) => set({ redeemPoints }),
   setShowPayment: (showPayment) => set({ showPayment }),
   switchDraftScope: (scope) => {
@@ -489,7 +489,7 @@ useTransactionStore.subscribe((state, previousState) => {
     || state.searchTerm !== previousState.searchTerm
     || state.paymentDrafts !== previousState.paymentDrafts
     || state.voucherCode !== previousState.voucherCode
-    || state.memberContactId !== previousState.memberContactId
+    || state.memberId !== previousState.memberId
     || state.redeemPoints !== previousState.redeemPoints
     || state.showPayment !== previousState.showPayment;
 

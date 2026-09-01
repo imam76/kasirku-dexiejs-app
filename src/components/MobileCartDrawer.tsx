@@ -1,6 +1,6 @@
 import { Button, Drawer } from 'antd';
 import { DollarSign, Trash2 } from 'lucide-react';
-import { CartItem as CartItemType, Contact, MembershipSetting, Promo } from '@/types';
+import { CartItem as CartItemType, Membership, MembershipSetting, Promo } from '@/types';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
@@ -31,22 +31,22 @@ interface MobileCartDrawerProps {
   paymentPreview: PosPaymentAllocationResult;
   paymentMethods: PosPaymentMethodOption[];
   voucherCode: string;
-  memberContactId?: string;
+  memberId?: string;
   redeemPoints: string;
   promoPreview: PromoEvaluationResult;
   membershipPreview: MembershipCheckoutEvaluation;
   activePromos: Promo[];
-  activeMembers: Contact[];
-  selectedMember: Contact | null;
+  activeMembers: Membership[];
+  selectedMember: Membership | null;
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
   updatePaymentDraft: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
   removePaymentDraft: (clientId: string) => void;
   handleAddPayment: () => void;
   setVoucherCode: (voucherCode: string) => void;
-  setMemberContactId: (memberContactId?: string) => void;
+  setMemberId: (memberId?: string) => void;
   setRedeemPoints: (points: string) => void;
-  createMember: (input: QuickCreateMemberInput) => Promise<Contact>;
+  createMember: (input: QuickCreateMemberInput) => Promise<Membership>;
   isCreatingMember: boolean;
   handleCheckout: () => Promise<boolean>;
   handleRecordExpense: () => Promise<boolean>;
@@ -69,7 +69,7 @@ export default function MobileCartDrawer({
   paymentPreview,
   paymentMethods,
   voucherCode,
-  memberContactId,
+  memberId,
   redeemPoints,
   promoPreview,
   membershipPreview,
@@ -82,7 +82,7 @@ export default function MobileCartDrawer({
   removePaymentDraft,
   handleAddPayment,
   setVoucherCode,
-  setMemberContactId,
+  setMemberId,
   setRedeemPoints,
   createMember,
   isCreatingMember,
@@ -177,7 +177,7 @@ export default function MobileCartDrawer({
                 paymentPreview={paymentPreview}
                 paymentMethods={paymentMethods}
                 voucherCode={voucherCode}
-                memberContactId={memberContactId}
+                memberId={memberId}
                 redeemPoints={redeemPoints}
                 promoPreview={promoPreview}
                 membershipPreview={membershipPreview}
@@ -190,7 +190,7 @@ export default function MobileCartDrawer({
                 removePaymentDraft={removePaymentDraft}
                 handleAddPayment={handleAddPayment}
                 setVoucherCode={setVoucherCode}
-                setMemberContactId={setMemberContactId}
+                setMemberId={setMemberId}
                 setRedeemPoints={setRedeemPoints}
                 createMember={createMember}
                 isCreatingMember={isCreatingMember}

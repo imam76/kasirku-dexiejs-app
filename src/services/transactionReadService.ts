@@ -86,6 +86,7 @@ const mapRemoteTransactionToLocal = (
   cashier_user_id: optionalString(remoteTransaction.cashier_user_id),
   cashier_user_name: optionalString(remoteTransaction.cashier_user_name),
   member_contact_id: optionalString(remoteTransaction.member_contact_id),
+  member_id: optionalString(remoteTransaction.member_id),
   member_number: optionalString(remoteTransaction.member_number),
   member_name: optionalString(remoteTransaction.member_name),
   member_phone: optionalString(remoteTransaction.member_phone),

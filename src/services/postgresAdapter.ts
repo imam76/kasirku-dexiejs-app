@@ -656,11 +656,22 @@ export interface RemoteContactDto {
   tax_number?: string | null;
   notes?: string | null;
   is_active: boolean;
-  is_member?: boolean | null;
-  membership_number?: string | null;
-  membership_status?: RetailMembershipStatus | null;
-  membership_joined_at?: string | null;
-  membership_points_balance?: number | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface RemoteMembershipDto {
+  id: string;
+  contact_id?: string | null;
+  member_number: string;
+  name?: string | null;
+  phone: string;
+  email?: string | null;
+  status: RetailMembershipStatus;
+  joined_at: string;
+  points_balance: number;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
@@ -713,6 +724,7 @@ export interface RemoteTransactionDto {
   cashier_user_id?: string | null;
   cashier_user_name?: string | null;
   member_contact_id?: string | null;
+  member_id?: string | null;
   member_number?: string | null;
   member_name?: string | null;
   member_phone?: string | null;
@@ -2803,6 +2815,32 @@ export const contactPostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteContactDto | null>('postgres_delete_contact', { id });
+  },
+};
+
+export const membershipPostgresAdapter = {
+  async list(options: PostgresListOptions = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteMembershipDto[]>('postgres_list_memberships', {
+      updatedAfter: options.updatedAfter,
+      cursorId: options.cursorId,
+      limit: options.limit,
+    });
+  },
+
+  async get(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteMembershipDto | null>('postgres_get_membership', { id });
+  },
+
+  async upsert(input: RemoteMembershipDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteMembershipDto>('postgres_upsert_membership', { input });
+  },
+
+  async delete(id: string) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteMembershipDto | null>('postgres_delete_membership', { id });
   },
 };
 

@@ -1,7 +1,7 @@
 import { AutoComplete, Modal, Select } from 'antd';
 import { TicketPercent, UserCheck } from 'lucide-react';
 import { useMemo } from 'react';
-import type { Contact, Promo } from '@/types';
+import type { Membership, Promo } from '@/types';
 import type { PosPaymentMethodOption } from '@/hooks/usePosPaymentMethods';
 import type { MembershipCheckoutEvaluation } from '@/services/membershipService';
 import type { PromoEvaluationResult } from '@/services/promoService';
@@ -22,13 +22,13 @@ interface PosPaymentModalProps {
   paymentPreview: PosPaymentAllocationResult;
   paymentMethods: PosPaymentMethodOption[];
   voucherCode: string;
-  memberContactId?: string;
+  memberId?: string;
   activePromos: Promo[];
-  activeMembers: Contact[];
+  activeMembers: Membership[];
   promoPreview: PromoEvaluationResult;
   membershipPreview: MembershipCheckoutEvaluation;
   onVoucherCodeChange: (voucherCode: string) => void;
-  onMemberChange: (memberContactId?: string) => void;
+  onMemberChange: (memberId?: string) => void;
   onAddPayment: () => void;
   onUpdatePayment: (clientId: string, patch: Partial<PosPaymentDraft>) => void;
   onRemovePayment: (clientId: string) => void;
@@ -44,7 +44,7 @@ export default function PosPaymentModal({
   paymentPreview,
   paymentMethods,
   voucherCode,
-  memberContactId,
+  memberId,
   activePromos,
   activeMembers,
   promoPreview,
@@ -63,12 +63,12 @@ export default function PosPaymentModal({
   const voucherOptions = useMemo(() => buildPosVoucherOptions(activePromos), [activePromos]);
   const memberOptions = useMemo(() => activeMembers.map((member) => ({
     value: member.id,
-    label: `${member.membership_number ?? '-'} - ${member.name}`,
-    searchText: `${member.membership_number ?? ''} ${member.name} ${member.phone ?? ''}`,
+    label: `${member.member_number} - ${member.name ?? member.phone}`,
+    searchText: `${member.member_number} ${member.name ?? ''} ${member.phone}`,
   })), [activeMembers]);
   const selectedMember = useMemo(
-    () => activeMembers.find((member) => member.id === memberContactId),
-    [activeMembers, memberContactId],
+    () => activeMembers.find((member) => member.id === memberId),
+    [activeMembers, memberId],
   );
   const voucherValue = voucherCode.trim();
   const hasAppliedVoucher = isAppliedPosVoucher(voucherValue, promoPreview.applied_promos_snapshot);
@@ -104,7 +104,7 @@ export default function PosPaymentModal({
                 allowClear
                 showSearch
                 className="ml-auto w-48 min-w-0 flex-none"
-                value={memberContactId}
+                value={memberId}
                 placeholder="Pilih member"
                 optionFilterProp="label"
                 onChange={(value) => onMemberChange(value)}
@@ -115,8 +115,8 @@ export default function PosPaymentModal({
             </div>
             {selectedMember ? (
               <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs font-semibold text-blue-700">
-                <p className="truncate" title={`${selectedMember.membership_number ?? '-'} - ${selectedMember.name}`}>
-                  {selectedMember.membership_number ?? '-'} - {selectedMember.name}
+                <p className="truncate" title={`${selectedMember.member_number} - ${selectedMember.name ?? selectedMember.phone}`}>
+                  {selectedMember.member_number} - {selectedMember.name ?? selectedMember.phone}
                 </p>
               </div>
             ) : null}
