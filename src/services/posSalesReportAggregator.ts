@@ -3,6 +3,7 @@ import type { PosTransactionPayment, Product, Transaction, TransactionItem } fro
 import {
   aggregateSoldItems,
   createEmptySoldItemSummary,
+  formatUnitQuantityBreakdown,
   resolveTransactionItemUnit,
   type SoldItemSummary,
 } from '@/utils/salesUnits';
@@ -170,9 +171,7 @@ export const buildPosSalesReportData = ({
   }, {} as Record<string, TopProductAggregation>);
   const topProducts = Object.values(aggregation)
     .map((product) => {
-      const totalQuantity = Object.entries(product.units)
-        .map(([unit, quantity]) => `${quantity.toLocaleString('id-ID')} ${unit}`)
-        .join(', ');
+      const totalQuantity = formatUnitQuantityBreakdown(product.units);
 
       return {
         ...product,

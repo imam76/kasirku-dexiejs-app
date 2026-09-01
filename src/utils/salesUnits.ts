@@ -97,18 +97,30 @@ export const createSalesUnitSnapshot = (
 };
 
 export interface SoldItemSummary {
-  unitItems: number;
+  unitItems: Record<string, number>;
   weightedLineItems: number;
   totalWeightBase: number;
   weightBaseUnit: ProductUnit;
 }
 
 export const createEmptySoldItemSummary = (): SoldItemSummary => ({
-  unitItems: 0,
+  unitItems: {},
   weightedLineItems: 0,
   totalWeightBase: 0,
   weightBaseUnit: WEIGHT_BASE_UNIT,
 });
+
+export const formatUnitQuantityBreakdown = (unitItems: Record<string, number>): string => {
+  const entries = Object.entries(unitItems).filter(([, quantity]) => quantity !== 0);
+
+  if (entries.length === 0) {
+    return '0';
+  }
+
+  return entries
+    .map(([unit, quantity]) => `${quantity.toLocaleString('id-ID')} ${unit}`)
+    .join(', ');
+};
 
 export const aggregateSoldItems = (
   items: TransactionItem[],
@@ -138,7 +150,7 @@ export const aggregateSoldItems = (
       return summary;
     }
 
-    summary.unitItems += item.quantity;
+    summary.unitItems[unit] = (summary.unitItems[unit] || 0) + item.quantity;
     return summary;
   }, createEmptySoldItemSummary());
 };

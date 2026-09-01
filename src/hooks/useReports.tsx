@@ -255,7 +255,7 @@ interface TransactionDetailReportData {
   totalDiscount: number;
   totalCost: number;
   totalProfit: number;
-  totalItems: number;
+  totalItemsByUnit: Record<string, number>;
   uniqueProducts: number;
   averageMargin: number;
 }
@@ -435,7 +435,7 @@ export const useTransactionDetailReport = (
           totalDiscount: 0,
           totalCost: 0,
           totalProfit: 0,
-          totalItems: 0,
+          totalItemsByUnit: {},
           uniqueProducts: 0,
           averageMargin: 0,
         };
@@ -547,7 +547,10 @@ export const useTransactionDetailReport = (
         totalDiscount,
         totalCost,
         totalProfit,
-        totalItems: rows.reduce((sum, row) => sum + row.quantity, 0),
+        totalItemsByUnit: rows.reduce((acc, row) => {
+          acc[row.unit] = (acc[row.unit] || 0) + row.quantity;
+          return acc;
+        }, {} as Record<string, number>),
         uniqueProducts: new Set(rows.map((row) => row.product_id)).size,
         averageMargin: totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
       };

@@ -8,6 +8,7 @@ import { getProductCategoryLabel, getProductCategoryOptions } from '@/i18n/stock
 import dayjs from '@/lib/dayjs';
 import { exportCsv, exportPdf, type ExportTarget } from '@/utils/export';
 import { formatCurrency } from '@/utils/formatters';
+import { formatUnitQuantityBreakdown } from '@/utils/salesUnits';
 import {
   FilePdfOutlined,
   FileTextOutlined,
@@ -298,7 +299,7 @@ export default function TransactionDetailReport() {
       const summaryRows = [
         [t('report.totalTransactions'), data.transactions.length],
         [t('report.totalItemLine'), data.rows.length],
-        [t('report.totalQty'), data.totalItems],
+        [t('report.totalQty'), formatUnitQuantityBreakdown(data.totalItemsByUnit)],
         [t('report.uniqueProducts'), data.uniqueProducts],
         [t('report.discount'), data.totalDiscount],
         [t('report.salesTotal'), data.totalRevenue],
@@ -403,7 +404,7 @@ export default function TransactionDetailReport() {
               '',
               '',
               t('common.total'),
-              data.totalItems.toLocaleString('id-ID'),
+              formatUnitQuantityBreakdown(data.totalItemsByUnit),
               formatCurrency(data.totalDiscount),
               formatCurrency(data.totalRevenue),
               formatCurrency(data.totalCost),
@@ -417,7 +418,7 @@ export default function TransactionDetailReport() {
               '',
               '',
               t('common.total'),
-              data.totalItems.toLocaleString('id-ID'),
+              formatUnitQuantityBreakdown(data.totalItemsByUnit),
               formatCurrency(data.totalDiscount),
               formatCurrency(data.totalRevenue),
             ];

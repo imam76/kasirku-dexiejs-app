@@ -6,7 +6,7 @@ import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import { exportCsv, exportPdf, type ExportTarget } from '@/utils/export';
 import { formatCurrency } from '@/utils/formatters';
-import { formatWeightTotal, resolveTransactionItemUnit } from '@/utils/salesUnits';
+import { formatUnitQuantityBreakdown, formatWeightTotal, resolveTransactionItemUnit } from '@/utils/salesUnits';
 import { BarChartOutlined, FilePdfOutlined, FileTextOutlined, ReloadOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import { App, Button, Card, DatePicker, Empty, Select, Statistic, Typography } from 'antd';
 import autoTable from 'jspdf-autotable';
@@ -174,7 +174,7 @@ export default function PosSalesReport() {
         [t('report.discount'), data.totalDiscount],
         [t('report.salesTotal'), data.totalRevenue],
         ...(canViewProfit ? [[t('report.profit'), data.totalProfit]] : []),
-        [t('report.unitItemsSold'), data.soldItems.unitItems],
+        [t('report.unitItemsSold'), formatUnitQuantityBreakdown(data.soldItems.unitItems)],
         [t('report.weightedItemsSold'), data.soldItems.weightedLineItems],
         [t('report.totalWeightedBase'), formatWeightTotal(data.soldItems.totalWeightBase)],
         [t('report.totalWeightedGram'), data.soldItems.totalWeightBase],
@@ -479,7 +479,7 @@ export default function PosSalesReport() {
             { title: t('report.totalTransactions'), value: data.transactions.length, suffix: t('report.transaction'), color: '#1890ff', border: 'border-l-blue-500' },
             { title: t('report.salesTotal'), value: data.totalRevenue, prefix: 'Rp ', color: '#52c41a', border: 'border-l-green-500', isCurrency: true },
             ...(canViewProfit ? [{ title: t('report.profit'), value: data.totalProfit, prefix: 'Rp ', color: '#faad14', border: 'border-l-orange-500', isCurrency: true }] : []),
-            { title: t('report.unitItemsSold'), value: data.soldItems.unitItems, suffix: t('report.unitSuffix'), color: '#722ed1', border: 'border-l-purple-500' },
+            { title: t('report.unitItemsSold'), value: formatUnitQuantityBreakdown(data.soldItems.unitItems), color: '#722ed1', border: 'border-l-purple-500' },
             { title: t('report.weightedItemsSold'), value: data.soldItems.weightedLineItems, suffix: `${t('report.itemSuffix')} / ${formatWeightTotal(data.soldItems.totalWeightBase)}`, color: '#0f766e', border: 'border-l-teal-500' },
             { title: t('report.averageTransaction'), value: data.averageTransaction, prefix: 'Rp ', color: '#eb2f96', border: 'border-l-pink-500', isCurrency: true },
           ].map((stat, idx) => (
