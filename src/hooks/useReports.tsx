@@ -13,7 +13,12 @@ import { buildPayableRows } from '@/utils/accountsPayable/buildPayableRows';
 import { buildReceivableRows } from '@/utils/accountsReceivable/buildReceivableRows';
 import { getSalesInvoicePaymentAllocatedAmount } from '@/utils/accountsReceivable/paymentAmounts';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
-import { filterActiveSaleTransactions, isTransactionActive, isTransactionExpense } from '@/utils/transactions';
+import {
+  filterActiveSaleTransactions,
+  getTransactionItemCost,
+  isTransactionActive,
+  isTransactionExpense,
+} from '@/utils/transactions';
 import type {
   AccountsPayableRow,
   AccountsReceivableRow,
@@ -472,7 +477,7 @@ export const useTransactionDetailReport = (
 
           const product = productMap.get(item.product_id) as Product | undefined;
           const unit = resolveTransactionItemUnit(item, product);
-          const costTotal = (item.purchase_price || 0) * item.quantity;
+          const costTotal = getTransactionItemCost(item);
           const profit = item.profit || 0;
           const transactionProfit = transactionProfitMap[item.transaction_id] || 0;
           const paymentSnapshot = paymentSnapshotMap.get(transaction.id);

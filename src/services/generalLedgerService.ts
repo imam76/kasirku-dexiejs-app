@@ -45,6 +45,7 @@ import {
   withUpdatedJournalEntrySync,
 } from '@/services/journalEntrySyncService';
 import { getAccountNormalBalance } from '@/utils/chartOfAccounts/getAccountNormalBalance';
+import { getTransactionItemCost } from '@/utils/transactions';
 import {
   getSalesInvoicePaymentAllocatedAmount,
   getSalesInvoicePaymentOverpaymentAmount,
@@ -1222,7 +1223,7 @@ export const postManualJournal = async ({
 
 const getTransactionItemsCost = (items: TransactionItem[]) => {
   return roundCurrency(items.reduce((sum, item) => {
-    return sum + amountOrZero(item.purchase_price) * amountOrZero(item.quantity);
+    return sum + getTransactionItemCost(item);
   }, 0));
 };
 

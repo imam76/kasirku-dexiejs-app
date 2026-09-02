@@ -17,7 +17,7 @@ import type {
   FinanceTransaction,
 } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
-import { konversiSatuanProduk } from '@/utils/pricing';
+import { konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { isTransactionActive, isTransactionExpense } from '@/utils/transactions';
 import { getIssuedReturnSummaryForSource, loadSalesReturnSourceChain } from '@/services/salesReturnReadService';
 import { recalculateSalesInvoicePaymentStatus } from '@/services/salesDocumentService';
@@ -404,7 +404,12 @@ const applyRestockEffect = async (
     // When restocking (direction === 1), create a FIFO lot using the original purchase_price snapshot.
     // On void of a return (direction === -1), we do NOT remove the lot — it may already be consumed.
     if (direction === 1 && stockQuantity > 0) {
-      const costPerStockUnit = item.purchase_price ?? 0;
+      const costPerStockUnit = normalisasiHargaProduk(
+        item.purchase_price ?? 0,
+        product,
+        item.unit,
+        product.purchase_unit,
+      );
       await addInventoryLot({
         productId: product.id,
         productName: product.name,
