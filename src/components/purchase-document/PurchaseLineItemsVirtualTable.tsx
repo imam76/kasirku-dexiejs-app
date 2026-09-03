@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
-import type { PurchaseDocumentItem } from '@/types';
+import type { PurchaseCostStatus, PurchaseDocumentItem } from '@/types';
 import type { DocumentCurrencySnapshot } from '@/utils/documentCurrency';
 import type { LineItemEntry } from '@/utils/documentLineItems/lineItemView';
 import { VirtualLineItemsTable } from '@/components/virtual-line-items/VirtualLineItemsTable';
@@ -26,6 +26,7 @@ interface PurchaseLineItemsVirtualTableProps {
   expandedRowSignature: string;
   hasPricing: boolean;
   isPurchaseReceipt: boolean;
+  receiptCostStatusDefault: PurchaseCostStatus;
   scrollToLastRequest: number;
   onUpdateItem: (itemId: string, patch: Partial<PurchaseDocumentItem>) => void;
   onSelectProduct: (itemId: string, productId: string) => void;
@@ -53,6 +54,7 @@ export const PurchaseLineItemsVirtualTable = ({
   expandedRowSignature,
   hasPricing,
   isPurchaseReceipt,
+  receiptCostStatusDefault,
   scrollToLastRequest,
   onUpdateItem,
   onSelectProduct,
@@ -66,11 +68,13 @@ export const PurchaseLineItemsVirtualTable = ({
     const columns = ['44px', 'minmax(260px,1fr)', '120px'];
     if (isPurchaseReceipt) columns.push('120px');
     columns.push('120px');
-    if (hasPricing) columns.push('140px', '140px', '56px');
+    if (hasPricing) columns.push('140px');
+    if (isPurchaseReceipt) columns.push('156px');
+    if (hasPricing) columns.push('140px', '56px');
     columns.push('56px');
     return columns.join(' ');
   }, [hasPricing, isPurchaseReceipt]);
-  const minWidth = isPurchaseReceipt ? 1072 : hasPricing ? 952 : 632;
+  const minWidth = isPurchaseReceipt ? 1228 : hasPricing ? 952 : 632;
 
   return (
     <VirtualLineItemsTable
@@ -95,6 +99,7 @@ export const PurchaseLineItemsVirtualTable = ({
           {isPurchaseReceipt && <div>{t('purchaseDocuments.field.receivedQuantity')}</div>}
           <div>{t('purchaseDocuments.field.unit')}</div>
           {hasPricing && <div>{t('purchaseDocuments.field.price')}</div>}
+          {isPurchaseReceipt && <div>{t('purchaseDocuments.field.costStatus')}</div>}
           {hasPricing && <div className="text-right">{t('purchaseDocuments.field.subtotal')}</div>}
           {hasPricing && <div />}
           <div />
@@ -123,6 +128,7 @@ export const PurchaseLineItemsVirtualTable = ({
           isExpanded={expandedRowKeySet.has(entry.item.id)}
           hasPricing={hasPricing}
           isPurchaseReceipt={isPurchaseReceipt}
+          receiptCostStatusDefault={receiptCostStatusDefault}
           gridTemplateColumns={gridTemplateColumns}
           onUpdateItem={onUpdateItem}
           onSelectProduct={onSelectProduct}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from 'antd';
 import { Plus } from 'lucide-react';
-import type { Product, PurchaseDocumentItem, Tax } from '@/types';
+import type { Product, PurchaseCostStatus, PurchaseDocumentItem, Tax } from '@/types';
 import type { PurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useI18n } from '@/hooks/useI18n';
 import { useUnits } from '@/hooks/useUnits';
@@ -26,6 +26,7 @@ interface PurchaseDocumentLineItemsProps {
   products: Product[];
   taxes: Tax[];
   documentCurrencySnapshot: DocumentCurrencySnapshot;
+  receiptCostStatusDefault?: PurchaseCostStatus;
   onChange: (items: PurchaseDocumentItem[]) => void;
   onCreateProductRequest?: (lineId: string, search: string) => void;
   onEditProductRequest?: (lineId: string, productId: string) => void;
@@ -53,6 +54,7 @@ export const PurchaseDocumentLineItems = ({
   products,
   taxes,
   documentCurrencySnapshot,
+  receiptCostStatusDefault = 'FINAL',
   onChange,
   onCreateProductRequest,
   onEditProductRequest,
@@ -199,6 +201,17 @@ export const PurchaseDocumentLineItems = ({
     [calculatedItems],
   );
 
+  const receiptCostSummary = useMemo(() => {
+    if (config.type !== 'PURCHASE_RECEIPT') return undefined;
+
+    return items.reduce<Record<PurchaseCostStatus, number>>((summary, item) => {
+      if (!item.product_id) return summary;
+      const status = item.cost_status ?? receiptCostStatusDefault;
+      summary[status] += 1;
+      return summary;
+    }, { FINAL: 0, ESTIMATED: 0, PENDING: 0 });
+  }, [config.type, items, receiptCostStatusDefault]);
+
   const handleSort = useCallback((sortKey: LineItemSortKey) => {
     onChange(sortLineItems(itemsRef.current, sortKey, subtotalById));
   }, [onChange, subtotalById]);
@@ -217,12 +230,13 @@ export const PurchaseDocumentLineItems = ({
       return applyCurrencySnapshotToLineItem({
         ...nextItem,
         id: item.id,
+        cost_status: item.cost_status,
         quantity,
         ordered_quantity: config.type === 'PURCHASE_RECEIPT' ? item.ordered_quantity ?? quantity : item.ordered_quantity,
         received_quantity: config.type === 'PURCHASE_RECEIPT' ? item.received_quantity ?? quantity : item.received_quantity,
-        price: config.behavior.hasPricing
+        price: config.behavior.hasPricing && item.cost_status !== 'PENDING'
           ? createSystemPurchasePricingPatch(product, { ...nextItem, quantity, unit }).price
-          : undefined,
+          : 0,
         discount_type: item.discount_type ?? nextItem.discount_type,
         discount_value: item.discount_value ?? nextItem.discount_value,
         discount_amount: item.discount_amount ?? nextItem.discount_amount,
@@ -283,6 +297,7 @@ export const PurchaseDocumentLineItems = ({
         expandedRowSignature={expandedRowSignature}
         hasPricing={config.behavior.hasPricing}
         isPurchaseReceipt={config.type === 'PURCHASE_RECEIPT'}
+        receiptCostStatusDefault={receiptCostStatusDefault}
         scrollToLastRequest={scrollToLastRequest}
         onUpdateItem={updateItem}
         onSelectProduct={selectProduct}
@@ -291,6 +306,19 @@ export const PurchaseDocumentLineItems = ({
         onCreateProductRequest={onCreateProductRequest}
         onEditProductRequest={onEditProductRequest}
       />
+      {receiptCostSummary && (receiptCostSummary.FINAL + receiptCostSummary.ESTIMATED + receiptCostSummary.PENDING) > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+          <div className="font-medium">Status harga diatur per produk.</div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            <span>{receiptCostSummary.FINAL} Harga Final</span>
+            <span>{receiptCostSummary.ESTIMATED} Harga Sementara</span>
+            <span>{receiptCostSummary.PENDING} Belum Ada Harga</span>
+          </div>
+          {receiptCostSummary.PENDING > 0 && (
+            <span className="text-red-700">Baris tanpa harga harus dilengkapi sebelum penerimaan diterbitkan.</span>
+          )}
+        </div>
+      )}
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-gray-500">
           {t('purchaseDocuments.addRowShortcut')}

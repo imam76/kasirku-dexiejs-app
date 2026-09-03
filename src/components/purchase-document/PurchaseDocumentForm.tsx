@@ -207,7 +207,6 @@ export const PurchaseDocumentForm = ({
   const items = useMemo(() => watchedItems ?? [], [watchedItems]);
   const filledItemCount = useMemo(() => countFilledLineItems(items), [items]);
   const documentDate = useWatch({ control, name: 'document_date' });
-  const watchedCostStatus = useWatch({ control, name: 'cost_status' });
   const watchedCurrencyCode = useWatch({ control, name: 'currency_code' });
   const watchedCurrencyName = useWatch({ control, name: 'currency_name' });
   const watchedCurrencySymbol = useWatch({ control, name: 'currency_symbol' });
@@ -643,36 +642,6 @@ export const PurchaseDocumentForm = ({
                 )}
               />
             </div>
-            <div className={fieldContainerClassName}>
-              <label className={labelClassName}>{t('purchaseDocuments.field.costStatus')}</label>
-              <Controller
-                name="cost_status"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    className="w-full"
-                    value={field.value ?? 'FINAL'}
-                    options={[
-                      { value: 'FINAL', label: t('purchaseDocuments.costStatus.final') },
-                      { value: 'ESTIMATED', label: t('purchaseDocuments.costStatus.estimated') },
-                      { value: 'PENDING', label: t('purchaseDocuments.costStatus.pending') },
-                    ]}
-                    onBlur={field.onBlur}
-                    onChange={field.onChange}
-                  />
-                )}
-              />
-              {watchedCostStatus === 'ESTIMATED' && (
-                <p className="mt-1 text-xs leading-5 text-amber-700">
-                  {t('purchaseDocuments.helper.estimatedCost')}
-                </p>
-              )}
-              {watchedCostStatus === 'PENDING' && (
-                <p className="mt-1 text-xs leading-5 text-red-600">
-                  {t('purchaseDocuments.helper.pendingCost')}
-                </p>
-              )}
-            </div>
           </>
         )}
         {config.behavior.hasDueDate && (
@@ -799,6 +768,7 @@ export const PurchaseDocumentForm = ({
         products={products}
         taxes={taxes}
         documentCurrencySnapshot={documentCurrencySnapshot}
+        receiptCostStatusDefault={initialData?.document?.cost_status ?? 'FINAL'}
         onChange={handleItemsChange}
         onCreateProductRequest={handleCreateProductRequest}
         onEditProductRequest={handleEditProductRequest}

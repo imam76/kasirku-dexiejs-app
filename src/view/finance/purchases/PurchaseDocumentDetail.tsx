@@ -1,25 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Input, Modal, Space, Typography } from 'antd';
-import { useNavigate } from '@tanstack/react-router';
-import { AlertTriangle, FileCheck2, Tags, Wrench } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Typography } from 'antd';
 import { PayablePaymentHistory } from '@/components/accounts-payable/PayablePaymentHistory';
-import {
-  getPurchaseDocumentConfig,
-  getPurchaseDocumentTypePathSegment,
-  PURCHASE_DOCUMENT_TYPE_OPTIONS,
-} from '@/configs/purchase-document';
-import { useI18n } from '@/hooks/useI18n';
+import { PurchaseDocumentActionButton, usePurchaseDocumentActions } from '@/components/purchase-document/PurchaseDocumentActions';
+import { getPurchaseDocumentConfig } from '@/configs/purchase-document';
 import { useAuth } from '@/auth/useAuth';
-import { getPurchaseDocumentPermission } from '@/auth/documentPermissions';
+import { useI18n } from '@/hooks/useI18n';
 import { useAccountsPayable } from '@/hooks/useAccountsPayable';
-import { usePurchaseDocuments } from '@/hooks/usePurchaseDocuments';
 import { db } from '@/lib/db';
 import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
 import type {
   PurchaseDocument,
   PurchaseDocumentItem,
   PurchaseDocumentStatus,
-  PurchaseDocumentType,
+  PurchaseCostReconciliation,
   PurchaseCostStatus,
   PurchaseInvoicePaymentStatus,
 } from '@/types';
@@ -77,9 +70,7 @@ interface PurchaseDocumentDetailProps {
 
 export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentDetailProps) {
   const { t } = useI18n();
-  const navigate = useNavigate();
   const { can } = useAuth();
-  const { issueDocument, voidDocument, convertDocument, correctDocument, isMutating } = usePurchaseDocuments();
   const {
     getInvoicePayments,
     voidPayment,
@@ -87,28 +78,33 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
   } = useAccountsPayable();
   const [document, setDocument] = useState<PurchaseDocument | undefined>();
   const [items, setItems] = useState<PurchaseDocumentItem[]>([]);
+  const [costReconciliations, setCostReconciliations] = useState<PurchaseCostReconciliation[]>([]);
 
   const loadDocument = useCallback(async () => {
-    const [loadedDocument, loadedItems] = await Promise.all([
+    const [loadedDocument, loadedItems, loadedCostReconciliations] = await Promise.all([
       db.purchaseDocuments.get(documentId),
       db.purchaseDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay),
+      db.purchaseCostReconciliations.where('purchase_document_id').equals(documentId).toArray(),
     ]);
     setDocument(loadedDocument);
     setItems(loadedItems);
+    setCostReconciliations(loadedCostReconciliations.sort((a, b) => b.created_at.localeCompare(a.created_at)));
   }, [documentId]);
 
   useEffect(() => {
     let isCurrent = true;
 
     const syncDocument = async () => {
-      const [loadedDocument, loadedItems] = await Promise.all([
+      const [loadedDocument, loadedItems, loadedCostReconciliations] = await Promise.all([
         db.purchaseDocuments.get(documentId),
         db.purchaseDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay),
+        db.purchaseCostReconciliations.where('purchase_document_id').equals(documentId).toArray(),
       ]);
       if (!isCurrent) return;
 
       setDocument(loadedDocument);
       setItems(loadedItems);
+      setCostReconciliations(loadedCostReconciliations.sort((a, b) => b.created_at.localeCompare(a.created_at)));
     };
 
     void syncDocument();
@@ -118,37 +114,18 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
     };
   }, [documentId]);
 
+  const getDocumentActions = usePurchaseDocumentActions({ onDocumentChanged: loadDocument });
+
   const config = document ? getPurchaseDocumentConfig(document.type) : undefined;
   const invoicePayments = document?.type === 'PURCHASE_INVOICE' ? getInvoicePayments(document.id) : [];
-  const nextConvertOptions = useMemo(() => {
-    if (!document || document.status !== 'ISSUED') return [];
-    const allowed: Record<PurchaseDocumentType, PurchaseDocumentType[]> = {
-      PURCHASE_REQUEST: ['REQUEST_FOR_QUOTATION', 'PURCHASE_ORDER'],
-      REQUEST_FOR_QUOTATION: ['PURCHASE_ORDER'],
-      PURCHASE_ORDER: ['PURCHASE_RECEIPT'],
-      PURCHASE_RECEIPT: ['PURCHASE_INVOICE', 'PURCHASE_RETURN'],
-      PURCHASE_INVOICE: ['PURCHASE_RETURN'],
-      PURCHASE_RETURN: [],
-    };
-    return allowed[document.type];
-  }, [document]);
 
   if (!document || !config) {
     return <div className="p-6">{t('purchaseDocuments.notFound')}</div>;
   }
 
-  const canEdit = document.status === 'DRAFT';
-  const canVoid = (document.status === 'DRAFT' || document.status === 'ISSUED') &&
-    !(document.type === 'PURCHASE_INVOICE' && (document.finance_transaction_id || Number(document.paid_amount || 0) > 0));
-  const canCorrect = document.status === 'ISSUED' &&
-    !(document.type === 'PURCHASE_INVOICE' && (document.finance_transaction_id || Number(document.paid_amount || 0) > 0));
-  const canReconcileCost = can('PURCHASE_RECEIPT_MANAGE') &&
-    document.type === 'PURCHASE_RECEIPT' &&
-    document.status === 'ISSUED' &&
-    (document.cost_status ?? 'FINAL') !== 'FINAL';
-  const canUpdateSellPrices = can('PRODUCT_MANAGE') &&
-    document.type === 'PURCHASE_INVOICE' &&
-    document.status === 'ISSUED';
+  const toolbarActions = getDocumentActions(document, 'detail-toolbar');
+  const normalToolbarActions = toolbarActions.filter((action) => action.group !== 'danger');
+  const dangerToolbarActions = toolbarActions.filter((action) => action.group === 'danger');
   const statusStyle = statusColor[document.status];
   const costStatus = document.cost_status ?? 'FINAL';
   const costStyle = costStatusColor[costStatus];
@@ -199,158 +176,27 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
     </span>
   );
 
-  const handleVoid = () => {
-    let voidReason = '';
-
-    Modal.confirm({
-      title: t('purchaseDocuments.voidConfirmTitle'),
-      content: (
-        <div className="space-y-3">
-          <Text type="secondary">
-            {t('purchaseDocuments.voidConfirmContent')}
-          </Text>
-          <Input.TextArea
-            rows={3}
-            placeholder={t('purchaseDocuments.voidReasonPlaceholder')}
-            onChange={(event) => {
-              voidReason = event.target.value;
-            }}
-          />
-        </div>
-      ),
-      okText: t('purchaseDocuments.void'),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        const normalizedReason = voidReason.trim();
-        if (!normalizedReason) {
-          throw new Error(t('purchaseDocuments.voidReasonRequired'));
-        }
-
-        await voidDocument({ id: document.id, reason: normalizedReason });
-        await loadDocument();
-      },
-    });
-  };
-
-  const handleCorrect = () => {
-    let correctReason = '';
-
-    Modal.confirm({
-      title: t('purchaseDocuments.correctConfirmTitle'),
-      content: (
-        <div className="space-y-3">
-          <Text type="secondary">
-            {t('purchaseDocuments.correctConfirmContent')}
-          </Text>
-          <Input.TextArea
-            rows={3}
-            placeholder={t('purchaseDocuments.correctReasonPlaceholder')}
-            onChange={(event) => {
-              correctReason = event.target.value;
-            }}
-          />
-        </div>
-      ),
-      okText: t('purchaseDocuments.correct'),
-      onOk: async () => {
-        const normalizedReason = correctReason.trim();
-        if (!normalizedReason) {
-          throw new Error(t('purchaseDocuments.correctReasonRequired'));
-        }
-
-        const result = await correctDocument({ id: document.id, reason: normalizedReason });
-        navigate({
-          to: '/purchases/$documentType/$documentId/edit',
-          params: {
-            documentType: getPurchaseDocumentTypePathSegment(result.draftDocument.type),
-            documentId: result.draftDocument.id,
-          },
-        });
-      },
-    });
-  };
-
   return (
     <div className="p-3 sm:p-4 md:p-6">
-      <div className="mx-auto mb-4 flex max-w-[900px] flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="mx-auto mb-4 max-w-[900px]">
         <div>
           <Title level={2} style={{ margin: 0 }}>{document.document_number}</Title>
           <Text type="secondary">{t(config.titleKey)}</Text>
         </div>
-        <Space wrap>
-          {canEdit && (
-            <Button
-              onClick={() => navigate({
-                to: '/purchases/$documentType/$documentId/edit',
-                params: { documentType: getPurchaseDocumentTypePathSegment(document.type), documentId: document.id },
-              })}
-            >
-              {t('purchaseDocuments.editDraft')}
-            </Button>
-          )}
-          {document.status === 'DRAFT' && (
-            <Button type="primary" loading={isMutating} onClick={async () => {
-              await issueDocument(document.id);
-              await loadDocument();
-            }}>
-              {t('purchaseDocuments.issue')}
-            </Button>
-          )}
-          {canReconcileCost && (
-            <Button
-              icon={<FileCheck2 size={16} />}
-              onClick={() => navigate({
-                to: '/purchases/$documentType/$documentId/reconcile',
-                params: { documentType: getPurchaseDocumentTypePathSegment(document.type), documentId: document.id },
-              })}
-            >
-              Rekonsiliasi HPP
-            </Button>
-          )}
-          {canUpdateSellPrices && (
-            <Button
-              icon={<Tags size={16} />}
-              onClick={() => navigate({
-                to: '/purchases/$documentType/$documentId/update-sell-prices',
-                params: { documentType: getPurchaseDocumentTypePathSegment(document.type), documentId: document.id },
-              })}
-            >
-              Update Harga Jual
-            </Button>
-          )}
-          {nextConvertOptions
-            .filter((targetType) => can(getPurchaseDocumentPermission(targetType)))
-            .map((targetType) => (
-            <Button
-              key={targetType}
-              loading={isMutating}
-              onClick={async () => {
-                const result = await convertDocument({ sourceId: document.id, targetType });
-                navigate({
-                  to: '/purchases/$documentType/$documentId',
-                  params: {
-                    documentType: getPurchaseDocumentTypePathSegment(result.document.type),
-                    documentId: result.document.id,
-                  },
-                });
-              }}
-            >
-              {t('purchaseDocuments.convertTo', {
-                type: t(PURCHASE_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === targetType)?.labelKey ?? 'purchaseDocuments.table.type'),
-              })}
-            </Button>
+        {toolbarActions.length > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3">
+            {normalToolbarActions.map((action) => (
+              <PurchaseDocumentActionButton key={action.id} action={action} />
             ))}
-          {canCorrect && (
-            <Button icon={<Wrench size={16} />} loading={isMutating} onClick={handleCorrect}>
-              {t('purchaseDocuments.correct')}
-            </Button>
-          )}
-          {canVoid && (
-            <Button danger icon={<AlertTriangle size={16} />} onClick={handleVoid}>
-              {t('purchaseDocuments.void')}
-            </Button>
-          )}
-        </Space>
+            {dangerToolbarActions.length > 0 ? (
+              <div className="ml-auto flex flex-wrap gap-2">
+                {dangerToolbarActions.map((action) => (
+                  <PurchaseDocumentActionButton key={action.id} action={action} />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="mx-auto max-w-[900px] overflow-hidden rounded-2xl bg-white px-5 py-7 shadow-[0_8px_40px_rgba(0,0,0,.12),0_2px_8px_rgba(0,0,0,.06)] sm:px-8 md:px-12 md:py-11">
@@ -620,6 +466,28 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
                 await loadDocument();
               }}
             />
+          </div>
+        )}
+
+        {document.type === 'PURCHASE_RECEIPT' && costReconciliations.length > 0 && (
+          <div className="mt-6 rounded-lg border border-amber-100 bg-amber-50/40 px-4 py-3">
+            <div className="mb-3">
+              <div className="text-sm font-bold text-gray-900">Riwayat Rekonsiliasi HPP</div>
+              <div className="text-xs text-gray-500">Setiap koreksi harga disimpan per proses rekonsiliasi.</div>
+            </div>
+            <div className="space-y-2">
+              {costReconciliations.map((reconciliation) => (
+                <div key={reconciliation.id} className="flex flex-col gap-1 rounded-md border border-amber-100 bg-white px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <span className="font-semibold text-gray-800">{reconciliation.supplier_invoice_number || 'Tanpa nomor invoice'}</span>
+                    <span className="text-gray-500"> · {formatDate(reconciliation.created_at)} · {reconciliation.created_by_name || 'Pengguna'}</span>
+                  </div>
+                  <div className="font-medium text-gray-700">
+                    Variance Rp {formatCurrency(reconciliation.total_variance_amount)}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

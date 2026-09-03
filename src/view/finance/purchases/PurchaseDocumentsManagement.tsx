@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Button, DatePicker, Input, Select, Table, Tag } from 'antd';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, ArrowRight, ClipboardList, CreditCard, Eye, FileCheck2, FileQuestion, FileText, PackageCheck, Plus, ReceiptText, RotateCcw, SlidersHorizontal, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ClipboardList, CreditCard, FileCheck2, FileQuestion, FileText, PackageCheck, Plus, ReceiptText, RotateCcw, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 import type { ColumnsType } from 'antd/es/table';
 import {
   getPurchaseDocumentConfig,
@@ -24,7 +24,10 @@ import { canAccessPath } from '@/auth/routePermissions';
 import { useAuth } from '@/auth/useAuth';
 import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb';
 import ManagementListCard from '@/components/ManagementListCard';
+import { RecordActionMenu, RecordContextMenu } from '@/components/RecordActionMenu';
 import { MobileCrudPageHeader, ResponsiveCrudCollection } from '@/components/mobile-crud';
+import { usePurchaseDocumentActions } from '@/components/purchase-document/PurchaseDocumentActions';
+import type { RecordContextMenuPosition } from '@/utils/recordActions';
 import dayjs from '@/lib/dayjs';
 
 const statusColor: Record<PurchaseDocumentStatus, string> = {
@@ -267,6 +270,11 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
   const isMobile = useIsMobile();
   const location = useLocation();
   const navigate = useNavigate();
+  const getDocumentActions = usePurchaseDocumentActions();
+  const [contextMenu, setContextMenu] = useState<{
+    document: PurchaseDocument;
+    position: RecordContextMenuPosition;
+  } | null>(null);
   const config = getPurchaseDocumentConfig(documentType);
   const menuItem = purchaseDocumentMenuItems.find((item) => item.type === documentType);
   const documentPathSegment = getPurchaseDocumentTypePathSegment(documentType);
@@ -361,16 +369,13 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
       title: t('common.actions'),
       key: 'action',
       fixed: 'right',
-      width: 110,
+      width: 64,
       render: (_, record) => (
-        <Link
-          to="/purchases/$documentType/$documentId"
-          params={{ documentType: getPurchaseDocumentTypePathSegment(record.type), documentId: record.id }}
-        >
-          <Button size="small" icon={<Eye size={14} />}>
-            {t('purchaseDocuments.detail')}
-          </Button>
-        </Link>
+        <RecordActionMenu
+          actions={getDocumentActions(record, 'list-menu')}
+          ariaLabel={`${t('common.actions')} ${record.document_number}`}
+          testId={`purchase-document-more-${record.id}`}
+        />
       ),
     },
   ];
@@ -391,6 +396,10 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
 
   const activeFilterCount = (statusFilter !== 'ALL' ? 1 : 0) + (dateRange ? 1 : 0);
   const activeSearchAndFilterCount = activeFilterCount + (searchText.trim() ? 1 : 0);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  const contextMenuActions = contextMenu
+    ? getDocumentActions(contextMenu.document, 'context-menu')
+    : [];
 
   return (
     <>
@@ -462,13 +471,29 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
               </div>
             )}
           >
-            <Table
-              rowKey="id"
-              columns={columns}
-              dataSource={filteredDocuments}
-              scroll={{ x: 1100 }}
-              pagination={{ pageSize: 20, showSizeChanger: true }}
-            />
+            <>
+              <Table
+                rowKey="id"
+                columns={columns}
+                dataSource={filteredDocuments}
+                scroll={{ x: 1100 }}
+                pagination={{ pageSize: 20, showSizeChanger: true }}
+                onRow={(record) => ({
+                  onContextMenu: (event) => {
+                    event.preventDefault();
+                    setContextMenu({
+                      document: record,
+                      position: { x: event.clientX, y: event.clientY },
+                    });
+                  },
+                })}
+              />
+              <RecordContextMenu
+                position={contextMenu?.position ?? null}
+                actions={contextMenuActions}
+                onClose={closeContextMenu}
+              />
+            </>
           </ManagementListCard>
         )}
         mobileFilter={{
@@ -539,6 +564,16 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
           ) : undefined,
           loadMoreLabel: (remaining) => t('purchaseDocuments.mobile.loadMoreDocuments', { count: remaining }),
           getItemAriaLabel: (document) => t('purchaseDocuments.mobile.detailAria', { number: document.document_number }),
+          getActionsAriaLabel: (document) => `${t('common.actions')} ${document.document_number}`,
+          getActionSheetTitle: (document) => document.document_number,
+          getActions: (document) => getDocumentActions(document, 'list-menu').map((action) => ({
+            key: action.id,
+            label: action.label,
+            icon: action.icon,
+            danger: action.group === 'danger',
+            disabled: action.disabled,
+            onSelect: () => action.run(),
+          })),
           onItemClick: (document) => {
             void navigate({
               to: '/purchases/$documentType/$documentId',

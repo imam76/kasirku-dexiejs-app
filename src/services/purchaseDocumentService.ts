@@ -172,8 +172,11 @@ const applyPurchaseReceiptCostMetadata = async (
   const headerCostStatus = document.cost_status ?? PURCHASE_RECEIPT_DEFAULT_COST_STATUS;
   const costAwareItems = await Promise.all(items.map(async (item) => {
     const product = productById.get(item.product_id);
+    // Cost status lives on the receipt line.  The document-level value remains
+    // a backwards-compatible summary for older receipts and list views.
+    const costStatus = item.cost_status ?? headerCostStatus;
 
-    if (headerCostStatus === 'FINAL') {
+    if (costStatus === 'FINAL') {
       return {
         ...item,
         cost_status: 'FINAL' as const,
@@ -183,7 +186,7 @@ const applyPurchaseReceiptCostMetadata = async (
       };
     }
 
-    if (headerCostStatus === 'PENDING') {
+    if (costStatus === 'PENDING') {
       return {
         ...item,
         cost_status: 'PENDING' as const,

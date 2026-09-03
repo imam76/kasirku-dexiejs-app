@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, DatePicker, Input, InputNumber, Select, Table, Typography } from 'antd';
+import { Alert, App, Button, Card, Checkbox, DatePicker, Input, InputNumber, Select, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, Save } from 'lucide-react';
@@ -24,12 +24,14 @@ interface ReconciliationLineInput {
   unit: string;
   estimatedPrice: number;
   finalPrice: number;
+  selected: boolean;
 }
 
 const getReceivedQuantity = (item: PurchaseDocumentItem) => Number(item.received_quantity ?? item.quantity ?? 0);
 
 export default function PurchaseReceiptCostReconciliation({ documentId }: PurchaseReceiptCostReconciliationProps) {
   const navigate = useNavigate();
+  const { message } = App.useApp();
   const { reconcilePurchaseReceiptCost, isReconciling } = usePurchaseCostReconciliation();
   const [document, setDocument] = useState<PurchaseDocument | undefined>();
   const [isLoading, setIsLoading] = useState(true);
@@ -56,10 +58,12 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
       setDocument(loadedDocument);
       setSupplierInvoiceNumber(loadedDocument?.supplier_invoice_number ?? '');
       setSupplierInvoiceDate(loadedDocument?.supplier_invoice_date ?? dayjs().tz().format('YYYY-MM-DD'));
-      setAdditionalCostTreatment(loadedDocument?.additional_cost_treatment ?? 'IGNORE_FOR_MVP');
-      setAdditionalCostAmount(Number(loadedDocument?.additional_cost_amount || 0));
-      setSupplierDiscountAmount(Number(loadedDocument?.supplier_discount_amount || 0));
-      setSupplierTaxAmount(Number(loadedDocument?.supplier_tax_amount || 0));
+      // Each reconciliation is an auditable allocation. Do not preload an
+      // earlier allocation onto a later partial reconciliation.
+      setAdditionalCostTreatment('IGNORE_FOR_MVP');
+      setAdditionalCostAmount(0);
+      setSupplierDiscountAmount(0);
+      setSupplierTaxAmount(0);
       setLines(loadedItems
         .filter((item) => (item.cost_status ?? loadedDocument?.cost_status ?? 'FINAL') !== 'FINAL')
         .map((item) => ({
@@ -69,6 +73,7 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
           unit: item.unit,
           estimatedPrice: Number(item.estimated_price ?? item.price ?? 0),
           finalPrice: Number(item.final_price ?? item.price ?? item.estimated_price ?? 0),
+          selected: false,
         })));
       setIsLoading(false);
     };
@@ -79,19 +84,30 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
     };
   }, [documentId]);
 
-  const totalEstimated = useMemo(
-    () => lines.reduce((sum, line) => sum + line.receivedQuantity * line.estimatedPrice, 0),
+  const selectedLines = useMemo(
+    () => lines.filter((line) => line.selected),
     [lines],
   );
+  const selectedCount = selectedLines.length;
+  const allSelected = lines.length > 0 && selectedCount === lines.length;
+  const partiallySelected = selectedCount > 0 && !allSelected;
+  const totalEstimated = useMemo(
+    () => selectedLines.reduce((sum, line) => sum + line.receivedQuantity * line.estimatedPrice, 0),
+    [selectedLines],
+  );
   const totalFinal = useMemo(
-    () => lines.reduce((sum, line) => sum + line.receivedQuantity * line.finalPrice, 0),
-    [lines],
+    () => selectedLines.reduce((sum, line) => sum + line.receivedQuantity * line.finalPrice, 0),
+    [selectedLines],
   );
 
   const updateLine = (lineId: string, patch: Partial<ReconciliationLineInput>) => {
     setLines((current) => current.map((line) => (
       line.purchaseDocumentItemId === lineId ? { ...line, ...patch } : line
     )));
+  };
+
+  const setAllSelected = (selected: boolean) => {
+    setLines((current) => current.map((line) => ({ ...line, selected })));
   };
 
   const goBack = () => {
@@ -111,6 +127,10 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
 
   const handleSubmit = async () => {
     if (!document) return;
+    if (selectedLines.length === 0) {
+      message.warning('Pilih minimal satu produk yang harga finalnya sudah tersedia.');
+      return;
+    }
 
     try {
       await reconcilePurchaseReceiptCost({
@@ -122,7 +142,7 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
         supplierDiscountAmount,
         supplierTaxAmount,
         notes,
-        items: lines.map((line) => ({
+        items: selectedLines.map((line) => ({
           purchaseDocumentItemId: line.purchaseDocumentItemId,
           invoicedQuantity: line.receivedQuantity,
           finalPrice: line.finalPrice,
@@ -136,6 +156,26 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
   };
 
   const columns: ColumnsType<ReconciliationLineInput> = [
+    {
+      title: (
+        <Checkbox
+          aria-label="Pilih semua produk untuk rekonsiliasi"
+          checked={allSelected}
+          indeterminate={partiallySelected}
+          onChange={(event) => setAllSelected(event.target.checked)}
+        />
+      ),
+      dataIndex: 'selected',
+      width: 58,
+      align: 'center',
+      render: (selected: boolean, line) => (
+        <Checkbox
+          aria-label={`Pilih ${line.productName} untuk rekonsiliasi`}
+          checked={selected}
+          onChange={(event) => updateLine(line.purchaseDocumentItemId, { selected: event.target.checked })}
+        />
+      ),
+    },
     {
       title: 'Produk',
       dataIndex: 'productName',
@@ -166,6 +206,7 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
           className="w-full"
           prefix="Rp"
           value={line.finalPrice}
+          disabled={!line.selected}
           formatter={formatCurrencyInput}
           parser={parseCurrencyInput}
           onChange={(value) => updateLine(line.purchaseDocumentItemId, { finalPrice: Number(value || 0) })}
@@ -207,6 +248,13 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
         <Alert type="success" message="Semua item pada Purchase Receipt ini sudah final." />
       ) : (
         <>
+          <Alert
+            className="mb-4"
+            type="info"
+            showIcon
+            message="Pilih hanya produk yang harga finalnya sudah tersedia"
+            description="Produk yang tidak dipilih tetap memakai harga sementara dan tidak akan diubah. Biaya, diskon, dan pajak pada form ini hanya dialokasikan ke produk yang dipilih."
+          />
           <Card size="small">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
@@ -262,8 +310,9 @@ export default function PurchaseReceiptCostReconciliation({ documentId }: Purcha
               scroll={{ x: true }}
             />
             <div className="mt-4 flex flex-col items-end gap-1 text-sm">
-              <div>Estimasi: <span className="font-semibold">Rp {formatCurrency(totalEstimated)}</span></div>
-              <div>Final sebelum biaya: <span className="font-semibold">Rp {formatCurrency(totalFinal)}</span></div>
+              <div>{selectedCount} dari {lines.length} produk dipilih</div>
+              <div>Estimasi terpilih: <span className="font-semibold">Rp {formatCurrency(totalEstimated)}</span></div>
+              <div>Final terpilih sebelum biaya: <span className="font-semibold">Rp {formatCurrency(totalFinal)}</span></div>
               <div>Variance: <span className="font-semibold">Rp {formatCurrency(totalFinal - totalEstimated)}</span></div>
             </div>
           </Card>

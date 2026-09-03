@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { Button, InputNumber, Select } from 'antd';
 import { AlertTriangle, ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
-import type { PurchaseDocumentItem } from '@/types';
+import type { PurchaseCostStatus, PurchaseDocumentItem } from '@/types';
 import {
   formatDocumentCurrencyAmount,
   isBaseCurrency,
@@ -31,6 +31,7 @@ export interface PurchaseLineItemRowProps {
   isExpanded: boolean;
   hasPricing: boolean;
   isPurchaseReceipt: boolean;
+  receiptCostStatusDefault: PurchaseCostStatus;
   gridTemplateColumns: string;
   virtualIndex: number;
   rowNumber: number;
@@ -56,6 +57,7 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
       isExpanded,
       hasPricing,
       isPurchaseReceipt,
+      receiptCostStatusDefault,
       gridTemplateColumns,
       virtualIndex,
       rowNumber,
@@ -82,6 +84,8 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
     const displayedPrice = isForeignCurrency
       ? item.foreign_price ?? toDocumentCurrencyAmount(item.price, documentCurrencySnapshot)
       : item.price;
+    const costStatus = item.cost_status ?? receiptCostStatusDefault;
+    const hasPendingCost = isPurchaseReceipt && costStatus === 'PENDING';
 
     return (
       <div
@@ -185,11 +189,33 @@ const PurchaseLineItemRowBase = forwardRef<HTMLDivElement, PurchaseLineItemRowPr
               min={0}
               className="w-full"
               value={displayedPrice}
+              disabled={hasPendingCost}
               formatter={formatCurrencyInput}
               parser={parseCurrencyInput}
               onChange={(value) => onUpdateItem(item.id, isForeignCurrency
                 ? { foreign_price: Number(value || 0) }
                 : { price: Number(value || 0) })}
+            />
+          )}
+
+          {isPurchaseReceipt && (
+            <Select
+              className="w-full min-w-0"
+              value={costStatus}
+              options={[
+                { value: 'FINAL', label: t('purchaseDocuments.costStatus.final') },
+                { value: 'ESTIMATED', label: t('purchaseDocuments.costStatus.estimated') },
+                { value: 'PENDING', label: t('purchaseDocuments.costStatus.pending') },
+              ]}
+              onChange={(nextCostStatus: PurchaseCostStatus) => onUpdateItem(item.id, {
+                cost_status: nextCostStatus,
+                ...(nextCostStatus === 'PENDING' ? {
+                  price: 0,
+                  foreign_price: 0,
+                  estimated_price: undefined,
+                  final_price: undefined,
+                } : {}),
+              })}
             />
           )}
 
@@ -258,6 +284,7 @@ export const PurchaseLineItemRow = memo(PurchaseLineItemRowBase, (prev, next) =>
   prev.isExpanded === next.isExpanded &&
   prev.hasPricing === next.hasPricing &&
   prev.isPurchaseReceipt === next.isPurchaseReceipt &&
+  prev.receiptCostStatusDefault === next.receiptCostStatusDefault &&
   prev.gridTemplateColumns === next.gridTemplateColumns &&
   prev.virtualIndex === next.virtualIndex &&
   prev.rowNumber === next.rowNumber &&
