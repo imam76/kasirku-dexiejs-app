@@ -53,7 +53,6 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   // POS
   '/transaction': ['POS_TRANSACTION'],
   '/pos-resto': ['POS_RESTAURANT'],
-  '/pos-resto-prototype': ['POS_RESTAURANT'],
   '/history': ['POS_TRANSACTION', 'POS_RESTAURANT'],
   // Legacy stock shopping route redirects to Purchase Receipt.
   '/shopping-note': ['PURCHASE_RECEIPT'],

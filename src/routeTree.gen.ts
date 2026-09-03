@@ -33,9 +33,6 @@ const TransactionLazyRouteImport = createFileRoute('/transaction')()
 const SyncDbLazyRouteImport = createFileRoute('/sync-db')()
 const ShoppingNoteLazyRouteImport = createFileRoute('/shopping-note')()
 const SettingsLazyRouteImport = createFileRoute('/settings')()
-const PosRestoPrototypeLazyRouteImport = createFileRoute(
-  '/pos-resto-prototype',
-)()
 const PosRestoLazyRouteImport = createFileRoute('/pos-resto')()
 const HistoryLazyRouteImport = createFileRoute('/history')()
 const ActivityLogLazyRouteImport = createFileRoute('/activity-log')()
@@ -342,13 +339,6 @@ const SettingsLazyRoute = SettingsLazyRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/settings.lazy').then((d) => d.Route))
-const PosRestoPrototypeLazyRoute = PosRestoPrototypeLazyRouteImport.update({
-  id: '/pos-resto-prototype',
-  path: '/pos-resto-prototype',
-  getParentRoute: () => rootRouteImport,
-} as any).lazy(() =>
-  import('./routes/pos-resto-prototype.lazy').then((d) => d.Route),
-)
 const PosRestoLazyRoute = PosRestoLazyRouteImport.update({
   id: '/pos-resto',
   path: '/pos-resto',
@@ -1376,7 +1366,6 @@ export interface FileRoutesByFullPath {
   '/activity-log': typeof ActivityLogLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
-  '/pos-resto-prototype': typeof PosRestoPrototypeLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
@@ -1516,7 +1505,6 @@ export interface FileRoutesByTo {
   '/activity-log': typeof ActivityLogLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
-  '/pos-resto-prototype': typeof PosRestoPrototypeLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
@@ -1657,7 +1645,6 @@ export interface FileRoutesById {
   '/activity-log': typeof ActivityLogLazyRoute
   '/history': typeof HistoryLazyRoute
   '/pos-resto': typeof PosRestoLazyRoute
-  '/pos-resto-prototype': typeof PosRestoPrototypeLazyRoute
   '/settings': typeof SettingsLazyRoute
   '/shopping-note': typeof ShoppingNoteLazyRoute
   '/sync-db': typeof SyncDbLazyRoute
@@ -1799,7 +1786,6 @@ export interface FileRouteTypes {
     | '/activity-log'
     | '/history'
     | '/pos-resto'
-    | '/pos-resto-prototype'
     | '/settings'
     | '/shopping-note'
     | '/sync-db'
@@ -1939,7 +1925,6 @@ export interface FileRouteTypes {
     | '/activity-log'
     | '/history'
     | '/pos-resto'
-    | '/pos-resto-prototype'
     | '/settings'
     | '/shopping-note'
     | '/sync-db'
@@ -2079,7 +2064,6 @@ export interface FileRouteTypes {
     | '/activity-log'
     | '/history'
     | '/pos-resto'
-    | '/pos-resto-prototype'
     | '/settings'
     | '/shopping-note'
     | '/sync-db'
@@ -2220,7 +2204,6 @@ export interface RootRouteChildren {
   ActivityLogLazyRoute: typeof ActivityLogLazyRoute
   HistoryLazyRoute: typeof HistoryLazyRoute
   PosRestoLazyRoute: typeof PosRestoLazyRoute
-  PosRestoPrototypeLazyRoute: typeof PosRestoPrototypeLazyRoute
   SettingsLazyRoute: typeof SettingsLazyRoute
   ShoppingNoteLazyRoute: typeof ShoppingNoteLazyRoute
   SyncDbLazyRoute: typeof SyncDbLazyRoute
@@ -2373,13 +2356,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsLazyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pos-resto-prototype': {
-      id: '/pos-resto-prototype'
-      path: '/pos-resto-prototype'
-      fullPath: '/pos-resto-prototype'
-      preLoaderRoute: typeof PosRestoPrototypeLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pos-resto': {
@@ -3410,7 +3386,6 @@ const rootRouteChildren: RootRouteChildren = {
   ActivityLogLazyRoute: ActivityLogLazyRoute,
   HistoryLazyRoute: HistoryLazyRoute,
   PosRestoLazyRoute: PosRestoLazyRoute,
-  PosRestoPrototypeLazyRoute: PosRestoPrototypeLazyRoute,
   SettingsLazyRoute: SettingsLazyRoute,
   ShoppingNoteLazyRoute: ShoppingNoteLazyRoute,
   SyncDbLazyRoute: SyncDbLazyRoute,

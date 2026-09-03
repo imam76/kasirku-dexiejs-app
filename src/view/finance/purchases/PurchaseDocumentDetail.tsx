@@ -354,33 +354,33 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
       </div>
 
       <div className="mx-auto max-w-[900px] overflow-hidden rounded-2xl bg-white px-5 py-7 shadow-[0_8px_40px_rgba(0,0,0,.12),0_2px_8px_rgba(0,0,0,.06)] sm:px-8 md:px-12 md:py-11">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
             <div
-              className="flex h-[62px] w-[62px] items-center justify-center rounded-full text-2xl font-extrabold text-white shadow-md"
+              className="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-full text-xl font-extrabold text-white shadow-md"
               style={{ backgroundColor: config.theme.accent, boxShadow: `0 4px 12px ${config.theme.accentShadow}` }}
             >
               {config.numberPrefix}
             </div>
-            <div className="mt-3">
+            <div className="min-w-0">
               <div className="text-[15px] font-bold" style={{ color: config.theme.accent }}>
                 {t(config.titleKey)}
               </div>
-              <div className="mt-1 text-xs leading-6 text-gray-500">
-                {document.source_document_number || document.document_number}
+              <div className="mt-1 truncate text-sm font-semibold text-gray-800">
+                <span className="mr-1 text-gray-400">#</span>
+                {document.document_number}
               </div>
+              {document.source_document_number && document.source_document_number !== document.document_number && (
+                <div className="mt-1 truncate text-xs text-gray-500">
+                  {t('paymentMethods.table.reference')}: {document.source_document_number}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="text-left sm:text-right">
-            <div className="text-[32px] font-extrabold uppercase leading-none tracking-[.04em]" style={{ color: config.theme.accent }}>
-              {config.numberPrefix}
-            </div>
-            <div className="mt-2 text-sm font-medium text-gray-700">
-              <span className="text-gray-400">#</span> {document.document_number}
-            </div>
-            {config.behavior.hasPricing ? (
-              <div className="mt-5">
+          {config.behavior.hasPricing && (
+            <div className="text-left sm:text-right">
+              <div>
                 <div className="text-[11px] font-semibold uppercase tracking-[.07em] text-gray-400">
                   {t('purchaseDocuments.field.total')}
                 </div>
@@ -388,10 +388,8 @@ export default function PurchaseDocumentDetail({ documentId }: PurchaseDocumentD
                   {renderMoney(document.total_amount || 0, document.foreign_total_amount, 'text-2xl font-extrabold text-gray-950')}
                 </div>
               </div>
-            ) : (
-              <div className="mt-5">{statusBadge}</div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="my-6 h-px bg-gray-200" />
