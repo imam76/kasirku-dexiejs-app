@@ -228,6 +228,7 @@ import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryCom
 import type { InventoryLot, InventoryLotConsumption, PurchaseCostReconciliation, PurchaseCostReconciliationItem } from '@/types';
 import type { LeaveRequest } from '@/types';
 import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
+import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -1622,17 +1623,17 @@ const mapJournalEntryToRemoteDto = (entry: JournalEntry): RemoteJournalEntryDto 
   description: entry.description,
   total_debit: normalizeRemoteNumber(entry.total_debit),
   total_credit: normalizeRemoteNumber(entry.total_credit),
-  posted_at: entry.posted_at,
-  voided_at: entry.voided_at,
+  posted_at: toCanonicalOptionalIsoTimestamp(entry.posted_at) ?? null,
+  voided_at: toCanonicalOptionalIsoTimestamp(entry.voided_at) ?? null,
   reversed_entry_id: entry.reversed_entry_id,
   version: entry.version ?? 1,
   created_by: entry.created_by,
   created_by_name: entry.created_by_name,
   updated_by: entry.updated_by,
   updated_by_name: entry.updated_by_name,
-  created_at: entry.created_at,
-  updated_at: entry.updated_at,
-  deleted_at: entry.deleted_at,
+  created_at: toCanonicalIsoTimestamp(entry.created_at),
+  updated_at: toCanonicalIsoTimestamp(entry.updated_at),
+  deleted_at: toCanonicalOptionalIsoTimestamp(entry.deleted_at) ?? null,
 });
 
 const mapJournalEntryLineToRemoteDto = (line: JournalEntryLine): RemoteJournalEntryLineDto => ({
@@ -1647,7 +1648,7 @@ const mapJournalEntryLineToRemoteDto = (line: JournalEntryLine): RemoteJournalEn
   description: line.description,
   department_id: line.department_id,
   project_id: line.project_id,
-  created_at: line.created_at,
+  created_at: toCanonicalIsoTimestamp(line.created_at),
 });
 
 const mapJournalEntryBundleToRemoteDto = (
@@ -1666,8 +1667,8 @@ const mapOpeningBalanceBatchToRemoteDto = (
   company_id: batch.company_id ?? null,
   company_name: batch.company_name ?? null,
   module: batch.module,
-  cutoff_date: batch.cutoff_date,
-  accounting_start_date: batch.accounting_start_date ?? null,
+  cutoff_date: toCanonicalIsoTimestamp(batch.cutoff_date),
+  accounting_start_date: toCanonicalOptionalIsoTimestamp(batch.accounting_start_date) ?? null,
   status: batch.status,
   revision_number: batch.revision_number ?? null,
   previous_batch_id: batch.previous_batch_id ?? null,
@@ -1675,16 +1676,16 @@ const mapOpeningBalanceBatchToRemoteDto = (
   total_credit: normalizeRemoteNumber(batch.total_credit),
   journal_entry_id: batch.journal_entry_id ?? null,
   posting_idempotency_key: batch.posting_idempotency_key ?? null,
-  posted_at: batch.posted_at ?? null,
+  posted_at: toCanonicalOptionalIsoTimestamp(batch.posted_at) ?? null,
   posted_by: batch.posted_by ?? null,
   posted_by_name: batch.posted_by_name ?? null,
-  locked_at: batch.locked_at ?? null,
-  reversed_at: batch.reversed_at ?? null,
+  locked_at: toCanonicalOptionalIsoTimestamp(batch.locked_at) ?? null,
+  reversed_at: toCanonicalOptionalIsoTimestamp(batch.reversed_at) ?? null,
   reversed_by: batch.reversed_by ?? null,
   reversed_by_name: batch.reversed_by_name ?? null,
   reversal_journal_entry_id: batch.reversal_journal_entry_id ?? null,
-  skipped_at: batch.skipped_at ?? null,
-  validated_at: batch.validated_at ?? null,
+  skipped_at: toCanonicalOptionalIsoTimestamp(batch.skipped_at) ?? null,
+  validated_at: toCanonicalOptionalIsoTimestamp(batch.validated_at) ?? null,
   validated_by: batch.validated_by ?? null,
   validated_by_name: batch.validated_by_name ?? null,
   notes: batch.notes ?? null,
@@ -1693,9 +1694,9 @@ const mapOpeningBalanceBatchToRemoteDto = (
   created_by_name: batch.created_by_name ?? null,
   updated_by: batch.updated_by ?? null,
   updated_by_name: batch.updated_by_name ?? null,
-  created_at: batch.created_at,
-  updated_at: batch.updated_at,
-  deleted_at: batch.deleted_at ?? null,
+  created_at: toCanonicalIsoTimestamp(batch.created_at),
+  updated_at: toCanonicalIsoTimestamp(batch.updated_at),
+  deleted_at: toCanonicalOptionalIsoTimestamp(batch.deleted_at) ?? null,
 });
 
 const mapOpeningBalanceLineToRemoteDto = (
@@ -1715,8 +1716,8 @@ const mapOpeningBalanceLineToRemoteDto = (
   contact_id: line.contact_id ?? null,
   party_name: line.party_name ?? null,
   document_number: line.document_number ?? null,
-  document_date: line.document_date ?? null,
-  due_date: line.due_date ?? null,
+  document_date: toCanonicalOptionalIsoTimestamp(line.document_date) ?? null,
+  due_date: toCanonicalOptionalIsoTimestamp(line.due_date) ?? null,
   currency_code: line.currency_code ?? null,
   currency_name: line.currency_name ?? null,
   currency_symbol: line.currency_symbol ?? null,
@@ -1727,7 +1728,7 @@ const mapOpeningBalanceLineToRemoteDto = (
   paid_amount: line.paid_amount ?? null,
   remaining_amount: line.remaining_amount ?? null,
   settlement_status: line.settlement_status ?? null,
-  last_paid_at: line.last_paid_at ?? null,
+  last_paid_at: toCanonicalOptionalIsoTimestamp(line.last_paid_at) ?? null,
   account_id: line.account_id ?? null,
   account_code: line.account_code ?? null,
   account_name: line.account_name ?? null,
@@ -1737,8 +1738,8 @@ const mapOpeningBalanceLineToRemoteDto = (
   debit: normalizeRemoteNumber(line.debit),
   credit: normalizeRemoteNumber(line.credit),
   notes: line.notes ?? null,
-  created_at: line.created_at,
-  updated_at: line.updated_at,
+  created_at: toCanonicalIsoTimestamp(line.created_at),
+  updated_at: toCanonicalIsoTimestamp(line.updated_at),
 });
 
 const mapOpeningBalanceBundleToRemoteDto = (
