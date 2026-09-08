@@ -61,10 +61,9 @@ export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
 
   const createOwnerButton = page.getByRole('button', { name: 'Buat Owner' });
   const loggedInProfile = page.getByLabel(/Profil login|Logged-in profile/);
-  await expect(createOwnerButton.or(loggedInProfile)).toBeVisible();
-  if (await createOwnerButton.isVisible()) {
-    await createOwnerButton.click();
-  }
+  await expect(page.getByRole('radiogroup', { name: 'Jenis Usaha' })).toBeVisible();
+  await expect(createOwnerButton).toBeVisible();
+  await createOwnerButton.click();
 
   await expect(loggedInProfile).toBeVisible();
   await normalizeOwnerAccountingBaseline(page);

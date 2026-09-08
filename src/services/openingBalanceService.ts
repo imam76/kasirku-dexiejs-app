@@ -940,6 +940,9 @@ const buildReadyGeneralLedgerSetting = ({
 export const markOpeningBalanceModuleSkipped = async (
   module: OpeningBalanceModule,
   notes?: string,
+  options: {
+    allowExistingInventoryData?: boolean;
+  } = {},
 ) => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'FINANCE_ACCESS');
@@ -962,6 +965,7 @@ export const markOpeningBalanceModuleSkipped = async (
   let queueOperation: 'create' | 'update' = existingBatch ? 'update' : 'create';
   let alreadySkipped = false;
   let updatedGeneralLedger: GeneralLedgerSetting | undefined;
+  let skippedInventoryWithExistingData = false;
 
   await db.transaction('rw', [
     db.accountingInitialSetupSetting,
@@ -1033,15 +1037,25 @@ export const markOpeningBalanceModuleSkipped = async (
           .filter((purchase) => toDateOnly(purchase.created_at) > toDateOnly(cutoffDate))
           .first(),
       ]);
-      if (productWithStock || lotWithRemainingQuantity) {
+      const hasExistingInventoryData = Boolean(
+        productWithStock ||
+        lotWithRemainingQuantity ||
+        laterLot ||
+        laterConsumption ||
+        laterSale ||
+        laterPurchase,
+      );
+      if (hasExistingInventoryData && !options.allowExistingInventoryData) {
         throw new Error(
-          'Saldo awal persediaan tidak dapat dilewati karena masih ada saldo stok. Posting saldo awal persediaan atau lakukan rekonsiliasi stok terlebih dahulu.',
+          'Saldo awal persediaan tidak dapat dilewati karena stok atau pergerakan stok sudah ada. Posting saldo awal persediaan, lakukan rekonsiliasi stok, atau gunakan opsi lewati eksplisit untuk data legacy.',
         );
       }
-      if (laterLot || laterConsumption || laterSale || laterPurchase) {
-        throw new Error(
-          'Saldo awal persediaan tidak dapat dilewati karena sudah ada pergerakan stok setelah cutoff. Rekonsiliasi saldo awal dan transaksi berjalan terlebih dahulu.',
-        );
+      if (hasExistingInventoryData) {
+        skippedInventoryWithExistingData = true;
+        skippedBatch.notes = [
+          notes?.trim(),
+          'Dilewati secara eksplisit walaupun stok atau mutasi stok sudah ada. Tidak ada saldo atau jurnal persediaan yang dibuat; nilai persediaan dan HPP sebelum penyesuaian berikutnya tidak tercermin di General Ledger.',
+        ].filter(Boolean).join(' ');
       }
     }
 
@@ -1085,7 +1099,7 @@ export const markOpeningBalanceModuleSkipped = async (
       action: 'OPENING_BALANCE_MODULE_SKIPPED',
       entity: 'openingBalanceBatches',
       entity_id: skippedBatch.id,
-      description: `${currentUser?.name ?? 'User'} menandai saldo awal ${module} sebagai dilewati.`,
+      description: `${currentUser?.name ?? 'User'} menandai saldo awal ${module} sebagai dilewati${skippedInventoryWithExistingData ? ' dengan stok atau mutasi existing' : ''}.`,
     });
   });
 

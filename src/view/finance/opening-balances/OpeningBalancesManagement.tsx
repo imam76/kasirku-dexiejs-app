@@ -3,13 +3,15 @@ import { useNavigate } from '@tanstack/react-router';
 import { App, Alert, Button, Card, DatePicker, Descriptions, Input, InputNumber, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, CheckCircle2, CircleSlash, FilePlus2, Landmark, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CircleSlash, FilePlus2, HelpCircle, Landmark, Plus, Trash2 } from 'lucide-react';
 import dayjs from '@/lib/dayjs';
 import { db } from '@/lib/db';
 import OpeningBalanceForm from '@/components/general-ledger/OpeningBalanceForm';
+import MobileCrudFloatingActions from '@/components/mobile-crud/MobileCrudFloatingActions';
 import { useAccountingSetupStatus } from '@/hooks/useAccountingSetupStatus';
 import { useBaseCurrency } from '@/hooks/useBaseCurrency';
 import { useI18n } from '@/hooks/useI18n';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import {
   OPENING_BALANCE_MODULE_DEFINITIONS,
   getOpeningBalanceBatchId,
@@ -30,6 +32,7 @@ import type {
   OpeningBalanceLine,
   OpeningBalanceModule,
 } from '@/types';
+import OpeningBalanceGuidanceWizard from './OpeningBalanceGuidanceWizard';
 
 const { Text, Title } = Typography;
 
@@ -119,6 +122,8 @@ export default function OpeningBalancesManagement() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { baseCurrencyCode, baseCurrencySymbol } = useBaseCurrency();
+  const isMobile = useIsMobile();
+  const [isGuidanceWizardOpen, setIsGuidanceWizardOpen] = useState(false);
   const openingBalanceState = useLiveQuery(
     async () => {
       const [batches, setup, setting] = await Promise.all([
@@ -203,12 +208,19 @@ export default function OpeningBalancesManagement() {
 
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-4">
-      <div>
-        <Title level={2} className="!mb-1 flex items-center gap-2">
-          <Landmark size={24} />
-          {t('openingBalances.title')}
-        </Title>
-        <Text type="secondary">{t('openingBalances.subtitle')}</Text>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <Title level={2} className="!mb-1 flex items-center gap-2">
+            <Landmark size={24} />
+            {t('openingBalances.title')}
+          </Title>
+          <Text type="secondary">{t('openingBalances.subtitle')}</Text>
+        </div>
+        {!isMobile && (
+          <Button icon={<HelpCircle size={16} />} onClick={() => setIsGuidanceWizardOpen(true)}>
+            {t('openingBalances.guidance.action')}
+          </Button>
+        )}
       </div>
 
       {!cutoffDate && (
@@ -246,6 +258,27 @@ export default function OpeningBalancesManagement() {
           scroll={{ x: 760 }}
         />
       </Card>
+
+      <OpeningBalanceGuidanceWizard
+        batches={openingBalanceState.batches}
+        cutoffDate={cutoffDate}
+        open={isGuidanceWizardOpen}
+        onClose={() => setIsGuidanceWizardOpen(false)}
+        onOpenModule={(route) => navigate({ to: route as never })}
+      />
+
+      {isMobile && !isGuidanceWizardOpen && (
+        <MobileCrudFloatingActions
+          actions={[{
+            key: 'opening-balance-guidance',
+            label: t('openingBalances.guidance.fabLabel'),
+            icon: <HelpCircle size={22} />,
+            onClick: () => setIsGuidanceWizardOpen(true),
+            testId: 'opening-balance-guidance-fab',
+            type: 'primary',
+          }]}
+        />
+      )}
     </div>
   );
 }

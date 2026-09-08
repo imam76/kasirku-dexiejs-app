@@ -578,7 +578,9 @@ export const saveInventoryOpeningBalanceDraft = async ({
 };
 
 export const skipInventoryOpeningBalance = async (notes?: string) => (
-  markOpeningBalanceModuleSkipped('INVENTORY', notes)
+  markOpeningBalanceModuleSkipped('INVENTORY', notes, {
+    allowExistingInventoryData: true,
+  })
 );
 
 export const postInventoryOpeningBalance = async ({

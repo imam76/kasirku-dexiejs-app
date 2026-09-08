@@ -129,7 +129,7 @@ describe('inventory opening-balance readiness compatibility', () => {
     expect(violation).toContain('saldo awal INVENTORY sudah POSTED');
   });
 
-  test('checks product and FIFO balances inside the inventory skip transaction', () => {
+  test('requires an explicit legacy override before skipping inventory with stock activity', () => {
     const skipStart = openingBalanceServiceSource.indexOf(
       'export const markOpeningBalanceModuleSkipped',
     );
@@ -147,8 +147,10 @@ describe('inventory opening-balance readiness compatibility', () => {
     expect(skipSource).toContain('db.stockPurchases');
     expect(skipSource).toContain('Math.abs(Number(product.stock || 0)) > 1e-6');
     expect(skipSource).toContain('Math.abs(Number(lot.quantity_remaining || 0)) > 1e-6');
+    expect(skipSource).toContain('allowExistingInventoryData');
+    expect(skipSource).toContain('hasExistingInventoryData && !options.allowExistingInventoryData');
     expect(skipSource).toContain(
-      'Saldo awal persediaan tidak dapat dilewati karena sudah ada pergerakan stok setelah cutoff.',
+      'Saldo awal persediaan tidak dapat dilewati karena stok atau pergerakan stok sudah ada.',
     );
     expect(balanceGuard).toBeGreaterThan(transactionStart);
     expect(batchWrite).toBeGreaterThan(balanceGuard);

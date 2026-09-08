@@ -229,6 +229,7 @@ import type { InventoryLot, InventoryLotConsumption, PurchaseCostReconciliation,
 import type { LeaveRequest } from '@/types';
 import { getProductSellableUnits, normalizeProductUnitMappings } from '@/utils/productUnits';
 import { toCanonicalIsoTimestamp, toCanonicalOptionalIsoTimestamp } from '@/utils/timestamps';
+import { normalizeOpeningBalanceSyncPayload } from '@/utils/openingBalances/normalizeOpeningBalanceSyncPayload';
 
 const SYNC_QUEUE_BATCH_SIZE = 20;
 const SYNC_QUEUE_MAX_ATTEMPTS = 3;
@@ -5279,7 +5280,9 @@ const processOpeningBalanceQueueItem = async (queueItem: SyncQueueItem) => {
     throw new Error('Payload opening balance sync queue tidak valid.');
   }
 
-  return openingBalancePostgresAdapter.upsert(queueItem.payload);
+  return openingBalancePostgresAdapter.upsert(
+    normalizeOpeningBalanceSyncPayload(queueItem.payload),
+  );
 };
 
 const processInventoryOpeningBalancePostingQueueItem = async (

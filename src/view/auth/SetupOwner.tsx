@@ -121,15 +121,6 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
     setCurrentStep(0);
   }, []);
 
-  const goToBusinessStep = useCallback(async () => {
-    try {
-      await form.validateFields(['name', 'email', 'pin', 'confirmPin']);
-      setCurrentStep(1);
-    } catch {
-      // Ant Design menampilkan pesan validasi pada kolom terkait.
-    }
-  }, [form]);
-
   const handleSubmit = async (values: SetupOwnerFormValues) => {
     if (isSubmitting) return;
 
@@ -185,6 +176,8 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
   };
 
   const handleFormFinish = () => {
+    // Advance only after form submission, so the navigation click cannot also
+    // submit the newly rendered accounting step.
     if (currentStep === 0) {
       setCurrentStep(1);
       return;
@@ -339,11 +332,12 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
                   </Button>
                 ) : <span />}
                 <Button
+                  key="next-step"
                   type="primary"
+                  htmlType="submit"
                   size="large"
                   icon={<ArrowRight size={16} />}
                   iconPlacement="end"
-                  onClick={() => void goToBusinessStep()}
                   className="w-full sm:w-auto sm:min-w-56"
                 >
                   Lanjut ke Pengaturan Usaha
@@ -361,6 +355,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
                   Kembali
                 </Button>
                 <Button
+                  key="create-owner"
                   type="primary"
                   htmlType="submit"
                   size="large"
