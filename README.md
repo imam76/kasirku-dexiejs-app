@@ -64,6 +64,45 @@ Untuk menjalankan aplikasi desktop Tauri:
 bun run tauri dev
 ```
 
+### Android Dev
+
+Aktifkan USB debugging di HP dan setujui izin koneksi ADB, lalu jalankan:
+
+```bash
+bun run tauri android dev
+```
+
+Untuk dev lewat kabel USB di Windows tanpa bergantung pada IP Wi-Fi/VPN:
+
+```powershell
+$adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+& $adb reverse tcp:1420 tcp:1420
+& $adb reverse tcp:1421 tcp:1421
+bun run tauri android dev --host 127.0.0.1
+```
+
+Port `1420` dipakai frontend dan `1421` dipakai hot reload. Jalankan ulang
+perintah `adb reverse` setelah perangkat disambungkan kembali.
+
+Build debug terpasang sebagai **Frayukti Dev** dengan application ID
+`com.asepimamnawawi_imam76.frayukti_app.dev`. Aplikasi release tetap memakai
+`com.asepimamnawawi_imam76.frayukti_app`, sehingga keduanya bisa terpasang
+bersamaan dan memiliki data lokal masing-masing. Pengaturan
+`bundle.android.debugApplicationIdSuffix` di `src-tauri/tauri.conf.json`
+harus sama dengan `applicationIdSuffix` pada build type debug di Gradle.
+
+Gradle menandatangani build debug dengan debug keystore lokal
+(`%USERPROFILE%\.android\debug.keystore` di Windows). Signing release memakai
+`src-tauri/gen/android/keystore.properties` dengan properti `storeFile`,
+`keyAlias`, dan `password`; path relatif `storeFile` dihitung dari direktori
+`src-tauri/gen/android`. File keystore release dan password tidak disimpan di Git.
+Konfigurasi Gradle saat ini juga memuat properti release saat menjalankan dev,
+jadi siapkan file tersebut di mesin pengembangan.
+
+Error `INSTALL_FAILED_UPDATE_INCOMPATIBLE` berarti application ID sama tetapi
+sertifikat penandatangan berbeda. Gunakan ID dev terpisah di atas untuk tetap
+mempertahankan aplikasi release beserta datanya.
+
 ## Clean Data Lokal Dexie
 
 Gunakan langkah ini saat data lokal Dexie/IndexedDB masih nyangkut di mode dev.

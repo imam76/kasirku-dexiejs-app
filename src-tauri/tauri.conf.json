@@ -28,6 +28,9 @@
   },
   "bundle": {
     "active": true,
+    "android": {
+      "debugApplicationIdSuffix": ".dev"
+    },
     "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
