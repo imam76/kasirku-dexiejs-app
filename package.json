@@ -10,6 +10,7 @@
     "billing:db": "docker compose -f services/billing/compose.yml up -d",
     "test:billing": "bun --env-file=services/billing/.env test tests/billing",
     "billing:smoke": "bun scripts/billing-sandbox-smoke.ts",
+    "billing:reconcile": "bun --env-file=services/billing/.env scripts/billing-reconcile.ts",
     "dev": "vite --config vite.config.ts",
     "build": "tsc -b && vite build --config vite.config.ts",
     "lint": "eslint .",

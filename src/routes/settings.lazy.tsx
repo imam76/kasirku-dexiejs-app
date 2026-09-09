@@ -1,7 +1,7 @@
 import { createLazyFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { App, Card, Button, Upload, Typography, Alert, Segmented, Row, Col } from 'antd'
-import { Download, Upload as UploadIcon, Database, AlertTriangle, FileText } from 'lucide-react'
+import { Download, Upload as UploadIcon, Database, AlertTriangle, FileText, Info } from 'lucide-react'
 import { backupDatabase, restoreDatabase } from '@/utils/backupRestore'
 import { useNavigate } from '@tanstack/react-router'
 import PrinterSettingsCard from '@/components/PrinterSettingsCard'
@@ -203,6 +203,16 @@ function Settings() {
         </Col>
       </Row>
       
+      <Card
+        title={<div className="flex items-center gap-2"><Info className="w-5 h-5" /> {t('settings.aboutTitle')}</div>}
+        className="mt-6 shadow-md"
+      >
+        <Typography.Text strong className="block">Frayukti ERP</Typography.Text>
+        <Typography.Text type="secondary" className="mt-1 block dark:!text-gray-400">
+          {t('settings.appVersion', { version: __APP_VERSION__ })}
+        </Typography.Text>
+      </Card>
+
       <div className="mt-8 text-center">
         <Button onClick={() => navigate({ to: '/' })} type="text">
           {t('settings.backToDashboard')}

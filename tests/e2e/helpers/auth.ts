@@ -70,15 +70,15 @@ export async function registerFirstOwner(page: Page, pin = demoOwner.pin) {
 }
 
 export async function logout(page: Page) {
-  const logoutButton = page.getByRole('button', { name: 'Logout' });
+  const logoutButton = page.getByRole('button', { name: 'Keluar', exact: true });
   if (!await logoutButton.isVisible()) {
     await page.getByLabel(/Profil login|Logged-in profile/).click();
   }
   await logoutButton.click();
 
-  const logoutDialog = page.getByRole('dialog').filter({ hasText: 'Logout dari Frayukti?' });
+  const logoutDialog = page.getByRole('dialog').filter({ hasText: 'Keluar dari Frayukti?' });
   await expect(logoutDialog).toBeVisible();
-  await logoutDialog.getByRole('button', { name: 'Logout' }).click();
+  await logoutDialog.getByRole('button', { name: 'Keluar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Masuk Frayukti' })).toBeVisible();
 }
 

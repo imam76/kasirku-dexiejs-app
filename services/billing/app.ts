@@ -255,7 +255,23 @@ export function buildApp(
     },
   );
   app.get('/v1/status', async (request) => {
-    const business = await authenticate(request.headers.authorization);
+    let business = await authenticate(request.headers.authorization);
+    let paymentCheck: 'verified' | 'waiting' | 'unavailable' = 'verified';
+    const pending = await db.billing.query<{ order_id: string }>(
+      "SELECT order_id FROM orders WHERE business_id=$1 AND status IN ('creating','pending') ORDER BY created_at DESC LIMIT 1",
+      [business.id],
+    );
+    if (pending.rows[0]) {
+      try {
+        paymentCheck = (await reconcileOrder(pending.rows[0].order_id))
+          ? 'verified'
+          : 'waiting';
+        business = await authenticate(request.headers.authorization);
+      } catch {
+        // Provider outages must not prevent reading already issued/offline access.
+        paymentCheck = 'unavailable';
+      }
+    }
     const orders = await db.billing.query(
       `SELECT order_id AS "orderId",plan,amount,status,created_at AS "createdAt",
       access_start AS "accessStart",access_end AS "accessEnd",redirect_url AS "redirectUrl"
@@ -263,6 +279,7 @@ export function buildApp(
       [business.id],
     );
     return {
+      paymentCheck,
       businessId: business.id,
       registration: business.registration,
       access: business.access,
@@ -467,6 +484,15 @@ export function buildApp(
       );
     });
   }
+  async function reconcileOrder(orderId: string) {
+    const status = await midtrans.status(orderId);
+    if (!status) return false;
+    if (status.order_id !== orderId)
+      fail(400, 'Status Midtrans tidak sesuai dengan order yang diperiksa.');
+    // Same merchant, amount, fraud and idempotency checks as the webhook path.
+    await applyNotification(status);
+    return true;
+  }
   app.post(
     '/v1/midtrans/notifications',
     { config: { rateLimit: { max: 300, timeWindow: '1 minute' } } },
@@ -476,6 +502,7 @@ export function buildApp(
         fail(401, 'Signature tidak valid.');
       // Status/fraud fields are not covered by the signature. Read their authoritative values from Midtrans.
       const status = await midtrans.status(notification.order_id);
+      if (!status) return fail(503, 'Status Midtrans belum tersedia.');
       if (
         status.order_id !== notification.order_id ||
         Number(status.gross_amount) !== Number(notification.gross_amount)
@@ -485,5 +512,5 @@ export function buildApp(
       return { received: true };
     },
   );
-  return app;
+  return Object.assign(app, { reconcileOrder });
 }

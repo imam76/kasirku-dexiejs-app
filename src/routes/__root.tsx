@@ -5,6 +5,7 @@ import { canAccessPath, canAccessPermissionRule, getRequiredPermissionForPath } 
 import { getPurchaseDocumentTypeFromPathSegment } from '@/configs/purchase-document'
 import { getSalesDocumentTypeFromPathSegment } from '@/configs/sales-document'
 import LoginProfile from '@/components/auth/LoginProfile'
+import { SubscriptionReminder } from '@/onboarding/SubscriptionStatus'
 import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { useAuth } from '@/auth/useAuth'
@@ -554,6 +555,7 @@ const RootLayout = () => {
                 ) : canOpenCurrentPath ? (
                   <>
                     {!usesEmbeddedMobileHeader ? <GlobalBreadcrumb pathname={location.pathname} /> : null}
+                    {location.pathname === '/' ? <SubscriptionReminder /> : null}
                     <Outlet />
                   </>
                 ) : (

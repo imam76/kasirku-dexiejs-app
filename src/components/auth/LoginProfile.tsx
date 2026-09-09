@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react';
-import { App, Avatar, Button, Divider, Form, Input, Modal, Popover, Space, Tag, Typography } from 'antd';
-import { ChevronDown, KeyRound, LogOut, Mail, Moon, Settings, ShieldCheck, Sun } from 'lucide-react';
+import { App, Avatar, Button, Divider, Form, Input, Modal, Popover, Space, Switch, Typography } from 'antd';
+import { ChevronDown, KeyRound, LogOut, Moon, Settings } from 'lucide-react';
 import { changeCurrentUserPin } from '@/auth/authService';
 import { AUTH_PIN_LENGTH, AUTH_PIN_VALIDATION_MESSAGE } from '@/auth/pinPolicy';
 import { useI18n } from '@/hooks/useI18n';
 import type { AuthUser, Role } from '@/types';
 import { buildAuthUserProfileSummary } from '@/utils/auth/profileDisplay';
+import { SubscriptionProfile } from '@/onboarding/SubscriptionStatus';
 
 const { Text } = Typography;
+const menuItemClassName = '!flex !h-11 !items-center !justify-start !gap-3 !rounded-lg !px-3 !font-normal';
 
 interface LoginProfileProps {
   currentUser: AuthUser | null;
@@ -97,80 +99,79 @@ export default function LoginProfile({
   };
 
   const content = (
-    <div className="w-72">
-      <div className="flex min-w-0 items-start gap-3">
-        <Avatar size={44} className="shrink-0 bg-blue-600 text-sm font-semibold">
+    <div className="w-72 max-w-[calc(100vw-48px)] max-h-[calc(100dvh-112px)] overflow-y-auto">
+      <div className="flex min-w-0 items-start gap-3 px-1 py-1">
+        <Avatar size={40} className="shrink-0 bg-blue-600 text-sm font-semibold">
           {profile.initials}
         </Avatar>
         <div className="min-w-0 flex-1">
-          <Text type="secondary" className="block text-xs">
-            {t('root.profile.currentSession')}
-          </Text>
-          <Text strong className="block truncate text-base">
+          <Text strong className="block truncate !text-base" title={profile.displayName}>
             {profile.displayName}
           </Text>
-          <Tag color={currentUser.is_active ? 'green' : 'default'} className="mt-2">
-            {currentUser.is_active ? t('root.profile.active') : t('root.profile.inactive')}
-          </Tag>
+          <Text type="secondary" className="block truncate !text-xs dark:!text-gray-400" title={profile.roleLabel}>
+            {profile.roleLabel}
+          </Text>
+          <Text
+            type="secondary"
+            className="mt-1 block truncate !text-xs dark:!text-gray-400"
+            title={profile.email ?? undefined}
+          >
+            {profile.email ?? t('root.profile.noEmail')}
+          </Text>
         </div>
       </div>
 
-      <Divider className="my-3" />
+      <Divider className="!my-3" />
 
-      <div className="space-y-3">
-        <div className="flex min-w-0 items-start gap-2">
-          <Mail size={16} className="mt-0.5 shrink-0 text-gray-400" />
-          <div className="min-w-0">
-            <Text type="secondary" className="block text-xs">
-              {t('root.profile.email')}
-            </Text>
-            <Text className="block truncate">
-              {profile.email ?? t('root.profile.noEmail')}
-            </Text>
-          </div>
-        </div>
+      <SubscriptionProfile onManage={() => setOpen(false)} />
 
-        <div className="flex min-w-0 items-start gap-2">
-          <ShieldCheck size={16} className="mt-0.5 shrink-0 text-gray-400" />
-          <div className="min-w-0">
-            <Text type="secondary" className="block text-xs">
-              {t('root.profile.role')}
-            </Text>
-            <Text className="block truncate">
-              {profile.roleLabel}
-            </Text>
-          </div>
-        </div>
-      </div>
-
-      <Divider className="my-3" />
-
-      <div className="space-y-2">
-        <Button
-          block
-          icon={isDark ? <Sun size={16} /> : <Moon size={16} />}
-          onClick={onToggleTheme}
-        >
-          {isDark ? t('common.useLightTheme') : t('common.useDarkTheme')}
-        </Button>
+      <div className="space-y-1">
+        <label className="flex h-11 cursor-pointer items-center justify-between gap-3 rounded-lg px-3 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800">
+          <span className="flex items-center gap-3">
+            <Moon size={16} className="shrink-0 text-gray-500 dark:text-gray-400" />
+            <Text>{t('root.profile.darkTheme')}</Text>
+          </span>
+          <Switch
+            size="small"
+            checked={isDark}
+            onChange={onToggleTheme}
+            aria-label={t('root.profile.darkTheme')}
+          />
+        </label>
         {canAccessSettings && (
-          <Button block icon={<Settings size={16} />} onClick={handleOpenSettings}>
+          <Button
+            type="text"
+            block
+            className={menuItemClassName}
+            icon={<Settings size={16} className="text-gray-500 dark:text-gray-400" />}
+            onClick={handleOpenSettings}
+          >
             {t('root.openSettings')}
           </Button>
         )}
-        <Button block icon={<KeyRound size={16} />} onClick={openPinModal}>
+        <Button
+          type="text"
+          block
+          className={menuItemClassName}
+          icon={<KeyRound size={16} className="text-gray-500 dark:text-gray-400" />}
+          onClick={openPinModal}
+        >
           {t('root.profile.changePin')}
-        </Button>
-        <Button danger block icon={<LogOut size={16} />} onClick={handleLogout}>
-          {t('root.logout')}
         </Button>
       </div>
 
-      <Divider className="my-3" />
+      <Divider className="!my-2" />
 
-      <Text type="secondary" className="block text-center text-xs">
-        {t('root.profile.appVersion', { version: __APP_VERSION__ })}
-      </Text>
+      <Button
+        type="text"
+        danger
+        block
+        className={`${menuItemClassName} dark:!text-red-400 dark:hover:!text-red-300`}
+        icon={<LogOut size={16} />}
+        onClick={handleLogout}
+      >
+        {t('root.logout')}
+      </Button>
     </div>
   );
 

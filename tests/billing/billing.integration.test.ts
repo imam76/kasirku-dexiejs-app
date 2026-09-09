@@ -37,6 +37,7 @@ const db: Databases = {
   }),
 };
 let authoritativeStatus: MidtransStatus;
+let gatewayUnavailable = false;
 let checkoutCount = 0;
 const app = buildApp(config, db, {
   async checkout() {
@@ -44,6 +45,7 @@ const app = buildApp(config, db, {
     return 'https://app.sandbox.midtrans.com/snap/v4/redirection/test';
   },
   async status() {
+    if (gatewayUnavailable) throw new Error('Midtrans unavailable');
     return authoritativeStatus;
   },
 });
@@ -131,6 +133,73 @@ afterAll(async () => {
   await Promise.all([adminBilling.end(), adminLeads.end()]);
 });
 describe('billing HTTP and PostgreSQL integration', () => {
+  test('recovers a missed webhook on status check and preserves access when the gateway is unavailable', async () => {
+    const retryToken = randomBytes(32).toString('hex');
+    const retryHeaders = { authorization: `Bearer ${retryToken}` };
+    await app.inject({
+      method: 'POST',
+      url: '/v1/registrations',
+      remoteAddress: '127.0.0.20',
+      payload: {
+        ...input,
+        installationId: randomUUID(),
+        token: retryToken,
+        recoveryCode: randomBytes(32).toString('hex'),
+      },
+    });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/v1/checkouts',
+      remoteAddress: '127.0.0.20',
+      headers: retryHeaders,
+      payload: { requestId: randomUUID(), plan: 'pos', customModules: [] },
+    });
+    const missingWebhookOrder = created.json().orderId;
+    gatewayUnavailable = true;
+    const unavailable = await app.inject({
+      url: '/v1/status',
+      headers: retryHeaders,
+    });
+    expect(unavailable.statusCode).toBe(200);
+    expect(unavailable.json().paymentCheck).toBe('unavailable');
+    expect(unavailable.json().access.kind).toBe('trial');
+    gatewayUnavailable = false;
+    authoritativeStatus = {
+      order_id: missingWebhookOrder,
+      status_code: '200',
+      merchant_id: config.MIDTRANS_MERCHANT_ID,
+      gross_amount: '149000.00',
+      transaction_status: 'settlement',
+      fraud_status: 'accept',
+      payment_type: 'bank_transfer',
+    };
+    const verified = await app.inject({
+      url: '/v1/status',
+      headers: retryHeaders,
+    });
+    expect(verified.json().paymentCheck).toBe('verified');
+    expect(verified.json().access.kind).toBe('subscription');
+    expect(verified.json().orders[0].status).toBe('paid');
+    expect(
+      (await app.inject({ url: '/v1/status', headers: retryHeaders })).json()
+        .access.end,
+    ).toBe(verified.json().access.end);
+    // Keep fixtures below independent of this additional business and checkout.
+    checkoutCount = 0;
+    const id = verified.json().businessId;
+    await db.billing.query('DELETE FROM webhook_events WHERE order_id=$1', [
+      missingWebhookOrder,
+    ]);
+    await db.billing.query('DELETE FROM orders WHERE business_id=$1', [id]);
+    await db.billing.query('DELETE FROM access_tokens WHERE business_id=$1', [
+      id,
+    ]);
+    await db.billing.query('DELETE FROM businesses WHERE id=$1', [id]);
+    await db.leads.query('DELETE FROM consent_events WHERE business_id=$1', [
+      id,
+    ]);
+    await db.leads.query('DELETE FROM leads WHERE business_id=$1', [id]);
+  });
   test('rejects unapproved consent and arbitrary transaction data', async () => {
     expect(
       (

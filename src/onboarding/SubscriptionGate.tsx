@@ -1,14 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, App, Button, Checkbox, Input } from 'antd';
 import { CheckCircle2, Download, RefreshCw } from 'lucide-react';
-import {
-  hasAccess,
-  remainingDays,
-  reminderDate,
-  type BillingStatus,
-} from './contract';
+import { hasAccess, remainingDays, type BillingStatus } from './contract';
 import { updateSubscription, type Subscription } from './storage';
 import { useSubscription } from './useSubscription';
+import { SubscriptionContext } from './SubscriptionContext';
 import {
   openCheckout,
   requestCheckout,
@@ -113,6 +109,12 @@ function SubscriptionPage({
             </p>
           </div>
         </div>
+        {status?.paymentCheck === 'unavailable' && (
+          <Alert
+            type="info"
+            title="Status Midtrans belum dapat diperiksa. Coba Periksa status lagi; akses yang sudah aktif tetap berlaku."
+          />
+        )}
         {!active && (
           <Alert
             type="warning"
@@ -365,7 +367,6 @@ export function SubscriptionGate({ children }: { children: ReactNode }) {
   }, []);
   if (!subscription) return null;
   const active = hasAccess(subscription.access, now);
-  const wednesday = reminderDate(new Date(now));
   if (!active || manage)
     return (
       <>
@@ -388,29 +389,10 @@ export function SubscriptionGate({ children }: { children: ReactNode }) {
       </>
     );
   return (
-    <>
-      <div className="onboarding-banner">
-        <span>
-          {subscription.access.kind === 'trial'
-            ? `Trial · ${remainingDays(subscription.access, now)} hari tersisa`
-            : `${PLAN_NAMES[subscription.access.plan]} · aktif sampai ${new Date(subscription.access.end).toLocaleDateString('id-ID')}`}
-        </span>
-        <Button size="small" type="link" onClick={() => setManage(true)}>
-          Langganan / Upgrade
-        </Button>
-      </div>
-      {wednesday && subscription.reminderDismissed !== wednesday && (
-        <div className="onboarding-reminder">
-          <Alert
-            type="info"
-            showIcon
-            closable
-            onClose={() => updateSubscription({ reminderDismissed: wednesday })}
-            title={`Pengingat Rabu: ${remainingDays(subscription.access, now)} hari akses tersisa. ${subscription.access.kind === 'trial' ? 'Anda dapat upgrade kapan saja.' : 'Perpanjang sebelum akses berakhir.'}`}
-          />
-        </div>
-      )}
+    <SubscriptionContext.Provider
+      value={{ subscription, now, openManage: () => setManage(true) }}
+    >
       {children}
-    </>
+    </SubscriptionContext.Provider>
   );
 }

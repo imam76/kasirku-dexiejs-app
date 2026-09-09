@@ -67,6 +67,7 @@ export const checkoutSchema = z
   })
   .strict();
 export const billingStatusSchema = z.object({
+  paymentCheck: z.enum(['verified', 'waiting', 'unavailable']).optional(),
   businessId: z.uuid(),
   registration: registrationSchema,
   access: accessSchema,

@@ -60,9 +60,15 @@ produksi. Nilai 100 berarti 1%; pajak dihitung server dan masuk total checkout.
 
 ## Webhook HTTPS publik
 
-URL publik belum tersedia di lingkungan ini. Pembuatan checkout berhasil, tetapi
-notifikasi Midtrans tidak dapat menjangkau `localhost` langsung. Untuk pengujian
-pembayaran dan aktivasi otomatis:
+URL publik belum tersedia di lingkungan ini. Notifikasi Midtrans tidak dapat
+menjangkau `localhost` langsung. **Periksa status tetap dapat mengaktifkan
+pembayaran yang berhasil**: backend memeriksa order tertunda melalui GET Status
+API Midtrans, lalu memakai validasi merchant, nominal, fraud, dan transaksi
+idempoten yang sama dengan webhook. Koneksi keluar dari backend ke Midtrans
+cukup untuk alur ini; frontend tidak dapat mengirim status sukses sendiri.
+
+Webhook tetap disarankan agar pembayaran tercatat segera, termasuk ketika
+aplikasi pelanggan sedang ditutup. Untuk menyediakan webhook:
 
 1. Jalankan billing pada port 8787 dan sediakan tunnel HTTPS ke port tersebut
    atau deploy layanan sandbox ke host yang dapat diakses melalui HTTPS.
@@ -116,10 +122,18 @@ pengguna membuka kembali aplikasi secara manual. Checkout tidak memakai WebView.
   consent yang belum terkirim dicoba lagi saat tersedia koneksi.
 - Akses berakhir menutup UI operasional dan laporan, termasuk navigasi langsung.
   Pembayaran, pemeriksaan/pemulihan akses, dan ekspor backup tetap tersedia.
-- Pengingat Rabu sekali per tanggal lokal setelah ditutup. Banner Langganan
-  menyediakan upgrade/perpanjangan saat akses masih aktif.
+- Menu profil menampilkan paket, status trial/aktif, tanggal akhir, serta tombol
+  Upgrade paket atau Kelola langganan. Tidak ada banner langganan mengambang.
+- Pengingat Rabu tampil di bagian atas dashboard dan dapat ditutup untuk hari itu.
+  Pembayaran yang baru terverifikasi menyembunyikan pengingat hari tersebut.
+  Saat akses tersisa paling lama 7 hari, dashboard menampilkan pengingat
+  perpanjangan yang dapat ditutup sekali per tanggal lokal.
 - Akses berbayar tersimpan offline sampai akhir periode. Gangguan billing tidak
   memperpendek periode lokal. Harga dan modul saat checkout ditetapkan server.
+- Pemeriksaan status merekonsiliasi order tertunda langsung ke Midtrans jika
+  webhook belum tiba. Status 404 untuk Snap yang belum memilih metode pembayaran
+  diperlakukan sebagai menunggu. Gangguan API Midtrans tetap mengembalikan akses
+  tersimpan dan informasi bahwa pemeriksaan pembayaran belum tersedia.
 - Riwayat menampilkan sampai 50 order terakhir dan status aktivasinya.
 
 Instalasi lama yang sudah mempunyai setup developer mempertahankan jalur
@@ -162,7 +176,7 @@ Keputusan implementasi untuk sandbox (perlu keputusan bisnis sebelum produksi):
 | Endpoint | Akses | Fungsi |
 | --- | --- | --- |
 | `POST /v1/registrations` | Secret instalasi pada body registrasi | Registrasi idempoten dan sinkronisasi lead |
-| `GET /v1/status` | Bearer token instalasi | Identitas, entitlement, riwayat |
+| `GET /v1/status` | Bearer token instalasi | Rekonsiliasi order sendiri ke Midtrans, identitas, entitlement, riwayat |
 | `GET/PATCH /v1/consent` | Bearer token instalasi | Baca/update consent, jejak audit terpisah |
 | `POST /v1/recovery` | Kode pemulihan rahasia | Hubungkan token instalasi baru |
 | `POST /v1/checkouts` | Bearer token instalasi | Buat/lanjutkan order Snap dengan harga server |
@@ -198,6 +212,14 @@ bun run billing:smoke
 
 Hasil checkout lokal disimpan ke `.billing-postgres.local/snap-smoke.json`, tanpa
 server key. Pengujian ini tidak menyelesaikan pembayaran atau mengaktifkan akses.
+
+Untuk memeriksa satu order dari terminal backend tanpa token instalasi, tersedia
+perintah operator berikut. Perintah ini tetap meminta status ke Midtrans dan
+memvalidasi merchant/nominal; akses tidak dapat dipaksakan lewat argumen:
+
+```bash
+bun run billing:reconcile "FRY-<uuid-order>"
+```
 
 Jika proses mati/timeout setelah Snap membuat order tetapi sebelum URL checkout
 tersimpan, order `creating` sengaja tidak dibuat ulang dengan ID berbeda.

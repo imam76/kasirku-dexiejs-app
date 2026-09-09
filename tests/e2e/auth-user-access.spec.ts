@@ -12,9 +12,9 @@ test.describe('user dan hak akses', () => {
     await loginAsBootstrappedOwner(page);
 
     await page.getByLabel(/Profil login|Logged-in profile/).click();
-    await page.getByRole('button', { name: 'Ganti PIN Saya' }).click();
+    await page.getByRole('button', { name: 'Ganti PIN', exact: true }).click();
 
-    const dialog = page.getByRole('dialog', { name: 'Ganti PIN Saya' });
+    const dialog = page.getByRole('dialog', { name: 'Ganti PIN', exact: true });
     await dialog.getByLabel('PIN Saat Ini').fill(demoOwner.pin);
     await dialog.getByLabel('PIN Baru', { exact: true }).fill(newPin);
     await dialog.getByLabel('Konfirmasi PIN Baru').fill(newPin);

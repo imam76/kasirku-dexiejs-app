@@ -42,7 +42,7 @@ export const isPaid = (status: MidtransStatus) =>
       status.fraud_status === 'accept'));
 
 export function createMidtrans(config: BillingConfig, request = fetch) {
-  async function api(url: string, init?: RequestInit) {
+  async function api(url: string, init?: RequestInit, allowNotFound = false) {
     const response = await request(url, {
       ...init,
       signal: AbortSignal.timeout(10_000),
@@ -53,6 +53,7 @@ export function createMidtrans(config: BillingConfig, request = fetch) {
         ...(init?.headers ?? {}),
       },
     });
+    if (allowNotFound && response.status === 404) return null;
     if (!response.ok)
       throw Object.assign(
         new Error(
@@ -81,11 +82,14 @@ export function createMidtrans(config: BillingConfig, request = fetch) {
       return result.redirect_url;
     },
     async status(orderId: string) {
-      return statusSchema.parse(
-        await api(
-          `https://api.sandbox.midtrans.com/v2/${encodeURIComponent(orderId)}/status`,
-        ),
+      const body = await api(
+        `https://api.sandbox.midtrans.com/v2/${encodeURIComponent(orderId)}/status`,
+        undefined,
+        true,
       );
+      // Snap has no Core API status until a payment method has been chosen.
+      if (body === null || body.status_code === '404') return null;
+      return statusSchema.parse(body);
     },
   };
 }

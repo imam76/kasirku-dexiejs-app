@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { billingStatusSchema, type BillingStatus } from './contract';
+import {
+  billingStatusSchema,
+  reminderDate,
+  type BillingStatus,
+} from './contract';
 import {
   readSubscription,
   updateSubscription,
@@ -103,9 +107,14 @@ async function sync(): Promise<BillingStatus | null> {
     current.access.kind === 'subscription' &&
     (status.access.kind !== 'subscription' ||
       Date.parse(status.access.end) < Date.parse(current.access.end));
+  const paymentActivated =
+    status.access.kind === 'subscription' &&
+    (current.access.kind !== 'subscription' ||
+      Date.parse(status.access.end) > Date.parse(current.access.end));
   updateSubscription({
     businessId: status.businessId,
     access: keepPaid ? current.access : status.access,
+    ...(paymentActivated ? { reminderDismissed: reminderDate() } : {}),
   });
   window.dispatchEvent(new Event(SETUP_CONFIG_CHANGED_EVENT));
   return status;

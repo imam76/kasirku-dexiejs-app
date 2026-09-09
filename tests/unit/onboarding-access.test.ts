@@ -17,10 +17,12 @@ import {
 import { withAutomaticAccountingBaselineModules } from '../../src/services/accountingInitialSetupService';
 import { createHash } from 'node:crypto';
 import {
+  createMidtrans,
   isPaid,
   verifySignature,
   type MidtransStatus,
 } from '../../services/billing/midtrans';
+import { readConfig } from '../../services/billing/config';
 
 const trial: Access = {
   kind: 'trial',
@@ -120,6 +122,25 @@ describe('onboarding access and sellable entitlements', () => {
 });
 describe('Midtrans verification', () => {
   const key = 'Mid-server-test';
+  test('an unselected Snap checkout has no Core API status yet', async () => {
+    const config = readConfig({
+      BILLING_DATABASE_URL: 'postgresql://localhost/billing',
+      LEADS_DATABASE_URL: 'postgresql://localhost/leads',
+      MIDTRANS_SERVER_KEY: key,
+      MIDTRANS_CLIENT_KEY: 'Mid-client-test',
+      MIDTRANS_MERCHANT_ID: 'test',
+    });
+    for (const response of [
+      new Response('', { status: 404 }),
+      Response.json({ status_code: '404' }),
+    ]) {
+      const midtrans = createMidtrans(
+        config,
+        (async () => response) as typeof fetch,
+      );
+      expect(await midtrans.status('unselected-order')).toBeNull();
+    }
+  });
   const body = {
     order_id: 'test-123',
     status_code: '200',

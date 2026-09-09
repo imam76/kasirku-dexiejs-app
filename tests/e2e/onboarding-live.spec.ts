@@ -44,8 +44,15 @@ async function registerTrial(page: Page) {
   await page.getByLabel('Konfirmasi PIN').fill('731482');
   await page.getByRole('button', { name: 'Buat Owner & masuk' }).click();
   await expect(
-    page.getByRole('button', { name: 'Langganan / Upgrade' }),
+    page.getByRole('button', { name: /^Profil login / }),
   ).toBeVisible();
+}
+async function openSubscription(page: Page, name = 'Upgrade paket') {
+  await page.getByRole('button', { name: /^Profil login / }).click();
+  await page
+    .getByRole('region', { name: 'Langganan usaha' })
+    .getByRole('button', { name })
+    .click();
 }
 async function expireTrial(page: Page) {
   await page.evaluate(() => {
@@ -84,6 +91,19 @@ for (const viewport of [
     expect(state.consent.termsHash).toMatch(/^[a-f0-9]{64}$/);
     expect(state.consent.marketing).toBe(false);
     expect(state.leadPending).toBe(true);
+    await page.getByRole('button', { name: /^Profil login / }).click();
+    const profileSubscription = page.getByRole('region', {
+      name: 'Langganan usaha',
+    });
+    await expect(profileSubscription).toContainText('POS Ritel & Resto');
+    await expect(profileSubscription).toContainText('Trial tersisa 90 hari');
+    await page.screenshot({
+      path: `test-results/onboarding-profile-trial-${viewport.width}.png`,
+    });
+    await profileSubscription
+      .getByRole('button', { name: 'Upgrade paket' })
+      .click();
+    await page.getByRole('button', { name: 'Kembali ke aplikasi' }).click();
     await expireTrial(page);
     await expect(
       page.getByRole('heading', { name: 'Langganan, tanpa ribet.' }),
@@ -125,9 +145,13 @@ test('paid offline cache survives unavailable billing and queues consent withdra
   page,
   context,
 }) => {
+  await page.clock.setFixedTime(new Date('2026-09-09T10:00:00Z'));
   await page.route('**/v1/**', (route) => route.abort());
   await page.goto('/');
   await registerTrial(page);
+  await expect(
+    page.getByText('Pengingat Rabu: 90 hari akses tersisa.'),
+  ).toBeVisible();
   await page.evaluate(() => {
     const key = 'frayukti-subscription-v1';
     const state = JSON.parse(localStorage.getItem(key)!);
@@ -141,7 +165,37 @@ test('paid offline cache survives unavailable billing and queues consent withdra
     window.dispatchEvent(new Event('frayukti-subscription-changed'));
   });
   await context.setOffline(true);
-  await page.getByRole('button', { name: 'Langganan / Upgrade' }).click();
+  await expect(page.getByText(/Pengingat Rabu:/)).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Kelola langganan' }),
+  ).toHaveCount(0);
+  await expect(page.locator('.ant-message-notice')).toHaveCount(0);
+  await page.getByRole('button', { name: /^Profil login / }).click();
+  const profileSubscription = page.getByRole('region', {
+    name: 'Langganan usaha',
+  });
+  await expect(profileSubscription).toContainText('POS Ritel & Resto');
+  await expect(profileSubscription).toContainText(
+    'Berlaku hingga 9 Okt 2026',
+  );
+  await expect(
+    profileSubscription.getByText('Aktif', { exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: 'test-results/onboarding-profile-paid-desktop.png',
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    profileSubscription.getByRole('button', { name: 'Kelola langganan' }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: 'test-results/onboarding-profile-paid-mobile.png',
+    animations: 'disabled',
+  });
+  await profileSubscription
+    .getByRole('button', { name: 'Kelola langganan' })
+    .click();
   await expect(
     page.getByText('Langganan aktif', { exact: true }),
   ).toBeVisible();
@@ -159,6 +213,31 @@ test('paid offline cache survives unavailable billing and queues consent withdra
   expect(state.access.kind).toBe('subscription');
   expect(state.consentPending).toBe(true);
   expect(state.consent.marketing).toBe(false);
+  await page.getByRole('button', { name: 'Kembali ke aplikasi' }).click();
+  await page.evaluate(() => {
+    const key = 'frayukti-subscription-v1';
+    const state = JSON.parse(localStorage.getItem(key)!);
+    state.access.start = new Date(Date.now() - 24 * 86_400_000).toISOString();
+    state.access.end = new Date(Date.now() + 6 * 86_400_000).toISOString();
+    localStorage.setItem(key, JSON.stringify(state));
+    window.dispatchEvent(new Event('frayukti-subscription-changed'));
+  });
+  const expiryReminder = page
+    .getByRole('alert')
+    .filter({ hasText: 'Akses berakhir dalam 6 hari.' });
+  await expect(expiryReminder).toBeVisible();
+  await expect(expiryReminder).toHaveCSS('position', 'relative');
+  await expiryReminder
+    .getByRole('button', { name: 'Perpanjang langganan' })
+    .click();
+  await expect(
+    page.getByText('Langganan aktif', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Kembali ke aplikasi' }).click();
+  await expiryReminder.getByRole('button', { name: 'Close' }).click();
+  await openSubscription(page, 'Kelola langganan');
+  await page.getByRole('button', { name: 'Kembali ke aplikasi' }).click();
+  await expect(expiryReminder).toHaveCount(0);
 });
 
 test('checkout stays trial until billing activation, then a new installation recovers without a local role', async ({
@@ -207,7 +286,7 @@ test('checkout stays trial until billing activation, then a new installation rec
     }
     return route.fulfill({ json: { saved: true } });
   });
-  await page.getByRole('button', { name: 'Langganan / Upgrade' }).click();
+  await openSubscription(page);
   await page.getByRole('button', { name: 'Siapkan pembayaran' }).click();
   await expect(
     page.getByRole('button', { name: 'Buka Midtrans Sandbox' }),
@@ -232,6 +311,12 @@ test('checkout stays trial until billing activation, then a new installation rec
     accessEnd: server.access.end,
   };
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(
+    page.getByText('Langganan aktif', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Kembali ke aplikasi' }).click();
+  await expect(page.getByText(/Pengingat Rabu:/)).toHaveCount(0);
+  await openSubscription(page, 'Kelola langganan');
   await expect(
     page.getByText('Langganan aktif', { exact: true }),
   ).toBeVisible();
