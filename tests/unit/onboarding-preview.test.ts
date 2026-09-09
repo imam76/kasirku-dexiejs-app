@@ -72,6 +72,42 @@ describe('package entitlement and prices', () => {
 });
 
 describe('access, payment and recovery are independent', () => {
+  test('changing a plan and payment method preserves access until activation and freezes the invoice', () => {
+    const original = createScenario('subscription-active');
+    const plans = flowReducer(original, { type: 'navigate', screen: 'plans' });
+    expect(plans.screen).toBe('plans');
+    const selected = flowReducer(plans, { type: 'plan', plan: 'production' });
+    const checkout = flowReducer(flowReducer(selected, { type: 'payment-method', method: 'va' }), { type: 'next' });
+    expect(checkout.screen).toBe('checkout');
+    expect(checkout.access).toEqual(original.access);
+    const result = simulationAdapter.createCheckout(checkout);
+    if (!result.ok) throw new Error('Expected online checkout');
+    expect(result.payment).toMatchObject({ method: 'va', amount: 449000, entitlement: { plan: 'production' } });
+    const pending = flowReducer(checkout, { type: 'payment', payment: result.payment });
+    expect(pending.access).toEqual(original.access);
+    const changed = flowReducer(pending, { type: 'plan', plan: 'trading' });
+    expect(simulationAdapter.createCheckout(changed)).toEqual(result);
+    const active = flowReducer(changed, { type: 'payment', payment: simulationAdapter.checkPayment(changed, 'success') });
+    expect(active.access.plan).toBe('production');
+    expect(active.plan).toBe('production');
+    expect(active.payment.amount).toBe(449000);
+    expect(active.access.modules).toEqual(getPlan('production').modules);
+  });
+  test('Custom charges setup only on first activation and requires selected modules', () => {
+    const original = createScenario('subscription-active');
+    const custom = { ...original, screen: 'plans' as const, plan: 'custom' as const };
+    expect(flowReducer(custom, { type: 'next' }).errors.plan).toBe('required');
+    const selected = { ...custom, customModules: ['PRODUCTION'] };
+    const first = simulationAdapter.createCheckout(selected);
+    if (!first.ok) throw new Error('Expected online checkout');
+    expect(first.payment.amount).toBe(4499000);
+    const pending = flowReducer(selected, { type: 'payment', payment: first.payment });
+    const active = flowReducer(pending, { type: 'payment', payment: simulationAdapter.checkPayment(pending, 'success') });
+    const renewal = simulationAdapter.createCheckout(active);
+    if (!renewal.ok) throw new Error('Expected online checkout');
+    expect(renewal.payment.amount).toBe(999000);
+    expect(renewal.payment.entitlement?.modules).toEqual([...BASE_MODULES, 'PRODUCTION']);
+  });
   test('expiry is at the start of the end date, with a one-day boundary', () => {
     const state = createScenario('trial-expired');
     expect(isAccessExpired(state)).toBe(true);

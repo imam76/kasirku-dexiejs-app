@@ -1,6 +1,7 @@
 import { Button, Tag } from 'antd';
 import { Briefcase, ChevronRight, HelpCircle, CreditCard, Home, LayoutGrid, RefreshCw, ShieldCheck } from 'lucide-react';
 import { getPlan, type PlanId } from './catalog';
+import { checkoutQuote } from './model';
 import type { OnboardingController } from './useOnboardingPreview';
 import { useOnboardingCopy } from './useOnboardingCopy';
 
@@ -19,11 +20,10 @@ export function PlanSummary({ plan, detail, price = false }: { plan: PlanId; det
 
 export function CheckoutAction({ flow }: Props) {
   const { copy, money } = useOnboardingCopy();
-  const plan = getPlan(flow.state.plan ?? flow.state.access.plan);
-  const setup = plan.id === 'custom' && (flow.state.access.kind !== 'subscription' || flow.state.access.plan !== 'custom') ? plan.setupPrice : 0;
+  const { amount } = checkoutQuote(flow.state);
   return <Button type="primary" size="large" block className="preview-wrap-button" disabled={flow.state.offline} onClick={flow.launchCheckout}
     aria-label={copy(flow.checkoutPlatform === 'android' ? 'external' : 'launchCheckout')}>
-    {copy(flow.checkoutPlatform === 'android' ? 'external' : 'payAmount', { amount: money(plan.monthlyPrice + setup) })}
+    {copy(flow.checkoutPlatform === 'android' ? 'external' : 'payAmount', { amount: money(amount) })}
   </Button>;
 }
 

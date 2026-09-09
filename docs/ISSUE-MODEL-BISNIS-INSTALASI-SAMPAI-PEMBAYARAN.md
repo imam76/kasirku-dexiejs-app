@@ -109,6 +109,34 @@ email wajib, device binding, atau validasi server periodik.
 
 ## Alur Registrasi sampai Pembayaran
 
+### Acuan Tampilan Responsif
+
+Referensi layar Frayukti «Langganan, tanpa ribet.» yang diberikan pada
+9 September 2026 menjadi acuan minimum tampilan pemilihan paket, pembayaran,
+aktivasi, dan pengelolaan langganan pada desktop, tablet, serta mobile.
+
+- Desktop: navigasi sidebar, perbandingan kartu paket berdampingan, serta
+  metode pembayaran dan ringkasan tagihan dalam dua kolom.
+- Tablet: kartu paket dalam dua kolom, checkout menyesuaikan ruang layar,
+  navigasi melalui menu, dan aksi utama tetap terjangkau.
+- Mobile: pilihan paket ringkas dengan detail paket terpilih, ringkasan paket
+  di atas metode pembayaran, rincian tagihan yang dapat dibuka, dan tombol
+  pembayaran di bagian bawah. Aktivasi memakai tanda berhasil yang jelas;
+  halaman langganan menyediakan perpanjangan, ubah paket, riwayat, dan bantuan.
+- Gunakan identitas Frayukti, warna biru, latar terang, border halus, serta
+  hierarki tipografi sesuai referensi, dengan dukungan tema gelap aplikasi.
+
+Nama Starter/Bisnis/Pro, harga, batas outlet/pengguna, dan periode tahunan pada
+gambar bersifat ilustratif. Katalog serta harga tetap memakai keputusan bisnis
+di dokumen ini: lima paket usaha dan pembayaran manual bulanan.
+
+Implementasi UI dapat dicoba di `/onboarding-preview.html`. Metode QRIS,
+Virtual Account, kartu, invoice, aktivasi, serta riwayat pembayaran masih berupa
+simulasi yang terisolasi. Detail dan cara pemeriksaan tersedia di
+[Preview UI onboarding](ONBOARDING-UI-PREVIEW.md).
+
+### Urutan Alur
+
 Alur pengguna baru berikut berlaku untuk **desktop maupun Android**. Pelanggan
 lama memakai jalur pemulihan pada keputusan identitas usaha di atas:
 

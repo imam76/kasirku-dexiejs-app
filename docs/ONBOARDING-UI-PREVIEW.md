@@ -17,6 +17,43 @@ Jika Vite berjalan pada port lain, gunakan port tersebut. Server pemeriksaan ses
 implementasi menggunakan `http://127.0.0.1:5173/onboarding-preview.html`.
 Entry HTML ini juga disertakan dalam hasil `bun run build`.
 
+## Penyelarasan referensi layar — 9 September 2026
+
+Empat layar utama mengikuti referensi Frayukti «Langganan, tanpa ribet.»:
+
+- **Pilih paket:** tiga kolom desktop, dua kolom tablet, kartu ringkas yang
+  membuka fitur paket terpilih pada ponsel; harga serta lima paket tetap
+  mengikuti dokumen bisnis. Periode yang tersedia adalah bulanan.
+- **Pembayaran:** QRIS, Virtual Account, dan kartu; ringkasan dua kolom di
+  layar lebar, rincian tagihan yang dapat dibuka pada ponsel, serta total dan
+  tombol bayar di footer mobile. Pilihan metode bertahan setelah reload.
+- **Aktivasi:** tanda centang hijau, paket dan tanggal akhir akses, tombol
+  kembali ke aplikasi, dan invoice simulasi.
+- **Langganan:** status aktif, harga dan masa akses, perpanjangan manual,
+  ubah paket, riwayat transaksi simulasi terakhir, dan bantuan.
+
+Buka **Skenario simulasi** untuk langsung memilih **01 · Pilih paket**,
+**02 · Pembayaran**, **Pembayaran & aktivasi berhasil**, atau **Langganan aktif**.
+Navigasi menggunakan sidebar desktop dan menu pada mobile/tablet. Tombol
+kembali dan history browser menutup invoice atau menu sebelum kembali layar.
+Warna referensi dibatasi pada preview; tema operasional tetap memakai token
+aplikasi yang ada.
+
+Pilihan paket baru tidak mengubah akses sampai aktivasi simulasi diterima.
+Transaksi yang masih menunggu dilanjutkan dengan paket, nominal, dan metode
+awalnya; mengganti pilihan tidak mengubah invoice transaksi tersebut. Invoice
+jelas ditandai sebagai simulasi, bukan bukti pembayaran atau faktur pajak.
+
+Tambahan berkas utama: `BillingPresentation.tsx` untuk ringkasan paket,
+tombol pembayaran, navigasi, dan konten invoice/riwayat/bantuan; serta
+`tests/e2e/onboarding-subscription-layout.spec.ts` untuk keempat layar pada
+lebar 390, 768, 1024, dan 1440 piksel dalam light/dark mode. Tes regresi preview
+juga memeriksa lebar 320 piksel, landscape, overlay, fokus, dan inset keyboard.
+
+Pemeriksaan penyelarasan: build produksi, lint berkas terkait, 424 tes unit
+(termasuk 21 tes preview), 17 tes browser preview, dan 6 tes regresi setup/login lulus. Keyboard
+serta system Back Android native belum diuji; checkout tetap berupa simulasi.
+
 Tombol **Skenario simulasi** di header membuka pilihan kondisi. **Registrasi baru**
 mereset hanya draft preview. Switch **Offline simulasi** tersedia di semua layar.
 Perilaku checkout dapat diubah menjadi **Android (browser eksternal)** tanpa
@@ -105,13 +142,13 @@ Berkas tanpa awalan direktori pada tabel berada di `src/preview/onboarding`.
 
 ## Pemeriksaan implementasi
 
-- Seluruh suite unit: **422 lulus, 0 gagal** (66 berkas), termasuk 19 tes preview.
+- Seluruh suite unit: **424 lulus, 0 gagal** (66 berkas), termasuk 21 tes preview.
 - TypeScript dan lint berkas yang diubah: lulus setelah penyelarasan desain.
 - Build produksi: lulus setelah penyelarasan desain.
   Peringatan aset beep dan chunk besar sudah terdapat pada aplikasi.
 - Lint seluruh proyek memiliki dua error `any` lama pada
   `tests/e2e/zz-diagnose-qty1.spec.ts`, serta dua warning React Compiler lama.
-- Browser: **15 tes lulus** — 9 preview serta 6 regresi setup/login lama.
+- Browser: **23 tes lulus** — 17 preview serta 6 regresi setup/login lama.
   Matriks preview mencakup desktop/mobile, light/dark, lebar 320px, landscape,
   resize saat overlay terbuka, Back pada picker, Tab/Shift+Tab, Escape, footer
   dengan inset IME simulasi, serta isolasi IndexedDB/localStorage.
@@ -130,7 +167,7 @@ Perintah pemeriksaan:
 bun run build
 bun run lint
 bun run test:unit
-bun run test:e2e:chromium -- tests/e2e/onboarding-preview.spec.ts tests/e2e/owner-accounting-navigation.spec.ts tests/e2e/setup-owner.spec.ts
+bun run test:e2e:chromium -- tests/e2e/onboarding-preview.spec.ts tests/e2e/onboarding-subscription-layout.spec.ts tests/e2e/owner-accounting-navigation.spec.ts tests/e2e/setup-owner.spec.ts
 ```
 
 Integrasi tersisa: metode bukti kepemilikan, layanan identitas/lead/billing,

@@ -105,9 +105,9 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 960 }, { name: '
       await page.getByRole('button', { name: 'Periksa status akses', exact: true }).click();
       await page.getByLabel('Hasil layanan simulasi').selectOption('success');
       await page.getByRole('button', { name: 'Periksa status pembayaran', exact: true }).click();
-      await expect(page.getByText(/Aktivasi simulasi diterima/)).toBeVisible();
-      await page.getByRole('button', { name: 'Status akses usaha', exact: true }).click();
-      await expect(page.getByText('Langganan aktif', { exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Paketmu sudah aktif', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Kembali ke aplikasi', exact: true }).click();
+      await expect(page.getByText('Aktif', { exact: true })).toBeVisible();
       await noOverflow(page);
       expect(requests.some((url) => /\/src\/(lib\/db|auth\/AuthProvider|AppShell|services\/setupKeyService)/.test(url))).toBe(false);
       expect(await page.evaluate(async () => (await indexedDB.databases()).length)).toBe(0);
@@ -140,7 +140,7 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 960 }, { name: '
       await page.getByRole('button', { name: 'Skenario simulasi', exact: true }).click();
       await page.getByLabel('Perilaku checkout').selectOption('android');
       await page.getByRole('dialog').getByRole('button', { name: 'Tutup', exact: true }).click();
-      await page.locator('.preview-footer').getByRole('button', { name: 'Perpanjang langganan' }).click();
+      await page.getByRole('button', { name: 'Perpanjang langganan', exact: true }).click();
       await page.getByRole('button', { name: 'Simulasikan menuju browser eksternal' }).click();
       await expect(page.getByText('Simulasi perpindahan ke browser', { exact: true })).toBeVisible();
       await page.getByRole('button', { name: 'Saya sudah kembali ke aplikasi' }).click();

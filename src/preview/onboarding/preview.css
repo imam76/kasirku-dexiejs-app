@@ -253,6 +253,8 @@
 .onboarding-preview.is-mobile .preview-footer .ant-btn-primary { min-width: 0; }
 .onboarding-preview.is-mobile .preview-footer .ant-btn:not(.ant-btn-primary) { min-width: 44px; }
 .onboarding-preview.is-mobile .preview-footer .ant-btn-block { width: auto; }
+.preview-footer-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; max-width: 1040px; margin: 0 auto 12px; font-size: 12px; }
+.preview-footer-total strong { font-size: 21px; letter-spacing: -.5px; }
 
 @media (max-width: 767px) {
   .onboarding-preview.is-mobile .preview-main { padding: 22px max(16px, var(--app-safe-area-inset-right, 0px)) 24px max(16px, var(--app-safe-area-inset-left, 0px)); }

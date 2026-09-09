@@ -7,7 +7,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useTheme } from '@/hooks/useTheme';
 import { getPlan, getPlanModules, moduleLabel } from './catalog';
-import { isAccessExpired, WIZARD_STEPS } from './model';
+import { checkoutQuote, isAccessExpired, WIZARD_STEPS } from './model';
 import { useOnboardingPreview } from './useOnboardingPreview';
 import { useOnboardingCopy } from './useOnboardingCopy';
 import { AccountingStep, ConsentStep, PlansStep, RegistrationStep, WelcomeStep } from './WizardSteps';
@@ -103,6 +103,7 @@ export function OnboardingPreview() {
   const avatar = owner.split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   const profile = <div className="preview-profile"><span className="preview-avatar">{avatar}</span><span><strong>{owner}</strong><small>{copy('ownerRole')}</small></span></div>;
   const showFooter = state.screen !== 'welcome' && !activated && !managing && (state.screen !== 'checkout' || isMobile);
+  const mobileHeaderBack = isMobile && (state.screen === 'checkout' || (state.screen === 'plans' && !inWizard));
   return <ConfigProvider theme={{ token: { ...previewTheme, controlHeight: 44 }, components: { Button: { primaryColor: '#FFFFFF' } } }}>
     <div className={`onboarding-preview ${isMobile ? 'is-mobile' : 'is-desktop'} ${billingScreen ? 'is-billing' : ''} ${state.screen === 'plans' || state.screen === 'checkout' ? 'is-wide' : ''} ${activated ? 'is-activated' : ''} screen-${state.screen}`} style={cssVariables}
       onKeyDownCapture={(event) => {
@@ -120,7 +121,7 @@ export function OnboardingPreview() {
       <div className="preview-underlay" inert={dialogOpen}>
         <header className="preview-header">
           <div className="preview-brand-area">
-            {isMobile && <Button type="text" icon={<Menu size={20} />} aria-label={copy('navigation')} onClick={() => flow.openOverlay('menu')} />}
+            {isMobile && <Button type="text" icon={mobileHeaderBack ? <ArrowLeft size={20} /> : <Menu size={20} />} aria-label={copy(mobileHeaderBack ? 'back' : 'navigation')} onClick={mobileHeaderBack ? flow.back : () => flow.openOverlay('menu')} />}
             <a className="preview-brand" href="/onboarding-preview.html" onClick={(event) => { event.preventDefault(); flow.go(state.access.kind === 'none' ? 'welcome' : 'status'); }}>
               <img src="/frayukti-f.svg" alt="" /><span>Frayukti</span>
             </a>
@@ -160,10 +161,12 @@ export function OnboardingPreview() {
               {billingScreen ? content : <SetupSurface>{content}</SetupSurface>}
               </div>
             </main>
-            {showFooter && <footer className="preview-footer"><div className="preview-footer-content">
-              {state.screen === 'status' && expired
+            {showFooter && <footer className="preview-footer">
+              {isMobile && state.screen === 'checkout' && <div className="preview-footer-total"><span>{copy('estimate')}</span><strong>{money(checkoutQuote(state).amount)}</strong></div>}
+              <div className="preview-footer-content">
+              {!mobileHeaderBack && (state.screen === 'status' && expired
                 ? <Button size="large" icon={<Download size={17} />} onClick={() => flow.openOverlay('backup')}>{copy('export')}</Button>
-                : <Button size="large" icon={<ArrowLeft size={17} />} onClick={flow.back}>{copy('back')}</Button>}
+                : <Button size="large" icon={<ArrowLeft size={17} />} onClick={flow.back}>{copy('back')}</Button>)}
               {!isMobile && state.screen === 'accounting' && state.accountingMode === 'configure' && <Button size="large" className="preview-wrap-button" onClick={() => {
                 flow.dispatch({ type: 'skip-accounting' });
               }}>{copy('skip')}</Button>}

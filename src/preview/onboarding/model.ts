@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import dayjs from '@/lib/dayjs';
 import { createDefaultAccountingDraft, validateAccountingDraft, type AccountingDraft } from '@/view/auth/ownerAccountingSetupModel';
-import { getPlanModules, PLAN_IDS } from './catalog';
+import { getPlan, getPlanModules, PLAN_IDS } from './catalog';
 
 export const PREVIEW_DATE = '2026-09-09'; // Wednesday; simulation never depends on the device clock.
 export const SCREENS = ['welcome', 'registration', 'plans', 'accounting', 'consent', 'status', 'checkout', 'payment', 'recovery'] as const;
@@ -73,6 +73,13 @@ export const remainingDays = (state: Pick<FlowState, 'access' | 'now'>) => Math.
 export const isAccessExpired = (state: Pick<FlowState, 'access' | 'now'>) => state.access.kind !== 'none' && remainingDays(state) === 0;
 export const shouldShowReminder = (state: FlowState) => state.access.kind !== 'none' && dayjs(state.now).day() === 3 && state.reminderDismissed !== state.now;
 export const WIZARD_STEPS: Screen[] = ['registration', 'plans', 'accounting', 'consent'];
+export const checkoutQuote = (state: FlowState) => {
+  const resuming = state.payment.status === 'pending' || state.payment.activation === 'waiting';
+  const plan = getPlan(resuming && state.payment.entitlement ? state.payment.entitlement.plan : state.plan ?? state.access.plan);
+  const setup = plan.id === 'custom' && (state.access.kind !== 'subscription' || state.access.plan !== 'custom') ? plan.setupPrice : 0;
+  return { plan, setup, resuming, amount: resuming && state.payment.amount > 0 ? state.payment.amount : plan.monthlyPrice + setup,
+    method: resuming ? state.payment.method : state.paymentMethod };
+};
 export const resolveScreen = (state: FlowState, target: Screen): Screen => {
   if (state.access.kind !== 'none' && target === 'plans') return 'plans';
   if (state.onboarding === 'complete' && WIZARD_STEPS.includes(target)) return 'status';
@@ -81,10 +88,12 @@ export const resolveScreen = (state: FlowState, target: Screen): Screen => {
     return WIZARD_STEPS.slice(0, index).find((step) => Object.keys(validateStep(state, step)).length > 0) ?? target;
   }
   if (['status', 'checkout', 'payment'].includes(target) && state.access.kind === 'none') return 'welcome';
+  if (target === 'checkout' && state.plan === 'custom' && Object.keys(validateStep(state, 'plans')).length) return 'plans';
   if (target === 'payment' && state.payment.status === 'idle') return 'checkout';
   return target;
 };
 export const previousScreen = (state: FlowState): Screen => {
+  if (state.screen === 'plans' && state.access.kind !== 'none') return 'status';
   const index = WIZARD_STEPS.indexOf(state.screen);
   if (index >= 0) return index === 0 ? 'welcome' : WIZARD_STEPS[index - 1];
   return ['checkout', 'payment', 'recovery'].includes(state.screen) && state.access.kind !== 'none' ? 'status' : 'welcome';

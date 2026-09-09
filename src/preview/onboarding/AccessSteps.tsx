@@ -1,7 +1,6 @@
 import { Alert, Button, Radio, Tag, Typography } from 'antd';
 import { CalendarDays, ChevronDown, ChevronRight, HelpCircle, CreditCard, Download, Info, Landmark, QrCode, ReceiptText, RefreshCw, ShieldCheck } from 'lucide-react';
-import { getPlan } from './catalog';
-import { isAccessExpired, PAYMENT_METHODS, remainingDays, shouldShowReminder } from './model';
+import { checkoutQuote, isAccessExpired, PAYMENT_METHODS, remainingDays, shouldShowReminder } from './model';
 import { PAYMENT_OUTCOMES, RECOVERY_ACCESS } from './simulation';
 import type { OnboardingController } from './useOnboardingPreview';
 import { useOnboardingCopy } from './useOnboardingCopy';
@@ -79,12 +78,11 @@ function ActiveSubscriptionStep({ flow }: Props) {
 export function CheckoutStep({ flow }: Props) {
   const { copy, money } = useOnboardingCopy();
   const { state } = flow;
-  const plan = getPlan(state.plan ?? state.access.plan);
-  const setup = plan.id === 'custom' && (state.access.kind !== 'subscription' || state.access.plan !== 'custom') ? plan.setupPrice : 0;
+  const { plan, setup, amount, method: selectedMethod, resuming } = checkoutQuote(state);
   const icons = { qris: QrCode, va: Landmark, card: CreditCard };
   const invoice = <dl className="preview-invoice"><div><dt>{copy('monthly')}</dt><dd>{money(plan.monthlyPrice)}</dd></div>
     {setup > 0 && <div><dt>{copy('setupFee', { price: '' })}</dt><dd>{money(setup)}</dd></div>}
-    <div className="preview-total"><dt>{copy('estimate')}</dt><dd>{money(plan.monthlyPrice + setup)}</dd></div>
+    <div className="preview-total"><dt>{copy('estimate')}</dt><dd>{money(amount)}</dd></div>
   </dl>;
   return <>
     <Paragraph className="preview-checkout-intro" type="secondary">{copy('checkoutIntro')}</Paragraph>
@@ -92,13 +90,13 @@ export function CheckoutStep({ flow }: Props) {
       <div className="preview-payment-methods">
         <div className="preview-mobile-package"><PlanSummary plan={plan.id} price /></div>
         <h2>{copy('paymentMethods')}</h2>
-        <Radio.Group value={state.paymentMethod} onChange={(event) => {
+        <Radio.Group value={selectedMethod} disabled={resuming} onChange={(event) => {
           const method = PAYMENT_METHODS.find((value) => value === event.target.value);
           if (method) flow.dispatch({ type: 'payment-method', method });
         }} aria-label={copy('paymentMethods')} className="preview-method-options">
           {PAYMENT_METHODS.map((method) => {
             const Icon = icons[method];
-            return <Radio value={method} key={method} className={`preview-method ${state.paymentMethod === method ? 'is-selected' : ''}`}>
+            return <Radio value={method} key={method} className={`preview-method ${selectedMethod === method ? 'is-selected' : ''}`}>
               <span className="preview-method-content"><span className="preview-method-icon"><Icon size={27} aria-hidden /></span><span><strong>{copy(`method.${method}`)}</strong><small>{copy(`methodHint.${method}`)}</small></span>{method !== 'qris' && <ChevronRight size={18} aria-hidden />}</span>
             </Radio>;
           })}
@@ -120,7 +118,7 @@ export function PaymentStep({ flow }: Props) {
   if (state.payment.activation === 'received') return <div className="preview-activation">
     <Paragraph type="secondary">{copy('activeBody')}</Paragraph>
     <div className="preview-activation-package"><PlanSummary plan={state.access.plan} detail={copy('activeUntil', { date: date(state.access.end) })} /></div>
-    <Button type="primary" block size="large" onClick={() => { flow.go('status'); flow.setHome(true); }}>{copy('returnApp')}</Button>
+    <Button type="primary" block size="large" onClick={() => flow.go('status')}>{copy('returnApp')}</Button>
     <Button block size="large" className="preview-outline-button" onClick={() => flow.openOverlay('invoice')}>{copy('viewInvoice')}</Button>
   </div>;
   return <>
