@@ -11,16 +11,17 @@ const isLocale = (value: string | null): value is Locale => {
 
 interface I18nProviderProps {
   children: ReactNode;
+  storageKey?: string;
 }
 
-export function I18nProvider({ children }: I18nProviderProps) {
+export function I18nProvider({ children, storageKey = STORAGE_KEY }: I18nProviderProps) {
   const [locale, setLocaleState] = useState<Locale>(() => {
     if (typeof window === 'undefined') {
       dayjs.locale(defaultLocale);
       return defaultLocale;
     }
 
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(storageKey);
     const initialLocale = isLocale(saved) ? saved : defaultLocale;
     dayjs.locale(initialLocale);
     return initialLocale;
@@ -41,8 +42,8 @@ export function I18nProvider({ children }: I18nProviderProps) {
 
   useEffect(() => {
     document.documentElement.lang = locale;
-    localStorage.setItem(STORAGE_KEY, locale);
-  }, [locale]);
+    localStorage.setItem(storageKey, locale);
+  }, [locale, storageKey]);
 
   const value = useMemo<I18nContextValue>(() => ({
     locale,

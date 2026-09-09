@@ -3,6 +3,7 @@ import { App, Button, Form, Input, Steps, Typography } from 'antd';
 import { ArrowLeft, ArrowRight, Check, ShieldCheck } from 'lucide-react';
 import { createOwnerUser, normalizeAuthEmail } from '@/auth/authService';
 import { useAuth } from '@/auth/useAuth';
+import { SetupPageHeading, SetupSurface } from '@/components/auth/SetupPresentation';
 import { AUTH_PIN_LENGTH, AUTH_PIN_VALIDATION_MESSAGE } from '@/auth/pinPolicy';
 import { DEFAULT_SELECTED_MODULES } from '@/constants/setupModules';
 import { db } from '@/lib/db';
@@ -189,19 +190,8 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
   return (
     <div className="h-[100dvh] overflow-y-auto [scrollbar-gutter:stable]">
       <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-6 sm:py-16">
-        <div className="mb-9 sm:mb-11">
-          <div className="flex items-center gap-3 sm:block">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-              <ShieldCheck size={24} />
-            </div>
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900 sm:mt-5">
-              Daftarkan Owner
-            </h1>
-          </div>
-          <Text type="secondary" className="mt-2 block max-w-lg text-sm leading-relaxed">
-            Akun Owner memegang akses utama aplikasi dan menentukan dasar pencatatan usaha.
-          </Text>
-        </div>
+        <SetupPageHeading icon={<ShieldCheck size={24} />} title="Daftarkan Owner"
+          description="Akun Owner memegang akses utama aplikasi dan menentukan dasar pencatatan usaha." />
 
         <Steps
           current={currentStep}
@@ -221,7 +211,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
           requiredMark={false}
           scrollToFirstError
         >
-          <div className="w-full rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7">
+          <SetupSurface>
             {currentStep === 0 ? (
               <>
                 <Form.Item
@@ -315,7 +305,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
                 onSelectBusinessTemplate={handleSelectBusinessTemplate}
               />
             )}
-          </div>
+          </SetupSurface>
 
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             {currentStep === 0 ? (

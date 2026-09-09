@@ -2,6 +2,8 @@
 
 Status: DRAFT  
 Tanggal: 2026-09-04  
+Tanggal revisi: 2026-09-08
+
 Dokumen induk: [Model Bisnis — Registrasi, Trial, Paket, dan Pembayaran](ISSUE-MODEL-BISNIS-INSTALASI-SAMPAI-PEMBAYARAN.md)
 
 ## Tujuan
@@ -19,6 +21,13 @@ batasan arsitektur yang telah ditetapkan pada dokumen induk.
 - Trial maksimal 90 hari dan status akses diperiksa secara lokal pada tahap
   awal. Risiko penghapusan data lokal, instal ulang, atau modifikasi aplikasi
   untuk mengakali trial telah diterima.
+- Langganan melekat pada identitas usaha dengan pemilik yang dapat diverifikasi.
+  Desktop dan Android dapat mengambil entitlement serta masa akses yang sama;
+  akun langganan terpisah dari akun kasir/karyawan dan role lokal.
+- Akses berbayar yang telah diterima berlaku offline sampai tanggal berakhir.
+  Verifikasi kepemilikan, pemulihan langganan, pembayaran, dan pengambilan
+  aktivasi terbaru memerlukan koneksi. Tidak ada validasi server periodik
+  sebagai syarat penggunaan selama masa akses lokal masih berlaku.
 - Saat akses habis, transaksi baru, perubahan data, dan laporan operasional
   diblokir. Halaman blokir tetap harus memberi akses ke halaman pembayaran dan
   ekspor backup data.
@@ -36,8 +45,11 @@ batasan arsitektur yang telah ditetapkan pada dokumen induk.
 
 ### Prinsip desain per platform
 
-**Desktop dan Android adalah dua flow UX yang terpisah, bukan satu desain
-desktop yang dibuat responsif.** Responsivitas hanya memastikan komponen muat
+**Desktop dan Android mengikuti alur bisnis yang sama dari registrasi sampai
+pembayaran dan aktivasi akses, dengan rancangan UX sesuai masing-masing
+platform.** Urutan tahapan, data wajib, paket, persetujuan, trial, dan aturan
+akses tetap sama. Tampilan dan perilaku interaksi dirancang untuk masing-masing
+platform. Responsivitas hanya memastikan komponen muat
 di ukuran layar berbeda; responsivitas tidak menyelesaikan perbedaan cara
 pengguna memasukkan data, menavigasi, menemukan aksi utama, atau melanjutkan
 pekerjaan.
@@ -55,7 +67,22 @@ Flow yang hanya dipersempit berisiko membuat tombol upgrade sulit dijangkau,
 form tidak nyaman diisi, navigasi kembali membingungkan, atau detail penting
 tersembunyi di balik gestur yang tidak ditemukan pengguna.
 
-### Urutan langkah
+### Jalur awal untuk kedua platform
+
+- **Daftar usaha baru:** menjalankan urutan onboarding di bawah, termasuk
+  dukungan registrasi/trial lokal dan antrean lead saat offline.
+- **Sudah punya langganan / Hubungkan ke usaha yang sudah terdaftar:**
+  memverifikasi kepemilikan secara online, lalu mengambil identitas usaha,
+  paket, entitlement, dan tanggal akhir akses dari billing. Berlaku untuk
+  perangkat tambahan maupun instal ulang, tanpa pembelian langganan ulang.
+
+Pemulihan akses tidak memulai trial baru, memperpanjang masa langganan, atau
+mengaktifkan langganan yang sudah habis. Pemulihan juga tidak memindahkan data
+transaksi, menjalankan restore backup, atau memberikan role lokal secara
+otomatis. Rancang jalur setup/koneksi data sesuai kondisi instalasi yang ada
+tanpa menimpa data pengguna.
+
+### Urutan langkah pengguna baru
 
 1. **Registrasi:** nama pemilik/pengguna, nama usaha, nomor WhatsApp, dan jenis
    usaha wajib diisi. Email serta lokasi usaha opsional.
@@ -75,6 +102,8 @@ tersembunyi di balik gestur yang tidak ditemukan pengguna.
 | Keadaan | Perilaku yang diperlukan |
 | --- | --- |
 | Perangkat offline saat registrasi | Onboarding tetap dapat diselesaikan sesuai aturan aplikasi; pengiriman lead diantrekan sampai koneksi tersedia. |
+| Pemulihan saat offline atau verifikasi gagal | Jelaskan bahwa pemulihan memerlukan koneksi dan bukti kepemilikan yang valid; sediakan coba lagi tanpa menghapus akses lokal yang masih berlaku. |
+| Pemulihan berhasil | Terapkan paket dan tanggal akhir dari billing; jika sudah habis, tampilkan layar blokir dan perpanjangan. Data transaksi serta role lokal tetap mengikuti mekanisme yang ada. |
 | Data wajib belum valid | Pengguna tidak dapat melanjutkan dan menerima pesan validasi per kolom. |
 | Syarat belum disetujui | Trial tidak boleh diaktifkan. |
 | Trial aktif | Status dan sisa masa trial mudah terlihat serta menyediakan tombol upgrade. |
@@ -147,6 +176,7 @@ menghilangkan jejak area lain:
 | Area | Data yang perlu dicatat |
 | --- | --- |
 | Profil registrasi | Nama pengguna, nama usaha, WhatsApp, jenis usaha, serta email/lokasi bila diisi. |
+| Identitas langganan | Pengenal pemilik/usaha dari layanan billing dan keterkaitannya dengan akses lokal; terpisah dari pengenal kasir/karyawan. |
 | Pengiriman lead | Status antrean, waktu percobaan, hasil terakhir, dan pengenal idempoten. Tidak memuat data transaksi bisnis. |
 | Persetujuan dokumen | Jenis dokumen, versi, hash, waktu persetujuan, serta status dan waktu penarikan consent marketing bila ada. |
 | Paket dan entitlement | Kode paket, daftar modul aktif eksplisit, harga yang ditampilkan sebagai informasi, dan waktu perubahan paket. |
@@ -168,6 +198,11 @@ lisensi yang tidak disediakan.
   paket, terutama agar `GENERAL_LEDGER` tidak tersisip melalui normalisasi.
 - Simpan perubahan status secara atomik dan siapkan migrasi data lokal untuk
   pengguna yang sudah memasang aplikasi sebelum fitur ini dirilis.
+- Kontrak identitas harus mengatur pengaitan registrasi offline ke identitas
+  usaha di server, otorisasi pengambilan akses, dan pemulihan pada instalasi
+  lain. Nama usaha atau nomor WhatsApp yang dimasukkan saja tidak cukup untuk
+  membuktikan kepemilikan. Metode verifikasi dan pemulihan kontak masih perlu
+  ditetapkan sebelum implementasi fitur tersebut.
 - Tambahkan pengujian untuk trial baru, sisa satu hari, trial habis, aktivasi
   sukses, paket Custom, pembatalan consent marketing, dan kegagalan antrean
   lead saat offline.
@@ -220,11 +255,14 @@ Aplikasi meminta checkout
 - Rekonsiliasi atau pemrosesan ulang webhook harus aman bila notifikasi yang
   sama diterima lebih dari sekali atau tiba tidak berurutan.
 - Layanan billing menyimpan metadata billing seperlunya: order, paket, nominal,
-  status Midtrans, masa akses, jejak webhook, dan hash token aktivasi. Layanan
-  ini tidak menerima data POS, stok, pelanggan, supplier, atau dokumen bisnis.
-- Endpoint publik dibatasi pada pengiriman lead, pembuatan checkout, pembacaan
-  status akses, dan webhook. Terapkan autentikasi/otorisasi yang sesuai pada
-  endpoint selain webhook, pencatatan audit, pembatasan laju, serta penyimpanan
+  status Midtrans, masa akses, jejak webhook, dan hash token aktivasi, serta
+  identitas pemilik/usaha dan metadata verifikasi/pemulihan langganan. Layanan
+  ini tidak menerima data POS, stok, pelanggan, supplier, atau dokumen bisnis,
+  dan tidak mengelola akun kasir/karyawan.
+- Endpoint publik dibatasi pada pengiriman lead, pendaftaran identitas
+  langganan, verifikasi kepemilikan dan pemulihan langganan, pembuatan checkout,
+  pembacaan status akses, dan webhook. Terapkan autentikasi/otorisasi yang sesuai
+  pada endpoint selain webhook, pencatatan audit, pembatasan laju, serta penyimpanan
   secret melalui mekanisme secret server.
 - Buat prosedur operasional untuk pembayaran tertunda, pembayaran ganda,
   pengembalian dana, webhook gagal, dan aktivasi yang belum tersinkron ke
@@ -273,18 +311,23 @@ layanan billing diterima.
 - Kontrak data lokal, migrasi, dan matriks akses per status.
 - Pemetaan entitlement paket ke modul beserta pengujian regresi normalisasi.
 - Kontrak API layanan lead/billing, skema database terpisah, daftar secret,
-  strategi webhook, dan prosedur rekonsiliasi.
+  strategi webhook, dan prosedur rekonsiliasi, termasuk identitas pemilik/usaha,
+  metode verifikasi kepemilikan, pengaitan registrasi offline, dan pemulihan.
 - Naskah reminder in-app dan template follow-up yang telah ditinjau terhadap
   Syarat Layanan serta Kebijakan Privasi.
 - Skenario uji end-to-end dari registrasi offline sampai aktivasi pembayaran dan
   ekspor backup ketika akses habis, diuji terpisah pada desktop dan Android.
+- Skenario pemulihan langganan setelah instal ulang dan pengambilan akses usaha
+  yang sama pada desktop/Android, termasuk verifikasi gagal, koneksi putus,
+  langganan habis, serta akses lokal yang masih berlaku saat billing gagal.
 
 ## Pertanyaan yang Harus Diputuskan Sebelum Rilis
 
 1. Apa kebijakan operasional untuk pembayaran ganda, refund, chargeback, dan
    pembayaran yang sukses tetapi aplikasi belum menerima aktivasi?
-2. Bagaimana pengguna memulihkan status akses setelah pindah perangkat atau
-   memasang ulang aplikasi, mengingat model awal tidak memakai device binding?
+2. Metode verifikasi kepemilikan apa yang digunakan pada jalur pemulihan
+   langganan yang sudah disepakati, dan bagaimana menangani kontak pemilik yang
+   hilang/berubah? Detail ini harus diputuskan sebelum implementasi pemulihan.
 3. Kanal dan frekuensi follow-up apa yang disetujui setelah consent marketing
    diperoleh, termasuk pemisahan pesan layanan dari pesan pemasaran?
 4. Bagaimana proses dukungan untuk koreksi data registrasi, penarikan consent,

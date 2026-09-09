@@ -1,4 +1,5 @@
 import { appMessages } from './app';
+import { onboardingMessages } from './onboardingMessages';
 import { commonMessages } from './common';
 import { cooperativeMessages } from './cooperativeMessages';
 import { navigationMessages } from './navigationMessages';
@@ -14,6 +15,7 @@ import { restaurantTableMessages } from './restaurantTableMessages';
 
 export const messages = {
   id: {
+    ...onboardingMessages.id,
     ...commonMessages.id,
     ...navigationMessages.id,
     ...appMessages.id,
@@ -2247,6 +2249,7 @@ export const messages = {
     'scanner.close': 'Tutup',
   },
   en: {
+    ...onboardingMessages.en,
     ...commonMessages.en,
     ...navigationMessages.en,
     ...appMessages.en,

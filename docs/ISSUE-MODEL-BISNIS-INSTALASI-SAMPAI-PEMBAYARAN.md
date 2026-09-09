@@ -2,7 +2,7 @@ DRAFT:
 # Issue: Model Bisnis — Registrasi, Trial, Paket, dan Pembayaran
 
 Tanggal catatan awal: 2026-09-03
-Tanggal revisi: 2026-09-04
+Tanggal revisi: 2026-09-08
 
 ## Ringkasan
 
@@ -10,15 +10,21 @@ Produk desktop/Android perlu mempunyai jalur mandiri yang jelas: calon
 pelanggan dapat mendaftar, memilih paket yang relevan, melakukan setup awal,
 menggunakan aplikasi dalam mode trial, lalu meng-upgrade ketika siap membayar.
 
+**Desktop dan Android mengikuti alur bisnis yang sama dari registrasi sampai
+pembayaran dan aktivasi akses.** Seluruh tahapan dan aturan pada dokumen ini
+berlaku untuk kedua platform. Perbedaannya ada pada tampilan, cara berinteraksi,
+navigasi, pembukaan checkout, dan cara melanjutkan aplikasi setelah pembayaran.
+
 Untuk tahap awal, aplikasi **tetap menggunakan arsitektur database dan backend
 yang ada saat ini**: offline-first dengan Dexie/IndexedDB lokal serta opsi
 self-host PostgreSQL/LAN. Data inti tidak dimigrasikan ke Supabase dan tidak
 akan dibuat layanan lisensi yang kompleks.
 
-Pengecualian yang disetujui adalah layanan kecil khusus pembayaran Midtrans.
-Layanan ini hanya membuat transaksi pembayaran, menerima webhook Midtrans, dan
-mengirim hasil aktivasi akses ke aplikasi; layanan ini bukan backend data
-transaksi atau migrasi arsitektur utama.
+Pengecualian yang disetujui adalah layanan kecil lead dan billing, termasuk
+identitas pemilik/usaha serta verifikasi kepemilikan untuk pemulihan langganan.
+Layanan ini membuat transaksi pembayaran Midtrans, menerima webhook, dan
+menyediakan hasil aktivasi akses ke aplikasi; layanan ini bukan backend data
+transaksi bisnis atau migrasi arsitektur utama.
 
 Distribusi Android pada tahap awal dilakukan di luar Google Play, melalui APK
 langsung atau kanal distribusi privat yang ditetapkan kemudian. Keputusan ini
@@ -56,8 +62,75 @@ Rancangan teknis, skema data, dan implementasi tetap dibahas terpisah.
    dibuat sebagai penawaran yang terpisah pada tahap berikutnya.
 8. Validasi akses dibuat ringan dan berjalan di sisi aplikasi. Tidak ada
    target anti-abuse tingkat lanjut pada tahap awal.
+9. Langganan melekat pada identitas usaha dengan pemilik yang dapat diverifikasi.
+   Desktop dan Android milik usaha yang sama mengambil paket dan masa akses
+   yang sama. Akun langganan terpisah dari akun kasir/karyawan serta role lokal.
+10. Pelanggan lama dapat menghubungkan instalasi baru atau memulihkan langganan
+    setelah instal ulang melalui verifikasi kepemilikan. Akses berbayar yang
+    sudah diterima aplikasi tetap berlaku offline sampai tanggal berakhirnya.
+
+## Keputusan Identitas Usaha dan Pemulihan Langganan
+
+Tanggal keputusan: 2026-09-08.
+
+Mengikuti pembahasan pola akun dan lisensi Adobe/Corel, Kasirku menggunakan
+identitas pemilik dan usaha sebagai penghubung antara langganan dan instalasi
+aplikasi. Penerapannya tetap sederhana: trial maksimal 90 hari, pembayaran
+manual setiap periode melalui Midtrans, serta lisensi perpetual per major
+version sebagai penawaran tahap berikutnya sesuai ketentuan di bawah.
+
+Halaman awal desktop dan Android menyediakan dua jalur:
+
+- **Daftar usaha baru:** mengikuti registrasi, pemilihan paket, setup,
+  persetujuan, dan trial yang ditetapkan pada dokumen ini.
+- **Sudah punya langganan / Hubungkan ke usaha yang sudah terdaftar:**
+  memverifikasi kepemilikan, lalu mengambil paket, entitlement, dan tanggal
+  akhir akses dari layanan billing. Jalur ini tidak membuat langganan baru
+  atau mengharuskan pembelian ulang untuk usaha yang sama.
+
+Contoh: pemilik membeli paket POS dari desktop, lalu memasang aplikasi Android.
+Setelah kepemilikan diverifikasi, Android memperoleh paket dan tanggal akhir
+yang sama. Pemulihan langganan tidak otomatis memindahkan data transaksi,
+memulihkan backup, atau memberikan role kasir/admin lokal. Data dan hak akses
+operasional tetap mengikuti mekanisme aplikasi yang sudah ada.
+
+Registrasi dan trial baru tetap dapat dimulai secara lokal saat offline;
+pengiriman lead menunggu koneksi. Verifikasi kepemilikan, pemulihan langganan,
+pembayaran, dan pengambilan aktivasi terbaru memerlukan koneksi. Akses berbayar
+yang sudah tersimpan lokal tidak dihentikan hanya karena internet atau layanan
+billing sedang tidak tersedia, selama tanggal akhir akses belum terlewati.
+Setelah akses habis, layar blokir tetap menyediakan pembayaran, pemulihan atau
+pemeriksaan status akses, dan ekspor backup.
+
+Metode verifikasi kepemilikan dan penanganan kontak pemilik yang hilang/berubah
+masih harus dirinci sebelum implementasi pemulihan. Mengetahui nama usaha atau
+nomor WhatsApp saja bukan bukti kepemilikan. Keputusan ini tidak menetapkan
+email wajib, device binding, atau validasi server periodik.
 
 ## Alur Registrasi sampai Pembayaran
+
+Alur pengguna baru berikut berlaku untuk **desktop maupun Android**. Pelanggan
+lama memakai jalur pemulihan pada keputusan identitas usaha di atas:
+
+Registrasi → pilih paket usaha → setup akuntansi (boleh dilewati) → persetujuan
+syarat dan privasi → trial → upgrade/pembayaran → aktivasi akses berbayar →
+perpanjangan bulanan. Upgrade dapat dilakukan kapan saja selama trial, tanpa
+menunggu trial berakhir. Pengingat hari Rabu berjalan selama penggunaan aplikasi
+dan bukan langkah yang harus dilalui sebelum pembayaran.
+
+### Perilaku per Platform
+
+| Area | Desktop | Android |
+| --- | --- | --- |
+| Registrasi sampai persetujuan | Form dan navigasi dioptimalkan untuk keyboard, mouse, dan layar lebar. | Form dan navigasi dioptimalkan untuk sentuhan, keyboard virtual, dan tombol/gestur kembali. |
+| Pilihan paket dan setup | Ringkasan serta perbandingan dapat ditampilkan berdampingan. | Informasi ditampilkan bertahap agar mudah dibaca dan dipilih pada layar kecil. |
+| Trial, pengingat, dan layar blokir | Status akses, pengingat Rabu, tombol pembayaran, dan ekspor backup tersedia dalam tampilan desktop. | Status akses, pengingat Rabu, tombol pembayaran, dan ekspor backup tersedia dalam tampilan mobile. |
+| Checkout Midtrans | Checkout dapat dibuka dari aplikasi sesuai rancangan desktop. | Checkout dibuka di browser eksternal sistem. |
+| Melanjutkan setelah pembayaran | Aplikasi membaca status akses terbaru setelah checkout, saat kembali aktif, atau saat dibuka lagi. | Pengguna dapat kembali melalui app link atau membuka aplikasi secara manual; aplikasi membaca status akses saat kembali aktif atau dibuka lagi. |
+
+Data registrasi wajib, pilihan paket, harga, entitlement modul, persetujuan,
+masa trial, aturan blokir, serta dasar aktivasi pembayaran tetap sama pada kedua
+platform. Detail UX masing-masing platform dirancang dalam dokumen implementasi.
 
 ### 1. Registrasi Pengguna dan Pengambilan Lead
 
@@ -179,19 +252,22 @@ bukan dipercaya dari aplikasi klien. Aktivasi hanya terjadi setelah webhook
 Midtrans diverifikasi, diproses idempoten berdasarkan `order_id`, dan memenuhi
 status transaksi berhasil yang disyaratkan Midtrans.
 
-Setelah pembayaran Android selesai, browser dapat mengarahkan pengguna kembali
-ke aplikasi melalui *app link*. Kembalinya pengguna bukan syarat aktivasi:
-ketika aplikasi aktif kembali atau dibuka lagi, aplikasi membaca status akses
-terbaru dari layanan billing. Status webhook tervalidasi tetap menjadi sumber
-kebenaran.
+Pada desktop maupun Android, aplikasi membaca status akses terbaru dari layanan
+billing setelah checkout, ketika aktif kembali, atau ketika dibuka lagi saat
+koneksi tersedia. Pada Android, browser dapat mengarahkan pengguna kembali ke
+aplikasi melalui *app link*; pengguna juga dapat membuka aplikasi secara manual.
+Kembalinya pengguna atau tertutupnya checkout bukan bukti pembayaran maupun
+syarat aktivasi. Status webhook tervalidasi tetap menjadi sumber kebenaran bagi
+kedua platform.
 
 ## Batasan Tahap Awal
 
 - Data transaksi dan arsitektur database tetap menggunakan kondisi saat ini:
   Dexie/IndexedDB lokal dan opsi self-host PostgreSQL/LAN.
 - Tidak ada migrasi Supabase untuk data inti, autentikasi, atau sinkronisasi
-  aplikasi pada tahap ini. Layanan kecil Midtrans adalah pengecualian khusus
-  untuk pembayaran otomatis.
+  aplikasi pada tahap ini. Layanan kecil lead/billing adalah pengecualian untuk
+  pembayaran otomatis serta identitas dan pemulihan langganan; autentikasi
+  kasir/karyawan tetap mengikuti sistem aplikasi yang ada.
 - Tidak ada tuntutan *device binding*, validasi server periodik, maupun
   perlindungan lisensi yang sulit dibypass.
 - Pengumpulan lead tidak boleh mengubah sifat offline-first dari data transaksi
@@ -204,14 +280,17 @@ kebenaran.
 
 | Area | Keputusan |
 | --- | --- |
+| Cakupan platform | Desktop dan Android mengikuti alur registrasi, pemilihan paket, setup, persetujuan, trial, pembayaran, aktivasi, dan perpanjangan yang sama. Perilaku UI, navigasi, dan checkout disesuaikan dengan platform. |
 | Registrasi & lead | Nama pengguna, nama usaha, nomor WhatsApp, dan jenis usaha wajib diisi. Lead dikirim saat koneksi tersedia ke penyimpanan terpisah. Persetujuan marketing/follow-up bersifat opsional. |
+| Identitas & pemulihan | Langganan melekat pada usaha dengan pemilik terverifikasi; instalasi desktop/Android dapat mengambil akses yang sama. Pemulihan lisensi terpisah dari pemulihan data dan role lokal. |
+| Akses offline | Akses berbayar yang sudah diterima disimpan lokal sampai tanggal berakhir; koneksi diperlukan untuk pembayaran, verifikasi kepemilikan, pemulihan, dan aktivasi terbaru. |
 | Trial berakhir | Blokir transaksi, perubahan data, dan laporan operasional sampai pembayaran berhasil; ekspor backup data tetap tersedia. |
 | Model komersial awal | Langganan bulanan dengan pembayaran manual tiap periode. Produk beli putus menjadi penawaran terpisah setelah langganan stabil. |
 | Harga skala usaha | Harga flat per paket untuk satu badan usaha; belum ada pembeda outlet, perangkat, atau pengguna. |
 | Pembayaran | Checkout Midtrans melalui layanan pembayaran kecil khusus token dan webhook tervalidasi. Desktop dapat membuka checkout dari aplikasi; Android membukanya di browser eksternal. |
 | Distribusi Android | Di luar Google Play, melalui APK langsung atau kanal privat. |
 | T&C & privasi | Syarat Layanan dan pemberitahuan Kebijakan Privasi wajib diterima. Consent marketing terpisah dan opsional. |
-| Data layanan | Layanan lead dan pembayaran hanya menyimpan data lead dan metadata billing; tidak pernah menyimpan data transaksi bisnis pelanggan. |
+| Data layanan | Layanan lead/billing hanya menyimpan data lead, identitas pemilik/usaha, metadata verifikasi/pemulihan, dan metadata billing; tidak pernah menyimpan data transaksi bisnis pelanggan. |
 
 ## Keputusan Paket, Harga, dan Modul
 
@@ -296,11 +375,15 @@ Layanan ini memakai dua database PostgreSQL terpisah:
 
 - `leads`: data registrasi, status follow-up, consent marketing, versi
   kebijakan, dan waktu persetujuan;
-- `billing`: `order_id`, paket, nominal, status Midtrans, masa akses, jejak
-  webhook, dan hash token aktivasi.
+- `billing`: identitas pemilik/usaha yang terkait dengan langganan, metadata
+  verifikasi/pemulihan akses, `order_id`, paket, nominal, status Midtrans, masa
+  akses, jejak webhook, dan hash token aktivasi.
 
-Endpoint publik dibatasi pada pengiriman lead, pembuatan checkout, pembacaan
-status akses, dan webhook Midtrans. Layanan tidak boleh menerima atau menyimpan
+Endpoint publik dibatasi pada pengiriman lead, pendaftaran identitas langganan,
+verifikasi kepemilikan dan pemulihan langganan, pembuatan checkout, pembacaan
+status akses, dan webhook Midtrans. Perluasan identitas ini khusus untuk
+langganan, bukan pengelolaan akun kasir/karyawan. Layanan tidak boleh menerima
+atau menyimpan
 data POS, stok, pelanggan, supplier, dokumen penjualan/pembelian, keuangan,
 atau data transaksi bisnis lain dari aplikasi. Server Key Midtrans disimpan
 sebagai secret di server, bukan dalam aplikasi klien. Backup harus terenkripsi,
@@ -327,8 +410,10 @@ di [Referensi Implementasi Onboarding, Trial, Akses, dan Pembayaran](REFERENSI-I
 1. Mengubah normalisasi setup agar paket tidak otomatis mengaktifkan
    `GENERAL_LEDGER`, lalu menambahkan entitlement paket di aplikasi.
 2. Menyusun desain teknis layanan lead dan billing sesuai database, endpoint,
-   keamanan secret, backup, dan webhook yang telah ditetapkan.
+   keamanan secret, backup, dan webhook yang telah ditetapkan, termasuk
+   identitas usaha, verifikasi kepemilikan, serta pemulihan langganan.
 3. Menyusun naskah Syarat Layanan dan Kebijakan Privasi untuk peninjauan hukum,
    serta menyelesaikan pendaftaran PSE Lingkup Privat sebelum peluncuran.
 4. Merancang wizard onboarding, layar blokir dengan ekspor backup, dan checkout
-   Midtrans sesuai keputusan tersebut.
+   Midtrans untuk desktop maupun Android dengan alur bisnis yang sama dan
+   perilaku interaksi sesuai platform.

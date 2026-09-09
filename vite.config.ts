@@ -78,6 +78,15 @@ export default defineConfig(async () => {
   return {
     plugins: [feedbackApiDevPlugin(), tanstackRouter(), react()],
 
+    build: {
+      rollupOptions: {
+        input: {
+          app: fileURLToPath(new URL('./index.html', import.meta.url)),
+          onboardingPreview: fileURLToPath(new URL('./onboarding-preview.html', import.meta.url)),
+        },
+      },
+    },
+
     define: {
       __APP_VERSION__: JSON.stringify(appVersion),
       'process.env.DRAGGABLE_DEBUG': 'false',
