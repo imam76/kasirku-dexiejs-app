@@ -3,6 +3,11 @@
 Aplikasi kasir/ERP berbasis React, TypeScript, Vite, Tauri 2, dan PostgreSQL.
 Project ini memakai Bun sebagai package manager utama.
 
+Onboarding usaha, trial 90 hari, pemulihan langganan, dan checkout Midtrans
+Sandbox sudah terhubung ke layanan billing terpisah. Panduan env, database,
+webhook HTTPS, serta pengujiannya tersedia di
+[`docs/ONBOARDING-MIDTRANS-SANDBOX.md`](docs/ONBOARDING-MIDTRANS-SANDBOX.md).
+
 ## Prasyarat
 
 Pastikan sudah terpasang:

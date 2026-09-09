@@ -6,6 +6,7 @@ import { appSetupConfigPostgresAdapter } from '@/services/postgresAdapter';
 import { usePostgresConnectionStore } from '@/store/postgresConnectionStore';
 import { resolveSetupConfigReconciliation } from '@/utils/setupConfigReconciliation';
 import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
+import { readSubscription } from '@/onboarding/storage';
 
 export const SETUP_CONFIG_CHANGED_EVENT = 'frayukti-setup-config-changed';
 export const CURRENT_MODULE_CATALOG_VERSION = 13;
@@ -146,7 +147,6 @@ const withAccountingBaselineDependencies = (modules: string[]): string[] => {
 
   if (Array.from(enabledModules).some(requiresAccountingBaselineModule)) {
     enabledModules.add('CHART_OF_ACCOUNTS');
-    enabledModules.add('GENERAL_LEDGER');
   }
 
   return Array.from(enabledModules);
@@ -174,7 +174,8 @@ export const getSetupConfig = (): SetupConfig | null => {
     if ((config.moduleCatalogVersion ?? 1) < CURRENT_MODULE_CATALOG_VERSION) {
       localStorage.setItem(SETUP_CONFIG_STORAGE_KEY, JSON.stringify(normalizedConfig));
     }
-    return normalizedConfig;
+    const subscription = readSubscription();
+    return subscription ? { ...normalizedConfig, enabledModules: subscription.access.modules } : normalizedConfig;
   } catch {
     return null;
   }
@@ -276,6 +277,7 @@ export const isSetupConfigured = (): boolean => {
  */
 export const shouldBypassSetupModuleLock = (): boolean => {
   if (typeof window === 'undefined') return false;
+  if (localStorage.getItem('frayukti-subscription-v1')) return false;
 
   const meta = import.meta as unknown as { env?: Record<string, string | undefined> };
   const webTrialBypassEnabled = meta.env?.VITE_WEB_TRIAL_MODULE_BYPASS !== 'false';

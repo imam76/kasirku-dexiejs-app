@@ -196,7 +196,6 @@ export const withAutomaticAccountingBaselineModules = (enabledModules: string[])
 
   if (requiresAccountingBaselineForModules(enabledModules)) {
     modules.add('CHART_OF_ACCOUNTS');
-    modules.add('GENERAL_LEDGER');
   }
 
   return Array.from(modules);

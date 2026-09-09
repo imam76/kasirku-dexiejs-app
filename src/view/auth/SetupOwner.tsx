@@ -15,6 +15,7 @@ import {
 import { getSetupConfig } from '@/services/setupKeyService';
 import type { AccountingBusinessTemplateCode, AccountingInitialSetupSetting } from '@/types';
 import { OwnerAccountingSetup } from './OwnerAccountingSetup';
+import { readSubscription } from '@/onboarding/storage';
 import {
   createDefaultAccountingDraft,
   getFirstValidationError,
@@ -34,17 +35,19 @@ interface SetupOwnerFormValues {
 }
 
 interface SetupOwnerProps {
+  onboardingMode?: boolean;
   onComplete?: () => void;
   onBackToLogin?: () => void;
 }
 
-export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
+export const SetupOwner = ({ onBackToLogin, onComplete, onboardingMode = false }: SetupOwnerProps) => {
   const { message } = App.useApp();
   const { login } = useAuth();
   const [form] = Form.useForm<SetupOwnerFormValues>();
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const setupConfig = useMemo(() => getSetupConfig(), []);
+  const subscription = useMemo(() => readSubscription(), []);
   const enabledModules = useMemo(
     () => setupConfig?.enabledModules ?? DEFAULT_SELECTED_MODULES,
     [setupConfig],
@@ -147,7 +150,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
       const email = normalizeAuthEmail(values.email) ?? '';
       const ownerName = values.name.trim();
       const ownerId = crypto.randomUUID();
-      await saveInitialAccountingSetup({
+      if (!onboardingMode || !existingAccountingSetup) await saveInitialAccountingSetup({
         enabledModules,
         configuredBy: ownerId,
         configuredByName: ownerName,
@@ -179,7 +182,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
   const handleFormFinish = () => {
     // Advance only after form submission, so the navigation click cannot also
     // submit the newly rendered accounting step.
-    if (currentStep === 0) {
+    if (currentStep === 0 && !onboardingMode) {
       setCurrentStep(1);
       return;
     }
@@ -191,9 +194,9 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
     <div className="h-[100dvh] overflow-y-auto [scrollbar-gutter:stable]">
       <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-6 sm:py-16">
         <SetupPageHeading icon={<ShieldCheck size={24} />} title="Daftarkan Owner"
-          description="Akun Owner memegang akses utama aplikasi dan menentukan dasar pencatatan usaha." />
+          description={onboardingMode ? 'Langganan siap. Buat akun dan PIN lokal untuk mengamankan data di instalasi ini. ID masuk boleh memakai alias lokal, tanpa alamat email pribadi.' : 'Akun Owner memegang akses utama aplikasi dan menentukan dasar pencatatan usaha.'} />
 
-        <Steps
+        {!onboardingMode && <Steps
           current={currentStep}
           responsive={false}
           size="small"
@@ -202,10 +205,11 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
             { title: 'Akun Owner' },
             { title: 'Pengaturan Usaha' },
           ]}
-        />
+        />}
 
         <Form<SetupOwnerFormValues>
           form={form}
+          initialValues={onboardingMode ? { name: subscription?.registration.owner, email: subscription?.registration.email || 'owner@frayukti.local' } : undefined}
           layout="vertical"
           onFinish={handleFormFinish}
           requiredMark={false}
@@ -227,7 +231,7 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
                 </Form.Item>
 
                 <Form.Item
-                  label="Email"
+                  label={onboardingMode ? 'ID masuk' : 'Email'}
                   name="email"
                   className="!mb-8"
                   rules={[
@@ -329,8 +333,9 @@ export const SetupOwner = ({ onBackToLogin, onComplete }: SetupOwnerProps) => {
                   icon={<ArrowRight size={16} />}
                   iconPlacement="end"
                   className="w-full sm:w-auto sm:min-w-56"
+                  loading={isSubmitting}
                 >
-                  Lanjut ke Pengaturan Usaha
+                  {onboardingMode ? 'Buat Owner & masuk' : 'Lanjut ke Pengaturan Usaha'}
                 </Button>
               </>
             ) : (

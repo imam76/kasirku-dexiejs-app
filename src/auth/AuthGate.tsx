@@ -1,5 +1,6 @@
 import {
   SETUP_CONFIG_CHANGED_EVENT,
+  getSetupConfig,
   isSetupConfigured,
 } from "@/services/setupKeyService";
 import { isTauriRuntime } from "@/utils/export/platform";
@@ -19,6 +20,9 @@ import {
 } from "react";
 import { hasActiveOwner } from "./authService";
 import { useAuth } from "./useAuth";
+import { OnboardingWizard } from '@/onboarding/OnboardingWizard';
+import { SubscriptionGate } from '@/onboarding/SubscriptionGate';
+import { useSubscription } from '@/onboarding/useSubscription';
 
 interface AuthGateProps {
   children: ReactNode;
@@ -128,6 +132,7 @@ const SetupWelcome = ({
 };
 
 export const AuthGate = ({ children }: AuthGateProps) => {
+  const subscription = useSubscription();
   const { currentUser, isLoading } = useAuth();
   const isTauri = isTauriRuntime();
   const [ownerCheckRevision, setOwnerCheckRevision] = useState(0);
@@ -198,8 +203,15 @@ export const AuthGate = ({ children }: AuthGateProps) => {
     return <LoadingScreen />;
   }
 
+  // Existing installations with a developer-issued setup keep their legacy access.
+  // New self-service installations must complete onboarding on both web and Tauri.
+  if (!subscription && (!setupConfigured || getSetupConfig()?.configuredBy.startsWith('subscription:'))) return <>
+    <OnboardingWizard onJoinHost={() => setShowJoinHostModal(true)} />
+    <JoinExistingHostModal open={showJoinHostModal} onClose={() => setShowJoinHostModal(false)} onJoined={handleHostJoined} />
+  </>;
+
   if (!setupRequired && currentUser) {
-    return <>{children}</>;
+    return subscription ? <SubscriptionGate>{children}</SubscriptionGate> : <>{children}</>;
   }
 
   // Unauthenticated — render Login/SetupOwner + hidden SetupKeyDrawer
@@ -217,6 +229,7 @@ export const AuthGate = ({ children }: AuthGateProps) => {
       if (authMode === "register") {
         return (
           <SetupOwner
+            onboardingMode={Boolean(subscription)}
             onBackToLogin={() => setAuthMode("login")}
             onComplete={() => setAuthMode("login")}
           />

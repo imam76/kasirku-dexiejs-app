@@ -17,7 +17,7 @@ test.describe.serial('setup awal owner', () => {
       base_currency_code: 'IDR',
       setup_completed_by_name: demoOwner.name,
     });
-    expect(accountingState.setupConfig).toBeNull();
+    expect(accountingState.setupConfig).toMatchObject({ configuredBy: 'e2e-legacy-setup' });
     expect(accountingState.profile).toMatchObject({
       accounting_profile: 'SAK_EMKM',
       industry_extension: 'RETAIL',

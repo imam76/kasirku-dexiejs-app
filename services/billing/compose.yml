@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: frayukti_billing
+      POSTGRES_PASSWORD: sandbox_local_only
+      POSTGRES_DB: billing
+    ports:
+      - "127.0.0.1:5544:5432"
+    volumes:
+      - billing_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01-leads.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U frayukti_billing -d billing"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  billing_data:
