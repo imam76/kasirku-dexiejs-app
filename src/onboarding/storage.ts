@@ -18,11 +18,9 @@ import {
 
 export const SUBSCRIPTION_KEY = 'frayukti-subscription-v1';
 export const SUBSCRIPTION_EVENT = 'frayukti-subscription-changed';
-const subscriptionSchema = z.object({
-  version: z.literal(1),
+const subscriptionFields = {
   installationId: z.uuid(),
   businessId: z.uuid().optional(),
-  token: z.string().regex(/^[a-f0-9]{64}$/),
   recoveryCode: z.string().regex(/^[a-f0-9]{64}$/),
   registration: registrationSchema,
   consent: consentSchema,
@@ -31,13 +29,28 @@ const subscriptionSchema = z.object({
   leadPending: z.boolean(),
   consentPending: z.boolean(),
   reminderDismissed: z.string().nullable(),
+};
+const subscriptionSchema = z.object({
+  version: z.literal(2),
+  ...subscriptionFields,
+});
+const legacySubscriptionSchema = z.object({
+  version: z.literal(1),
+  token: z.string().regex(/^[a-f0-9]{64}$/),
+  ...subscriptionFields,
 });
 export type Subscription = z.infer<typeof subscriptionSchema>;
 export function readSubscription(): Subscription | null {
   try {
     const raw = localStorage.getItem(SUBSCRIPTION_KEY);
     if (!raw) return null;
-    return subscriptionSchema.parse(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    const current = subscriptionSchema.safeParse(parsed);
+    if (current.success) return current.data;
+    const legacy = legacySubscriptionSchema.parse(parsed);
+    const migrated = subscriptionSchema.parse({ ...legacy, version: 2 });
+    localStorage.setItem(SUBSCRIPTION_KEY, JSON.stringify(migrated));
+    return migrated;
   } catch {
     return null;
   }
@@ -93,9 +106,8 @@ export async function createTrial(
     end: new Date(now + TRIAL_DAYS * DAY_MS).toISOString(),
   };
   return {
-    version: 1,
+    version: 2,
     installationId: crypto.randomUUID(),
-    token: randomSecret(),
     recoveryCode: randomSecret(),
     registration: registrationSchema.parse(registration),
     consent: await makeConsent(marketing),

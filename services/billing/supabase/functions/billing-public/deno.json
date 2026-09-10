@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom", "dom.iterable", "esnext"],
+    "strict": true
+  },
+  "imports": {
+    "@fastify/cors": "npm:@fastify/cors@11.3.0",
+    "@fastify/rate-limit": "npm:@fastify/rate-limit@11.2.0",
+    "fastify": "npm:fastify@5.12.3",
+    "pg": "npm:pg@8.23.0",
+    "zod": "npm:zod@4.3.6"
+  },
+  "nodeModulesDir": "auto"
+}

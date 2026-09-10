@@ -29,6 +29,7 @@ jobs:
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_BILLING_DB_PASSWORD }}
       SUPABASE_WORKDIR: services/billing
       BILLING_BASE_URL: https://${{ vars.SUPABASE_BILLING_PROJECT_ID }}.supabase.co/functions/v1/billing
+      BILLING_PUBLIC_BASE_URL: https://${{ vars.SUPABASE_BILLING_PROJECT_ID }}.supabase.co/functions/v1/billing-public
 
     steps:
       - name: Checkout repository
@@ -45,7 +46,7 @@ jobs:
           deno-version: v2.x
 
       - name: Check billing Edge Function
-        run: deno check services/billing/supabase/functions/billing/index.ts
+        run: deno check services/billing/supabase/functions/billing/index.ts services/billing/supabase/functions/billing-public/index.ts
 
       - name: Validate staging inputs
         shell: bash
@@ -70,6 +71,9 @@ jobs:
       - name: Link staging project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
 
+      - name: Enable anonymous Supabase Auth
+        run: supabase --yes config push --project-ref "$SUPABASE_PROJECT_ID"
+
       - name: Apply database migrations
         run: supabase db push --linked
 
@@ -91,8 +95,8 @@ jobs:
           MIDTRANS_MERCHANT_ID=$MIDTRANS_MERCHANT_ID
           MIDTRANS_CLIENT_KEY=$MIDTRANS_CLIENT_KEY
           MIDTRANS_SERVER_KEY=$MIDTRANS_SERVER_KEY
-          MIDTRANS_NOTIFICATION_URL=$BILLING_BASE_URL/v1/midtrans/notifications
-          MIDTRANS_FINISH_URL=$BILLING_BASE_URL/payment/finish
+          MIDTRANS_NOTIFICATION_URL=$BILLING_PUBLIC_BASE_URL/v1/midtrans/notifications
+          MIDTRANS_FINISH_URL=$BILLING_PUBLIC_BASE_URL/payment/finish
           BILLING_TAX_BPS=$BILLING_TAX_BPS
           EOF
           supabase secrets set --project-ref "$SUPABASE_PROJECT_ID" --env-file "$secrets_file"
@@ -100,12 +104,15 @@ jobs:
       - name: Deploy billing Edge Function
         run: supabase functions deploy billing --project-ref "$SUPABASE_PROJECT_ID"
 
+      - name: Deploy public billing callbacks
+        run: supabase functions deploy billing-public --project-ref "$SUPABASE_PROJECT_ID"
+
       - name: Verify public health endpoint
         shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4 5; do
-            if curl --fail --silent --show-error "$BILLING_BASE_URL/health"; then
+            if curl --fail --silent --show-error "$BILLING_PUBLIC_BASE_URL/health"; then
               exit 0
             fi
             sleep 5

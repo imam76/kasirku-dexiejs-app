@@ -54,10 +54,11 @@ export async function migrate(
       access jsonb NOT NULL, custom_setup_paid boolean NOT NULL DEFAULT false,
       first_paid_at timestamptz, created_at timestamptz NOT NULL DEFAULT now()
     );
-    CREATE TABLE IF NOT EXISTS access_tokens (
-      token_hash text PRIMARY KEY, business_id uuid NOT NULL REFERENCES businesses(id),
+    CREATE TABLE IF NOT EXISTS business_users (
+      auth_user_id uuid PRIMARY KEY, business_id uuid NOT NULL REFERENCES businesses(id),
       created_at timestamptz NOT NULL DEFAULT now()
     );
+    CREATE INDEX IF NOT EXISTS business_users_business_id_idx ON business_users(business_id);
     CREATE TABLE IF NOT EXISTS orders (
       order_id text PRIMARY KEY, business_id uuid NOT NULL REFERENCES businesses(id),
       request_id uuid NOT NULL, plan text NOT NULL, modules jsonb NOT NULL,
@@ -74,8 +75,10 @@ export async function migrate(
       status text NOT NULL, payment_type text, received_at timestamptz NOT NULL DEFAULT now()
     );
     CREATE TABLE IF NOT EXISTS recovery_events (
-      id uuid PRIMARY KEY, business_id uuid NOT NULL REFERENCES businesses(id), created_at timestamptz NOT NULL DEFAULT now()
+      id uuid PRIMARY KEY, business_id uuid NOT NULL REFERENCES businesses(id),
+      auth_user_id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
     );
+    ALTER TABLE recovery_events ADD COLUMN IF NOT EXISTS auth_user_id uuid;
   `);
   await leads.query(`
     CREATE TABLE IF NOT EXISTS leads (

@@ -33,11 +33,14 @@ import {
   type MidtransStatus,
 } from './midtrans.ts';
 
+export const AUTH_USER_HEADER = 'x-frayukti-auth-user';
+
 const fail = (statusCode: number, message: string): never => {
   throw Object.assign(new Error(message), { statusCode });
 };
 type Business = {
   id: string;
+  installation_id: string;
   registration: {
     owner: string;
     business: string;
@@ -71,6 +74,7 @@ export function buildApp(
       redact: [
         'req.headers.authorization',
         'req.headers.apikey',
+        `req.headers.${AUTH_USER_HEADER}`,
         'req.body',
         'res.headers',
       ],
@@ -107,17 +111,21 @@ export function buildApp(
       client.release();
     }
   }
-  async function authenticate(authorization?: string): Promise<Business> {
-    const token = authorization?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];
-    if (!token)
-      return fail(401, 'Hubungkan identitas langganan terlebih dahulu.');
+  function requireAuthUser(value: string | string[] | undefined): string {
+    const candidate = Array.isArray(value) ? value[0] : value;
+    const parsed = z.uuid().safeParse(candidate);
+    if (!parsed.success)
+      return fail(401, 'Masuk dengan Supabase Auth terlebih dahulu.');
+    return parsed.data;
+  }
+  async function authenticate(authUserId: string): Promise<Business> {
     const result = await db.billing.query<Business>(
-      'SELECT b.* FROM businesses b JOIN access_tokens t ON t.business_id=b.id WHERE t.token_hash=$1',
-      [hashSecret(token)],
+      'SELECT b.* FROM businesses b JOIN business_users u ON u.business_id=b.id WHERE u.auth_user_id=$1',
+      [authUserId],
     );
     return (
       result.rows[0] ??
-      fail(401, 'Akses billing tidak valid. Gunakan kode pemulihan.')
+      fail(401, 'Identitas Supabase belum terhubung ke langganan. Gunakan kode pemulihan.')
     );
   }
   function validateConsent(consent: z.infer<typeof consentSchema>) {
@@ -169,11 +177,22 @@ export function buildApp(
     '/v1/registrations',
     { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request) => {
+      const authUserId = requireAuthUser(request.headers[AUTH_USER_HEADER]);
       const input = registerBillingSchema.parse(request.body);
       validateConsent(input.consent);
       if (Date.parse(input.access.start) > Date.now() + 300_000)
         fail(400, 'Waktu trial tidak valid.');
       const business = await transaction(async (client) => {
+        const alreadyLinked = await client.query<Business>(
+          `SELECT b.* FROM businesses b JOIN business_users u ON u.business_id=b.id
+          WHERE u.auth_user_id=$1 FOR UPDATE OF b`,
+          [authUserId],
+        );
+        if (alreadyLinked.rows[0]) {
+          if (alreadyLinked.rows[0].installation_id !== input.installationId)
+            fail(409, 'Identitas Supabase sudah terhubung ke usaha lain.');
+          return alreadyLinked.rows[0];
+        }
         const id = randomUUID();
         const result = await client.query<Business>(
           `INSERT INTO businesses (id,installation_id,registration,recovery_hash,access)
@@ -186,29 +205,37 @@ export function buildApp(
             input.access,
           ],
         );
-        if (result.rows[0]) {
-          await client.query(
-            'INSERT INTO access_tokens (token_hash,business_id) VALUES ($1,$2)',
-            [hashSecret(input.token), id],
-          );
-          return result.rows[0];
-        }
-        const existing = await client.query<Business>(
-          `SELECT b.* FROM businesses b JOIN access_tokens t ON b.id=t.business_id
-        WHERE b.installation_id=$1 AND t.token_hash=$2`,
-          [input.installationId, hashSecret(input.token)],
+        const business =
+          result.rows[0] ??
+          (
+            await client.query<Business>(
+              `SELECT * FROM businesses
+              WHERE installation_id=$1 AND recovery_hash=$2 FOR UPDATE`,
+              [input.installationId, hashSecret(input.recoveryCode)],
+            )
+          ).rows[0] ??
+          fail(409, 'Instalasi sudah terdaftar. Gunakan kode pemulihan.');
+        await client.query(
+          `INSERT INTO business_users (auth_user_id,business_id) VALUES ($1,$2)
+          ON CONFLICT (auth_user_id) DO NOTHING`,
+          [authUserId, business.id],
         );
-        return (
-          existing.rows[0] ??
-          fail(409, 'Instalasi sudah terdaftar. Gunakan pemulihan.')
+        const linked = await client.query<{ business_id: string }>(
+          'SELECT business_id FROM business_users WHERE auth_user_id=$1',
+          [authUserId],
         );
+        if (linked.rows[0]?.business_id !== business.id)
+          fail(409, 'Identitas Supabase sudah terhubung ke usaha lain.');
+        return business;
       });
       await saveLead(business.id, business.registration, input.consent);
       return { businessId: business.id };
     },
   );
   app.get('/v1/consent', async (request) => {
-    const business = await authenticate(request.headers.authorization);
+    const business = await authenticate(
+      requireAuthUser(request.headers[AUTH_USER_HEADER]),
+    );
     const result = await db.leads.query(
       'SELECT consent FROM leads WHERE business_id=$1',
       [business.id],
@@ -222,7 +249,9 @@ export function buildApp(
     );
   });
   app.patch('/v1/consent', async (request) => {
-    const business = await authenticate(request.headers.authorization);
+    const business = await authenticate(
+      requireAuthUser(request.headers[AUTH_USER_HEADER]),
+    );
     const consent = consentSchema.parse(request.body);
     validateConsent(consent);
     await saveLead(business.id, business.registration, consent);
@@ -232,10 +261,10 @@ export function buildApp(
     '/v1/recovery',
     { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
     async (request) => {
+      const authUserId = requireAuthUser(request.headers[AUTH_USER_HEADER]);
       const input = z
         .object({
           recoveryCode: z.string().regex(/^[a-f0-9]{64}$/),
-          token: z.string().regex(/^[a-f0-9]{64}$/),
         })
         .strict()
         .parse(request.body);
@@ -246,13 +275,19 @@ export function buildApp(
         );
         const business =
           result.rows[0] ?? fail(401, 'Kode pemulihan tidak valid.');
+        const current = await client.query<{ business_id: string }>(
+          'SELECT business_id FROM business_users WHERE auth_user_id=$1',
+          [authUserId],
+        );
+        if (current.rows[0] && current.rows[0].business_id !== business.id)
+          fail(409, 'Identitas Supabase sudah terhubung ke usaha lain.');
         await client.query(
-          'INSERT INTO access_tokens (token_hash,business_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-          [hashSecret(input.token), business.id],
+          'INSERT INTO business_users (auth_user_id,business_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+          [authUserId, business.id],
         );
         await client.query(
-          'INSERT INTO recovery_events (id,business_id) VALUES ($1,$2)',
-          [randomUUID(), business.id],
+          'INSERT INTO recovery_events (id,business_id,auth_user_id) VALUES ($1,$2,$3)',
+          [randomUUID(), business.id, authUserId],
         );
         return business.id;
       });
@@ -260,7 +295,8 @@ export function buildApp(
     },
   );
   app.get('/v1/status', async (request) => {
-    let business = await authenticate(request.headers.authorization);
+    const authUserId = requireAuthUser(request.headers[AUTH_USER_HEADER]);
+    let business = await authenticate(authUserId);
     let paymentCheck: 'verified' | 'waiting' | 'unavailable' = 'verified';
     const pending = await db.billing.query<{ order_id: string }>(
       "SELECT order_id FROM orders WHERE business_id=$1 AND status IN ('creating','pending') ORDER BY created_at DESC LIMIT 1",
@@ -271,7 +307,7 @@ export function buildApp(
         paymentCheck = (await reconcileOrder(pending.rows[0].order_id))
           ? 'verified'
           : 'waiting';
-        business = await authenticate(request.headers.authorization);
+        business = await authenticate(authUserId);
       } catch {
         // Provider outages must not prevent reading already issued/offline access.
         paymentCheck = 'unavailable';
@@ -295,7 +331,9 @@ export function buildApp(
     '/v1/checkouts',
     { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request) => {
-      const business = await authenticate(request.headers.authorization);
+      const business = await authenticate(
+        requireAuthUser(request.headers[AUTH_USER_HEADER]),
+      );
       const input = checkoutSchema.parse(request.body);
       const plan = getPlan(input.plan);
       if (

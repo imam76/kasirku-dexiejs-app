@@ -11,9 +11,9 @@ Staging memakai Supabase khusus billing/lead sesuai
 ```bash
 bun install
 cp .env.example .env
-cp services/billing/.env.example services/billing/.env
-bun run billing:db
-bun run billing:dev
+cp services/billing/supabase/functions/.env.example services/billing/supabase/functions/.env
+bun run supabase:start
+bun run supabase:billing:serve
 # Terminal lain
 bun run dev
 ```
@@ -22,11 +22,11 @@ Jangan menimpa `.env` yang sudah berisi konfigurasi. Pada workspace pengembangan
 ini kedua env sudah disiapkan, termasuk kredensial merchant sandbox yang diberikan.
 
 - Frontend: `http://localhost:1420`.
-- Billing: `http://localhost:8787`; pemeriksaan database: `GET /health`.
-- PostgreSQL billing: port `5544`, database `billing` dan `leads`, terpisah dari
-  database transaksi aplikasi. Compose hanya mengikat port ke loopback.
-- `bun run billing:start` menjalankan Fastify dengan Node 22.18+ (atau Node
-  yang mendukung type stripping). Bun dipakai sebagai package manager.
+- Billing pengguna: `http://127.0.0.1:54321/functions/v1/billing`.
+- Callback/health publik:
+  `http://127.0.0.1:54321/functions/v1/billing-public/health`.
+- Supabase Auth membuat user anonim dan JWT khusus identitas langganan. Akun
+  Owner/Kasir aplikasi tetap akun lokal dan tidak berubah menjadi akun Supabase.
 
 Docker daemon tidak tersedia saat implementasi diuji. Sebagai pengganti, cluster
 PostgreSQL 16 lokal dibuat di `.billing-postgres.local/data`, port `5544`, dengan
@@ -45,7 +45,8 @@ port yang sama. Jangan menunjuk layanan billing ke database POS/LAN pengguna.
 Frontend hanya memerlukan:
 
 ```env
-VITE_BILLING_API_URL=http://localhost:8787
+VITE_BILLING_API_URL=http://127.0.0.1:54321/functions/v1/billing
+VITE_BILLING_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 VITE_WEB_TRIAL_MODULE_BYPASS=false
 ```
 
@@ -72,13 +73,13 @@ cukup untuk alur ini; frontend tidak dapat mengirim status sukses sendiri.
 Webhook tetap disarankan agar pembayaran tercatat segera, termasuk ketika
 aplikasi pelanggan sedang ditutup. Untuk menyediakan webhook:
 
-1. Jalankan billing pada port 8787 dan sediakan tunnel HTTPS ke port tersebut
-   atau deploy layanan sandbox ke host yang dapat diakses melalui HTTPS.
+1. Deploy kedua Supabase Edge Function. Function `billing` wajib JWT, sedangkan
+   `billing-public` hanya menyediakan callback/health yang diizinkan.
 2. Isi env backend, misalnya:
 
    ```env
-   MIDTRANS_NOTIFICATION_URL=https://billing-sandbox.example.com/v1/midtrans/notifications
-   MIDTRANS_FINISH_URL=https://billing-sandbox.example.com/payment/finish
+   MIDTRANS_NOTIFICATION_URL=https://PROJECT_REF.supabase.co/functions/v1/billing-public/v1/midtrans/notifications
+   MIDTRANS_FINISH_URL=https://PROJECT_REF.supabase.co/functions/v1/billing-public/payment/finish
    ```
 
 3. Restart billing, lalu **buat checkout baru**. Backend memasang
@@ -96,14 +97,14 @@ settlement atau capture kartu yang diterima, sesuai
 Pembuatan Snap memakai
 [parameter transaksi resmi](https://docs.midtrans.com/reference/request-body-json-parameter).
 
-Untuk Android dev melalui USB:
+Untuk Android dev melalui USB, reverse port Supabase lokal:
 
 ```powershell
 $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
-& $adb reverse tcp:8787 tcp:8787
+& $adb reverse tcp:54321 tcp:54321
 ```
 
-Frontend dapat tetap memakai `http://localhost:8787` pada perangkat yang mendapat
+Frontend dapat tetap memakai `http://127.0.0.1:54321` pada perangkat yang mendapat
 ADB reverse. Untuk APK di perangkat lain, build dengan URL billing HTTPS publik
 dan tambahkan origin aplikasi ke `BILLING_ALLOWED_ORIGINS`. Android membuka
 checkout dengan plugin opener/browser sistem. App link otomatis belum diklaim;
@@ -152,9 +153,10 @@ Owner aktif di halaman Langganan; server hanya menyimpan hash. Mengganti identit
 langganan pada instalasi yang sudah memiliki Owner juga memerlukan sesi Owner.
 Instalasi baru tetap dapat memulihkan sebelum membuat Owner lokal. Ekspor backup
 memerlukan izin Pengaturan (`SETTINGS_ACCESS`), termasuk ketika akses habis.
-Kasir dapat memakai **Ganti pengguna** agar Owner masuk. Token API instalasi
-juga disimpan sebagai hash di server. Endpoint pemulihan memiliki rate limit,
-dan setiap pemulihan dicatat tanpa menyimpan kode mentah.
+Kasir dapat memakai **Ganti pengguna** agar Owner masuk. Identitas jaringan
+berasal dari claim `sub` pada JWT Supabase Auth; token instalasi buatan Frayukti
+tidak lagi digunakan. Endpoint pemulihan memiliki rate limit, dan setiap
+pemulihan mencatat user Supabase tanpa menyimpan kode mentah.
 
 Nama usaha/WhatsApp tidak digunakan sebagai bukti kepemilikan. Salin kode ke
 tempat aman setelah pendaftaran tersinkron; perangkat baru mendapat paket dan
@@ -179,20 +181,20 @@ Keputusan implementasi untuk sandbox (perlu keputusan bisnis sebelum produksi):
 
 ## Kontrak endpoint
 
-Saat dipanggil melalui Supabase Edge Function, semua endpoint aplikasi pada
-tabel di bawah juga wajib membawa publishable key pada header `apikey`.
-`@supabase/server` memvalidasi key proyek sebelum Fastify menjalankan validasi
-akses domain. Health check, halaman payment finish, preflight CORS, dan webhook
-Midtrans tidak memakai gate publishable key.
+Semua endpoint aplikasi pada function `billing` membawa publishable key di
+`apikey` dan access token user Supabase di `Authorization: Bearer <JWT>`.
+Gateway memakai `verify_jwt=true`; `@supabase/server` mode `auth: 'user'`
+memverifikasi JWT dan mengambil `sub`. Health, payment finish, dan webhook berada
+di function `billing-public` karena Midtrans tidak mempunyai JWT Supabase.
 
 | Endpoint | Akses | Fungsi |
 | --- | --- | --- |
-| `POST /v1/registrations` | Secret instalasi pada body registrasi | Registrasi idempoten dan sinkronisasi lead |
-| `GET /v1/status` | Bearer token instalasi | Rekonsiliasi order sendiri ke Midtrans, identitas, entitlement, riwayat |
-| `GET/PATCH /v1/consent` | Bearer token instalasi | Baca/update consent, jejak audit terpisah |
-| `POST /v1/recovery` | Kode pemulihan rahasia | Hubungkan token instalasi baru |
-| `POST /v1/checkouts` | Bearer token instalasi | Buat/lanjutkan order Snap dengan harga server |
-| `POST /v1/midtrans/notifications` | Signature + status API Midtrans | Aktivasi idempoten dan audit status |
+| `POST /v1/registrations` | JWT user Supabase + kode pemulihan pada body | Registrasi idempoten, tautkan user, sinkronisasi lead |
+| `GET /v1/status` | JWT user Supabase | Rekonsiliasi order sendiri ke Midtrans, entitlement, riwayat |
+| `GET/PATCH /v1/consent` | JWT user Supabase | Baca/update consent, jejak audit terpisah |
+| `POST /v1/recovery` | JWT user Supabase + kode pemulihan | Tautkan user baru ke bisnis lama |
+| `POST /v1/checkouts` | JWT user Supabase | Buat/lanjutkan order Snap dengan harga server |
+| `billing-public: POST /v1/midtrans/notifications` | Signature + status API Midtrans | Aktivasi idempoten dan audit status |
 
 Body registrasi/checkout memakai schema ketat; field transaksi bisnis ditolak.
 Pada pengembangan lokal, lead tersimpan di database `leads`; identitas
@@ -200,7 +202,9 @@ langganan, token hash, order, entitlement dan audit webhook/pemulihan di
 `billing`. Pada Supabase staging, pemisahan yang sama memakai schema privat
 `leads_private` dan `billing_private` dalam satu project khusus billing. Tabel
 transaksi POS tidak masuk project ini. Kegagalan penyimpanan lead setelah
-identitas tersimpan dapat dicoba ulang tanpa membuat usaha kedua.
+identitas tersimpan dapat dicoba ulang tanpa membuat usaha kedua. User Supabase
+dipetakan ke bisnis lewat `billing_private.business_users`; schema tetap tidak
+dapat diakses langsung oleh role `anon` maupun `authenticated`.
 
 ## Operasional dan pengujian
 
@@ -222,13 +226,14 @@ Smoke test berikut membuat **order sandbox belum dibayar** dengan identitas
 sintetis melalui layanan billing dan API Midtrans sesungguhnya:
 
 ```bash
-bun run billing:smoke
+BILLING_SMOKE_URL=https://PROJECT_REF.supabase.co/functions/v1/billing \
+BILLING_SMOKE_PUBLISHABLE_KEY=sb_publishable_... bun run billing:smoke
 ```
 
 Hasil checkout lokal disimpan ke `.billing-postgres.local/snap-smoke.json`, tanpa
 server key. Pengujian ini tidak menyelesaikan pembayaran atau mengaktifkan akses.
 
-Untuk memeriksa satu order dari terminal backend tanpa token instalasi, tersedia
+Untuk memeriksa satu order dari terminal backend tanpa sesi Supabase, tersedia
 perintah operator berikut. Perintah ini tetap meminta status ke Midtrans dan
 memvalidasi merchant/nominal; akses tidak dapat dipaksakan lewat argumen:
 

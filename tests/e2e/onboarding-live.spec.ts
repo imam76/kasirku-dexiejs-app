@@ -1,6 +1,42 @@
 import { expect, test, type Page } from '@playwright/test';
 test.use({ storageState: { cookies: [], origins: [] } });
 
+function anonymousAuthResponse(userId: string) {
+  const now = new Date().toISOString();
+  const accessToken = [
+    Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString(
+      'base64url',
+    ),
+    Buffer.from(
+      JSON.stringify({
+        sub: userId,
+        role: 'authenticated',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      }),
+    ).toString('base64url'),
+    Buffer.from('e2e-signature').toString('base64url'),
+  ].join('.');
+  const user = {
+    id: userId,
+    aud: 'authenticated',
+    role: 'authenticated',
+    app_metadata: {},
+    user_metadata: {},
+    identities: [],
+    is_anonymous: true,
+    created_at: now,
+    updated_at: now,
+  };
+  return {
+    access_token: accessToken,
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    refresh_token: `refresh-${userId}`,
+    user,
+  };
+}
+
 async function registerTrial(page: Page) {
   await page
     .getByRole('button', { name: 'Buat usaha baru', exact: true })
@@ -259,8 +295,15 @@ test('checkout stays trial until billing activation, then a new installation rec
     orders: [] as Record<string, unknown>[],
   };
   await page.unroute('**/v1/**');
+  const primaryAuth = anonymousAuthResponse(
+    '8870f7f2-a1c4-4d29-99dd-87c75c410010',
+  );
   await page.route('**/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/auth/v1/signup')
+      return route.fulfill({ json: primaryAuth });
+    if (path === '/auth/v1/user')
+      return route.fulfill({ json: primaryAuth.user });
     if (path === '/v1/registrations')
       return route.fulfill({ json: { businessId } });
     if (path === '/v1/status') return route.fulfill({ json: server });
@@ -327,8 +370,15 @@ test('checkout stays trial until billing activation, then a new installation rec
     viewport: { width: 390, height: 844 },
   });
   const newPage = await other.newPage();
+  const recoveryAuth = anonymousAuthResponse(
+    '8870f7f2-a1c4-4d29-99dd-87c75c410011',
+  );
   await newPage.route('**/v1/**', (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/auth/v1/signup')
+      return route.fulfill({ json: recoveryAuth });
+    if (path === '/auth/v1/user')
+      return route.fulfill({ json: recoveryAuth.user });
     if (path === '/v1/recovery') {
       expect(route.request().postDataJSON().recoveryCode).toBe(
         trial.recoveryCode,

@@ -7,12 +7,11 @@ import {
   PRIVACY_TEXT,
   PRIVACY_VERSION,
 } from '../src/onboarding/legal.ts';
-export function createTrialPayload(token: string) {
+export function createTrialPayload() {
   const now = Date.now();
   const timestamp = new Date(now).toISOString();
   return {
     installationId: randomUUID(),
-    token,
     recoveryCode: randomBytes(32).toString('hex'),
     registration: {
       owner: 'Sandbox Tester',

@@ -2,6 +2,40 @@ import { expect, test, type Page } from '@playwright/test';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
+function anonymousAuthResponse(userId: string) {
+  const now = new Date().toISOString();
+  return {
+    access_token: [
+      Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString(
+        'base64url',
+      ),
+      Buffer.from(
+        JSON.stringify({
+          sub: userId,
+          role: 'authenticated',
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        }),
+      ).toString('base64url'),
+      Buffer.from('e2e-signature').toString('base64url'),
+    ].join('.'),
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    refresh_token: `refresh-${userId}`,
+    user: {
+      id: userId,
+      aud: 'authenticated',
+      role: 'authenticated',
+      app_metadata: {},
+      user_metadata: {},
+      identities: [],
+      is_anonymous: true,
+      created_at: now,
+      updated_at: now,
+    },
+  };
+}
+
 async function seedSubscriptionUser(page: Page, role: 'KASIR' | 'ADMIN') {
   await page.route('**/v1/**', route => route.abort());
   await page.goto('/');
@@ -87,8 +121,14 @@ test('a failed checkout refreshes the pending order and retries using the same r
     redirectUrl: null as string | null,
   };
   await page.unroute('**/v1/**');
+  const auth = anonymousAuthResponse(
+    '8870f7f2-a1c4-4d29-99dd-87c75c410012',
+  );
   await page.route('**/v1/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/auth/v1/signup') return route.fulfill({ json: auth });
+    if (path === '/auth/v1/user')
+      return route.fulfill({ json: auth.user });
     if (path === '/v1/registrations') return route.fulfill({ json: { businessId } });
     if (path === '/v1/status') return route.fulfill({ json: {
       businessId, registration: trial.registration, access: trial.access,

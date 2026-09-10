@@ -2,54 +2,31 @@ import {
   createSupabaseContext,
   type SupabaseEnv,
 } from '@supabase/server';
-import { buildApp } from '../../../app.ts';
-import { readConfig } from '../../../config.ts';
-import { createDatabases } from '../../../db.ts';
-import { createMidtrans } from '../../../midtrans.ts';
+import { AUTH_USER_HEADER } from '../../../app.ts';
+import {
+  billingPath,
+  forwardToBilling,
+} from '../_shared/billing-runtime.ts';
 
 type EdgeEnvironment = typeof globalThis & {
   Deno?: { env: { toObject(): Record<string, string> } };
 };
 
-type BillingApp = ReturnType<typeof buildApp>;
-let app: BillingApp | undefined;
-let runtimeReady: PromiseLike<void> | undefined;
-
-const PUBLIC_ROUTES = new Set([
-  'GET /health',
-  'GET /payment/finish',
-  'POST /v1/midtrans/notifications',
+const USER_ROUTES = new Set([
+  'POST /v1/registrations',
+  'GET /v1/consent',
+  'PATCH /v1/consent',
+  'POST /v1/recovery',
+  'GET /v1/status',
+  'POST /v1/checkouts',
 ]);
 
-async function getRuntime() {
-  if (!app) {
-    const env = (globalThis as EdgeEnvironment).Deno?.env.toObject() ?? {};
-    const config = readConfig(env);
-    const db = createDatabases(config);
-    app = buildApp(config, db, createMidtrans(config));
-    runtimeReady = app.ready();
-  }
-  await runtimeReady;
-  return app;
-}
-
-function billingPath(requestUrl: string) {
-  const url = new URL(requestUrl);
-  const marker = '/functions/v1/billing';
-  const markerIndex = url.pathname.indexOf(marker);
-  const pathname =
-    markerIndex >= 0
-      ? url.pathname.slice(markerIndex + marker.length) || '/'
-      : url.pathname;
-  return `${pathname}${url.search}`;
-}
-
-export function requiresSupabaseApiKey(
+export function requiresSupabaseUser(
   request: Pick<Request, 'method' | 'url'>,
 ) {
   if (request.method.toUpperCase() === 'OPTIONS') return false;
-  const pathname = billingPath(request.url).split('?', 1)[0];
-  return !PUBLIC_ROUTES.has(`${request.method.toUpperCase()} ${pathname}`);
+  const pathname = billingPath(request.url, 'billing').split('?', 1)[0];
+  return USER_ROUTES.has(`${request.method.toUpperCase()} ${pathname}`);
 }
 
 function authErrorHeaders(request: Request) {
@@ -71,68 +48,48 @@ function authErrorHeaders(request: Request) {
   return headers;
 }
 
-export async function authorizeSupabaseClient(
+export async function authorizeSupabaseUser(
   request: Request,
   env?: Partial<SupabaseEnv>,
-): Promise<Response | null> {
-  const { error } = await createSupabaseContext(request, {
-    auth: 'publishable',
+): Promise<{ userId: string } | Response> {
+  const { data, error } = await createSupabaseContext(request, {
+    auth: 'user',
     ...(env ? { env } : {}),
   });
-  if (!error) return null;
+  if (!error && data.userClaims?.id)
+    return { userId: data.userClaims.id };
 
-  if (error.status >= 500)
+  if (error && error.status >= 500)
     console.error(`Supabase billing auth misconfigured: ${error.code}`);
   return Response.json(
     {
       error:
-        error.status >= 500
+        error && error.status >= 500
           ? 'Konfigurasi autentikasi billing belum siap.'
-          : 'Akses API billing tidak valid.',
-      code: error.code,
+          : 'Sesi Supabase tidak valid atau sudah berakhir.',
+      ...(error ? { code: error.code } : {}),
     },
-    { status: error.status, headers: authErrorHeaders(request) },
+    {
+      status: error?.status ?? 401,
+      headers: authErrorHeaders(request),
+    },
   );
 }
 
-async function handle(request: Request): Promise<Response> {
-  const app = await getRuntime();
-  const method = request.method.toUpperCase() as
-    | 'GET'
-    | 'HEAD'
-    | 'POST'
-    | 'PATCH'
-    | 'OPTIONS';
-  const payload = ['GET', 'HEAD'].includes(method)
-    ? undefined
-    : await request.text();
-  const response = await app.inject({
-    method,
-    url: billingPath(request.url),
-    headers: Object.fromEntries(request.headers.entries()),
-    ...(payload === undefined ? {} : { payload }),
-  });
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(response.headers)) {
-    if (value === undefined || name === 'content-length') continue;
-    if (Array.isArray(value)) {
-      for (const item of value) headers.append(name, String(item));
-    } else {
-      headers.set(name, String(value));
-    }
-  }
-  return new Response(response.body, {
-    status: response.statusCode,
-    headers,
-  });
-}
-
 async function fetch(request: Request): Promise<Response> {
-  if (requiresSupabaseApiKey(request)) {
-    const authFailure = await authorizeSupabaseClient(request);
-    if (authFailure) return authFailure;
-  }
-  return handle(request);
+  if (request.method.toUpperCase() === 'OPTIONS')
+    return forwardToBilling(request, 'billing');
+  if (!requiresSupabaseUser(request))
+    return Response.json(
+      { error: 'Route billing tidak ditemukan.' },
+      { status: 404 },
+    );
+
+  const authorization = await authorizeSupabaseUser(request);
+  if (authorization instanceof Response) return authorization;
+  return forwardToBilling(request, 'billing', {
+    [AUTH_USER_HEADER]: authorization.userId,
+  });
 }
 
 export default { fetch };

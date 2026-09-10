@@ -51,13 +51,12 @@ const app = buildApp(config, db, {
   },
 });
 app.log.level = 'silent';
-const token = randomBytes(32).toString('hex');
+const authUserId = randomUUID();
 const recoveryCode = randomBytes(32).toString('hex');
-const headers = { authorization: `Bearer ${token}` };
+const headers = { 'x-frayukti-auth-user': authUserId };
 const now = new Date().toISOString();
 const input = {
   installationId: randomUUID(),
-  token,
   recoveryCode,
   registration: {
     owner: 'Sandbox Owner',
@@ -135,16 +134,15 @@ afterAll(async () => {
 });
 describe('billing HTTP and PostgreSQL integration', () => {
   test('recovers a missed webhook on status check and preserves access when the gateway is unavailable', async () => {
-    const retryToken = randomBytes(32).toString('hex');
-    const retryHeaders = { authorization: `Bearer ${retryToken}` };
+    const retryHeaders = { 'x-frayukti-auth-user': randomUUID() };
     await app.inject({
       method: 'POST',
       url: '/v1/registrations',
       remoteAddress: '127.0.0.20',
+      headers: retryHeaders,
       payload: {
         ...input,
         installationId: randomUUID(),
-        token: retryToken,
         recoveryCode: randomBytes(32).toString('hex'),
       },
     });
@@ -192,7 +190,7 @@ describe('billing HTTP and PostgreSQL integration', () => {
       missingWebhookOrder,
     ]);
     await db.billing.query('DELETE FROM orders WHERE business_id=$1', [id]);
-    await db.billing.query('DELETE FROM access_tokens WHERE business_id=$1', [
+    await db.billing.query('DELETE FROM business_users WHERE business_id=$1', [
       id,
     ]);
     await db.billing.query('DELETE FROM businesses WHERE id=$1', [id]);
@@ -207,6 +205,7 @@ describe('billing HTTP and PostgreSQL integration', () => {
         await app.inject({
           method: 'POST',
           url: '/v1/registrations',
+          headers,
           payload: {
             ...input,
             consent: { ...input.consent, termsHash: '0'.repeat(64) },
@@ -219,15 +218,17 @@ describe('billing HTTP and PostgreSQL integration', () => {
         await app.inject({
           method: 'POST',
           url: '/v1/registrations',
+          headers,
           payload: { ...input, transactions: [] },
         })
       ).statusCode,
     ).toBe(400);
   });
-  test('retries registration without creating another business, stores only secret hashes', async () => {
+  test('retries registration without creating another business and binds one Supabase user', async () => {
     const first = await app.inject({
       method: 'POST',
       url: '/v1/registrations',
+      headers,
       payload: input,
     });
     expect(first.statusCode).toBe(200);
@@ -235,6 +236,7 @@ describe('billing HTTP and PostgreSQL integration', () => {
     const retry = await app.inject({
       method: 'POST',
       url: '/v1/registrations',
+      headers,
       payload: input,
     });
     expect(retry.json().businessId).toBe(businessId);
@@ -242,6 +244,14 @@ describe('billing HTTP and PostgreSQL integration', () => {
       (await db.billing.query('SELECT count(*)::int AS count FROM businesses'))
         .rows[0].count,
     ).toBe(1);
+    expect(
+      (
+        await db.billing.query(
+          'SELECT auth_user_id FROM business_users WHERE business_id=$1',
+          [businessId],
+        )
+      ).rows,
+    ).toEqual([{ auth_user_id: authUserId }]);
     expect(
       (await db.billing.query('SELECT recovery_hash FROM businesses')).rows[0]
         .recovery_hash,
@@ -255,7 +265,8 @@ describe('billing HTTP and PostgreSQL integration', () => {
         await app.inject({
           method: 'POST',
           url: '/v1/registrations',
-          payload: { ...input, token: '0'.repeat(64) },
+          headers: { 'x-frayukti-auth-user': randomUUID() },
+          payload: { ...input, recoveryCode: '0'.repeat(64) },
         })
       ).statusCode,
     ).toBe(409);
@@ -345,14 +356,15 @@ describe('billing HTTP and PostgreSQL integration', () => {
     expect(after.access.end).toBe(first.access.end);
     expect(after.orders[0].status).toBe('paid');
   });
-  test('verifies recovery secret and links another token to the identical access', async () => {
-    const newToken = randomBytes(32).toString('hex');
+  test('verifies recovery secret and links another Supabase user to the identical access', async () => {
+    const recoveredHeaders = { 'x-frayukti-auth-user': randomUUID() };
     expect(
       (
         await app.inject({
           method: 'POST',
           url: '/v1/recovery',
-          payload: { token: newToken, recoveryCode: '1'.repeat(64) },
+          headers: recoveredHeaders,
+          payload: { recoveryCode: '1'.repeat(64) },
         })
       ).statusCode,
     ).toBe(401);
@@ -361,14 +373,15 @@ describe('billing HTTP and PostgreSQL integration', () => {
         await app.inject({
           method: 'POST',
           url: '/v1/recovery',
-          payload: { token: newToken, recoveryCode },
+          headers: recoveredHeaders,
+          payload: { recoveryCode },
         })
       ).json().businessId,
     ).toBe(businessId);
     const recovered = (
       await app.inject({
         url: '/v1/status',
-        headers: { authorization: `Bearer ${newToken}` },
+        headers: recoveredHeaders,
       })
     ).json();
     expect(recovered.access).toEqual(
@@ -446,17 +459,16 @@ describe('billing HTTP and PostgreSQL integration', () => {
     expect(refunded.access.end).toBe(after.access.end);
   });
   test('Custom charges setup once and stores only the explicitly selected sale modules', async () => {
-    const customToken = randomBytes(32).toString('hex');
-    const customHeaders = { authorization: `Bearer ${customToken}` };
+    const customHeaders = { 'x-frayukti-auth-user': randomUUID() };
     const customModules = ['PRODUCTION'];
     const registered = await app.inject({
       method: 'POST',
       url: '/v1/registrations',
       remoteAddress: '127.0.0.10',
+      headers: customHeaders,
       payload: {
         ...input,
         installationId: randomUUID(),
-        token: customToken,
         recoveryCode: randomBytes(32).toString('hex'),
         access: {
           ...input.access,
@@ -508,12 +520,13 @@ describe('billing HTTP and PostgreSQL integration', () => {
 async function retryFixture(gateway: Midtrans) {
   const server = buildApp(config, db, gateway);
   server.log.level = 'silent';
-  const retryHeaders = { authorization: `Bearer ${randomBytes(32).toString('hex')}` };
+  const retryHeaders = { 'x-frayukti-auth-user': randomUUID() };
   const registration = await server.inject({
     method: 'POST', url: '/v1/registrations',
+    headers: retryHeaders,
     payload: {
       ...input, installationId: randomUUID(),
-      token: retryHeaders.authorization.slice(7), recoveryCode: randomBytes(32).toString('hex'),
+      recoveryCode: randomBytes(32).toString('hex'),
     },
   });
   expect(registration.statusCode).toBe(200);

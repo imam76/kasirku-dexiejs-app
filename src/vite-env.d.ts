@@ -2,6 +2,8 @@
 
 interface ImportMetaEnv {
   readonly VITE_WEB_TRIAL_MODULE_BYPASS?: string
+  readonly VITE_BILLING_API_URL?: string
+  readonly VITE_BILLING_SUPABASE_PUBLISHABLE_KEY?: string
 }
 
 interface ImportMeta {

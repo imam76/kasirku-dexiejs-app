@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   billingStatusSchema,
   reminderDate,
@@ -8,7 +9,6 @@ import {
   readSubscription,
   updateSubscription,
   writeSubscription,
-  randomSecret,
   type Subscription,
 } from './storage';
 import type { PlanId } from './catalog';
@@ -21,28 +21,81 @@ import {
   saveSetupConfig,
 } from '@/services/setupKeyService';
 
-const meta = import.meta as unknown as {
-  env?: Record<string, string | boolean | undefined>;
-};
-const rawBillingUrl = meta.env?.VITE_BILLING_API_URL;
+const rawBillingUrl = import.meta.env.VITE_BILLING_API_URL;
 const configuredBillingUrl =
   typeof rawBillingUrl === 'string' ? rawBillingUrl.trim() : '';
 const rawBillingPublishableKey =
-  meta.env?.VITE_BILLING_SUPABASE_PUBLISHABLE_KEY;
+  import.meta.env.VITE_BILLING_SUPABASE_PUBLISHABLE_KEY;
 const billingPublishableKey =
   typeof rawBillingPublishableKey === 'string'
     ? rawBillingPublishableKey.trim()
     : '';
 export const BILLING_URL = (
   configuredBillingUrl ||
-  (meta.env?.DEV === true ? 'http://localhost:8787' : '')
+  (import.meta.env.DEV
+    ? 'http://127.0.0.1:54321/functions/v1/billing'
+    : '')
 ).replace(/\/$/, '');
+
+const BILLING_AUTH_STORAGE_KEY = 'frayukti-billing-supabase-auth-v1';
+let billingSupabase: SupabaseClient | null = null;
+
+function billingSupabaseSettings() {
+  if (!BILLING_URL || !billingPublishableKey)
+    throw new Error(
+      'Supabase Auth billing belum dikonfigurasi pada build aplikasi.',
+    );
+  const functionUrl = new URL(BILLING_URL);
+  const marker = '/functions/v1/billing';
+  const local = ['localhost', '127.0.0.1'].includes(functionUrl.hostname);
+  if (!local && !functionUrl.pathname.endsWith(marker))
+    throw new Error('URL billing Supabase tidak valid.');
+  return { url: functionUrl.origin, key: billingPublishableKey };
+}
+
+function getBillingSupabase() {
+  if (billingSupabase) return billingSupabase;
+  const { url, key } = billingSupabaseSettings();
+  billingSupabase = createClient(url, key, {
+    auth: {
+      storageKey: BILLING_AUTH_STORAGE_KEY,
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+    },
+  });
+  return billingSupabase;
+}
+
+async function requireBillingAccessToken(client = getBillingSupabase()) {
+  const current = await client.auth.getSession();
+  if (current.error) throw current.error;
+  if (current.data.session?.access_token)
+    return current.data.session.access_token;
+
+  const signedIn = await client.auth.signInAnonymously();
+  if (signedIn.error || !signedIn.data.session)
+    throw new Error(
+      `Tidak dapat membuat sesi Supabase billing. Pastikan Anonymous Sign-Ins aktif.${signedIn.error ? ` ${signedIn.error.message}` : ''}`,
+    );
+  return signedIn.data.session.access_token;
+}
+
+class BillingApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 async function api(
   path: string,
   body?: unknown,
-  token?: string,
   method = 'POST',
   timeoutMs = 12_000,
+  accessToken?: string,
 ) {
   if (!BILLING_URL)
     throw new Error(
@@ -54,19 +107,37 @@ async function api(
     !['localhost', '127.0.0.1'].includes(url.hostname)
   )
     throw new Error('Layanan billing harus memakai HTTPS.');
+  const resolvedAccessToken =
+    accessToken ?? (await requireBillingAccessToken());
   const response = await fetch(`${BILLING_URL}${path}`, {
     method: body === undefined ? 'GET' : method,
     signal: AbortSignal.timeout(timeoutMs),
     headers: {
       'Content-Type': 'application/json',
-      ...(billingPublishableKey ? { apikey: billingPublishableKey } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      apikey: billingPublishableKey,
+      Authorization: `Bearer ${resolvedAccessToken}`,
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
+  if (response.status === 401 && accessToken === undefined) {
+    const refreshed = await getBillingSupabase().auth.refreshSession();
+    if (
+      !refreshed.error &&
+      refreshed.data.session?.access_token &&
+      refreshed.data.session.access_token !== resolvedAccessToken
+    )
+      return api(
+        path,
+        body,
+        method,
+        timeoutMs,
+        refreshed.data.session.access_token,
+      );
+  }
   const result = await response.json();
   if (!response.ok)
-    throw new Error(
+    throw new BillingApiError(
+      response.status,
       typeof result.error === 'string'
         ? result.error
         : 'Layanan billing tidak tersedia.',
@@ -95,11 +166,11 @@ async function sync(): Promise<BillingStatus | null> {
   const installationId = local.installationId;
   const sameIdentity = () =>
     readSubscription()?.installationId === installationId;
+  let status: BillingStatus | undefined;
   if (local.leadPending && local.originalTrial) {
     const result = z.object({ businessId: z.uuid() }).parse(
       await api('/v1/registrations', {
         installationId,
-        token: local.token,
         recoveryCode: local.recoveryCode,
         registration: local.registration,
         consent: local.consent,
@@ -108,17 +179,29 @@ async function sync(): Promise<BillingStatus | null> {
     );
     if (!sameIdentity()) return null;
     updateSubscription({ businessId: result.businessId, leadPending: false });
+  } else {
+    try {
+      status = billingStatusSchema.parse(
+        await api('/v1/status', undefined, 'GET'),
+      );
+    } catch (error) {
+      if (!(error instanceof BillingApiError) || error.status !== 401)
+        throw error;
+      // One-time migration from the old installation-token design: prove
+      // ownership with the existing recovery code and bind this Supabase user.
+      await api('/v1/recovery', { recoveryCode: local.recoveryCode });
+    }
   }
   local = readSubscription()!;
   if (local.consentPending) {
     const sentAt = local.consent.marketingUpdatedAt;
-    await api('/v1/consent', local.consent, local.token, 'PATCH');
+    await api('/v1/consent', local.consent, 'PATCH');
     if (!sameIdentity()) return null;
     if (readSubscription()?.consent.marketingUpdatedAt === sentAt)
       updateSubscription({ consentPending: false });
   }
-  const status = billingStatusSchema.parse(
-    await api('/v1/status', undefined, local.token),
+  status ??= billingStatusSchema.parse(
+    await api('/v1/status', undefined, 'GET'),
   );
   if (!sameIdentity()) return null;
   const current = readSubscription()!;
@@ -158,7 +241,6 @@ export async function requestCheckout(
       await api(
         '/v1/checkouts',
         { plan, customModules, requestId },
-        local.token,
         'POST',
         30_000,
       ),
@@ -185,21 +267,44 @@ export async function recoverSubscription(
 ): Promise<Subscription> {
   // A fresh installation can recover before creating its first local Owner.
   if (await hasActiveOwner()) await requireSubscriptionOwner();
-  const token = randomSecret();
-  await api('/v1/recovery', { recoveryCode: recoveryCode.trim(), token });
+  const { url, key } = billingSupabaseSettings();
+  const recoveryClient = createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+  const signedIn = await recoveryClient.auth.signInAnonymously();
+  if (signedIn.error || !signedIn.data.session)
+    throw new Error(
+      `Tidak dapat membuat identitas pemulihan Supabase.${signedIn.error ? ` ${signedIn.error.message}` : ''}`,
+    );
+  const recoveryToken = signedIn.data.session.access_token;
+  await api(
+    '/v1/recovery',
+    { recoveryCode: recoveryCode.trim() },
+    'POST',
+    12_000,
+    recoveryToken,
+  );
   const status = billingStatusSchema.parse(
-    await api('/v1/status', undefined, token),
+    await api('/v1/status', undefined, 'GET', 12_000, recoveryToken),
   );
   // Recovery restores existing acceptance, never invents new acceptance or grants a local user role.
   const consentResult = z
     .object({ consent: z.unknown() })
-    .parse(await api('/v1/consent', undefined, token));
+    .parse(await api('/v1/consent', undefined, 'GET', 12_000, recoveryToken));
+  const adopted = await getBillingSupabase().auth.setSession({
+    access_token: recoveryToken,
+    refresh_token: signedIn.data.session.refresh_token,
+  });
+  if (adopted.error) throw adopted.error;
   const { consentSchema } = await import('./contract');
   const recovered: Subscription = {
-    version: 1,
+    version: 2,
     installationId: crypto.randomUUID(),
     businessId: status.businessId,
-    token,
     recoveryCode: recoveryCode.trim(),
     registration: status.registration,
     access: status.access,

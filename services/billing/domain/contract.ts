@@ -52,7 +52,6 @@ export type Access = z.infer<typeof accessSchema>;
 export const registerBillingSchema = z
   .object({
     installationId: z.uuid(),
-    token: z.string().regex(/^[a-f0-9]{64}$/),
     recoveryCode: z.string().regex(/^[a-f0-9]{64}$/),
     registration: registrationSchema,
     consent: consentSchema,

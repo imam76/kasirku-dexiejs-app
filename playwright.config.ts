@@ -51,7 +51,11 @@ export default defineConfig({
   ],
   webServer: {
     command: `bun run dev -- --host 127.0.0.1 --port ${port}`,
-    env: { VITE_WEB_TRIAL_MODULE_BYPASS: 'true' },
+    env: {
+      VITE_WEB_TRIAL_MODULE_BYPASS: 'true',
+      VITE_BILLING_API_URL: 'http://127.0.0.1:8787',
+      VITE_BILLING_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_e2e_test',
+    },
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

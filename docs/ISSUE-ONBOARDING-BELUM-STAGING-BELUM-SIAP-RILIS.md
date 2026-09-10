@@ -124,9 +124,9 @@ Hasil 2026-09-10:
 | Pemeriksaan | Hasil |
 | --- | --- |
 | `bun run billing:check` | Lulus |
-| `bun run test:billing` | 19 tes lulus; termasuk satu database, pembatasan schema public, dan migrasi Supabase |
+| `bun run test:billing` | 22 tes lulus; termasuk identitas Supabase Auth, satu database, pembatasan schema public, dan migrasi Supabase |
 | Deno check + health adapter Edge Function | Lulus; entrypoint memanggil Fastify melalui runtime Deno dan PostgreSQL lokal |
-| `bun run test:unit` | 432 tes lulus |
+| `bun run test:unit` | 433 tes lulus; termasuk penghapusan token instalasi saat migrasi localStorage v1 ke v2 |
 | Playwright Chromium: `onboarding-live.spec.ts` dan `onboarding-permissions.spec.ts` | 7 tes lulus |
 | ESLint pada file onboarding/billing dan tes baru yang diubah | Lulus |
 | `bun run build` | Lulus; warning aset beep dan ukuran chunk masih ada |

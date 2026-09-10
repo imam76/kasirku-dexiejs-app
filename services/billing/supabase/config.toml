@@ -1,8 +1,15 @@
 project_id = "frayukti"
 
+[auth]
+enable_anonymous_sign_ins = true
+
 [functions.billing]
-# @supabase/server verifies the publishable API key for application routes.
-# Health, payment finish, CORS preflight, and the Midtrans webhook stay public;
-# protected business routes additionally validate Frayukti's installation token.
-verify_jwt = false
+# The gateway and @supabase/server both require a Supabase Auth user JWT.
+verify_jwt = true
 entrypoint = "./functions/billing/index.ts"
+
+[functions.billing-public]
+# Midtrans cannot send a Supabase JWT. This separate function exposes only the
+# signed webhook, health check, and inert payment-finish page.
+verify_jwt = false
+entrypoint = "./functions/billing-public/index.ts"

@@ -18,11 +18,14 @@ create table if not exists billing_private.businesses (
   created_at timestamptz not null default now()
 );
 
-create table if not exists billing_private.access_tokens (
-  token_hash text primary key,
+create table if not exists billing_private.business_users (
+  auth_user_id uuid primary key,
   business_id uuid not null references billing_private.businesses(id),
   created_at timestamptz not null default now()
 );
+
+create index if not exists business_users_business_id_idx
+  on billing_private.business_users(business_id);
 
 create table if not exists billing_private.orders (
   order_id text primary key,
@@ -58,6 +61,7 @@ create table if not exists billing_private.webhook_events (
 create table if not exists billing_private.recovery_events (
   id uuid primary key,
   business_id uuid not null references billing_private.businesses(id),
+  auth_user_id uuid not null,
   created_at timestamptz not null default now()
 );
 
