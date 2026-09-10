@@ -260,16 +260,14 @@ export function OnboardingWizard({ onJoinHost }: { onJoinHost?: () => void }) {
     }
   }
   return (
-    <div className="onboarding-shell">
+    <div
+      className={`onboarding-shell${screen === 'welcome' ? ' onboarding-welcome-shell' : ''}`}
+    >
       <aside className="onboarding-sidebar">
         <div className="onboarding-brand">
           <img src="/frayukti-f.svg" alt="" /> Frayukti
         </div>
-        <p>
-          Usaha Anda.
-          <br />
-          Langkah baru yang lebih mudah.
-        </p>
+        <p>Kelola usaha lebih mudah.</p>
         {screen === 'wizard' && (
           <ol>
             {steps.map((label, i) => (
@@ -280,25 +278,25 @@ export function OnboardingWizard({ onJoinHost }: { onJoinHost?: () => void }) {
             ))}
           </ol>
         )}
-        <small>
-          Data usaha tetap di perangkat Anda.
-          <br />
-          Desktop dan Android, satu langganan.
-        </small>
+        <small>Data tersimpan di perangkat Anda.</small>
       </aside>
       <main className="onboarding-main">
         <div className="onboarding-content">
-          <span className="onboarding-eyebrow">FRAYUKTI · SANDBOX</span>
+          <span className="onboarding-eyebrow">
+            {screen === 'welcome' ? 'Sandbox' : 'FRAYUKTI · SANDBOX'}
+          </span>
           {screen === 'welcome' ? (
-            <>
-              <h1>
+            <section
+              className="onboarding-welcome"
+              aria-labelledby="onboarding-welcome-title"
+            >
+              <h1 id="onboarding-welcome-title">
                 Mulai usaha,
                 <br />
                 tanpa ribet.
               </h1>
               <p className="onboarding-intro">
-                Pilih paket yang sesuai, atur usaha, lalu coba selama 90 hari.
-                Anda dapat memulai saat offline.
+                Coba 90 hari. Tetap bisa digunakan offline.
               </p>
               <div className="onboarding-actions vertical">
                 <Button
@@ -306,18 +304,22 @@ export function OnboardingWizard({ onJoinHost }: { onJoinHost?: () => void }) {
                   size="large"
                   onClick={() => setScreen('wizard')}
                 >
-                  Daftar usaha baru <ArrowRight size={17} />
+                  Buat usaha baru <ArrowRight size={17} aria-hidden="true" />
                 </Button>
                 <Button size="large" onClick={() => setScreen('recovery')}>
-                  Sudah punya langganan / Hubungkan usaha
+                  Hubungkan langganan
                 </Button>
               </div>
               {onJoinHost && (
-                <Button type="link" onClick={onJoinHost}>
-                  Hubungkan ke host database yang sudah ada
+                <Button
+                  type="link"
+                  className="onboarding-host-link"
+                  onClick={onJoinHost}
+                >
+                  Hubungkan perangkat ke host
                 </Button>
               )}
-            </>
+            </section>
           ) : screen === 'recovery' ? (
             <>
               <h1>Hubungkan usaha Anda.</h1>

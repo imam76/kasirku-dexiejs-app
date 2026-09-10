@@ -6,6 +6,7 @@ import { migrate, type Databases } from '../../services/billing/db';
 import { buildApp } from '../../services/billing/app';
 import {
   hashSecret,
+  type Midtrans,
   type MidtransStatus,
 } from '../../services/billing/midtrans';
 import { getPlanModules } from '../../src/onboarding/catalog';
@@ -501,5 +502,126 @@ describe('billing HTTP and PostgreSQL integration', () => {
       payload: { requestId: randomUUID(), plan: 'custom', customModules },
     });
     expect(renewal.json().amount).toBe(999_000);
+  });
+});
+
+async function retryFixture(gateway: Midtrans) {
+  const server = buildApp(config, db, gateway);
+  server.log.level = 'silent';
+  const retryHeaders = { authorization: `Bearer ${randomBytes(32).toString('hex')}` };
+  const registration = await server.inject({
+    method: 'POST', url: '/v1/registrations',
+    payload: {
+      ...input, installationId: randomUUID(),
+      token: retryHeaders.authorization.slice(7), recoveryCode: randomBytes(32).toString('hex'),
+    },
+  });
+  expect(registration.statusCode).toBe(200);
+  const request = (target = server, plan = 'pos') => target.inject({
+    method: 'POST', url: '/v1/checkouts', headers: retryHeaders,
+    payload: { requestId: randomUUID(), plan, customModules: [] },
+  });
+  const storedOrder = async () => (await db.billing.query(
+    'SELECT * FROM orders WHERE business_id=$1', [registration.json().businessId],
+  )).rows;
+  return { server, headers: retryHeaders, request, storedOrder };
+}
+
+describe('checkout failure recovery', () => {
+  test('retries a lost Snap response after restart with the same order and frozen price; concurrent processes create once', async () => {
+    const attempts: { transaction_details: { order_id: string; gross_amount: number } }[] = [];
+    const gateway: Midtrans = {
+      async checkout(payload) {
+        attempts.push(payload as typeof attempts[number]);
+        if (attempts.length === 1) throw new Error('Snap response lost');
+        await new Promise(resolve => setTimeout(resolve, 30));
+        return 'https://app.sandbox.midtrans.com/snap/v4/redirection/retried';
+      },
+      async status() { return null; },
+    };
+    const fixture = await retryFixture(gateway);
+    expect((await fixture.request()).statusCode).toBe(500);
+    const [failed] = await fixture.storedOrder();
+    expect(failed.status).toBe('creating');
+    expect(failed.redirect_url).toBeNull();
+    await fixture.server.close();
+    const restarted = buildApp(config, db, gateway);
+    const concurrent = buildApp(config, db, gateway);
+    restarted.log.level = concurrent.log.level = 'silent';
+    try {
+      const replies = await Promise.all([
+        fixture.request(restarted, 'trading'), fixture.request(concurrent),
+      ]);
+      expect(replies.map(reply => reply.statusCode)).toEqual([200, 200]);
+      expect(replies.map(reply => reply.json())).toEqual([
+        { orderId: failed.order_id, amount: 149000, redirectUrl: 'https://app.sandbox.midtrans.com/snap/v4/redirection/retried' },
+        { orderId: failed.order_id, amount: 149000, redirectUrl: 'https://app.sandbox.midtrans.com/snap/v4/redirection/retried' },
+      ]);
+      expect(attempts).toHaveLength(2);
+      expect(attempts[1]).toEqual(attempts[0]);
+      const orders = await fixture.storedOrder();
+      expect(orders).toHaveLength(1);
+      expect(orders[0].status).toBe('pending');
+      const status = await restarted.inject({ url: '/v1/status', headers: fixture.headers });
+      expect(status.json().access.kind).toBe('trial');
+    } finally {
+      await restarted.close();
+      await concurrent.close();
+    }
+  });
+
+  test('an unavailable status API never opens a replacement checkout; recovery works when it returns', async () => {
+    let calls = 0;
+    let unavailable = true;
+    const fixture = await retryFixture({
+      async checkout() {
+        if (++calls === 1) throw new Error('Connection failed before Snap creation');
+        return 'https://app.sandbox.midtrans.com/snap/v4/redirection/recovered';
+      },
+      async status() {
+        if (unavailable) throw new Error('Status unavailable');
+        return null;
+      },
+    });
+    try {
+      expect((await fixture.request()).statusCode).toBe(500);
+      expect((await fixture.request()).statusCode).toBe(500);
+      expect(calls).toBe(1);
+      expect(await fixture.storedOrder()).toHaveLength(1);
+      unavailable = false;
+      expect((await fixture.request()).statusCode).toBe(200);
+      expect(calls).toBe(2);
+    } finally { await fixture.server.close(); }
+  });
+
+  test('reconciles an already-paid order and validates merchant without creating or activating twice', async () => {
+    let calls = 0;
+    let currentOrder = '';
+    let merchant = 'wrong-merchant';
+    const fixture = await retryFixture({
+      async checkout(payload) {
+        calls++;
+        currentOrder = (payload as { transaction_details: { order_id: string } }).transaction_details.order_id;
+        throw new Error('Response lost');
+      },
+      async status() {
+        return { order_id: currentOrder, merchant_id: merchant, gross_amount: '149000.00',
+          status_code: '200', transaction_status: 'settlement', payment_type: 'bank_transfer' };
+      },
+    });
+    try {
+      expect((await fixture.request()).statusCode).toBe(500);
+      expect((await fixture.request()).statusCode).toBe(400);
+      expect((await fixture.storedOrder())[0].activated_at).toBeNull();
+      merchant = config.MIDTRANS_MERCHANT_ID;
+      expect((await fixture.request()).statusCode).toBe(409);
+      expect(calls).toBe(1);
+      const first = (await fixture.server.inject({ url: '/v1/status', headers: fixture.headers })).json();
+      expect(first.access.kind).toBe('subscription');
+      await fixture.server.reconcileOrder(currentOrder);
+      const duplicate = (await fixture.server.inject({ url: '/v1/status', headers: fixture.headers })).json();
+      expect(duplicate.access).toEqual(first.access);
+      expect(await fixture.storedOrder()).toHaveLength(1);
+    } finally { await fixture.server.close(); }
   });
 });

@@ -145,8 +145,12 @@ awal yang diterima dalam issue. Ini bukan sistem proteksi lisensi anti-tamper.
 
 ## Pemulihan dan keputusan sandbox
 
-Pemulihan awal memakai kode acak rahasia 256-bit. Kode tampil atas permintaan
-pemilik di halaman Langganan; server hanya menyimpan hash. Token API instalasi
+Pemulihan awal memakai kode acak rahasia 256-bit. Kode tampil hanya untuk sesi
+Owner aktif di halaman Langganan; server hanya menyimpan hash. Mengganti identitas
+langganan pada instalasi yang sudah memiliki Owner juga memerlukan sesi Owner.
+Instalasi baru tetap dapat memulihkan sebelum membuat Owner lokal. Ekspor backup
+memerlukan izin Pengaturan (`SETTINGS_ACCESS`), termasuk ketika akses habis.
+Kasir dapat memakai **Ganti pengguna** agar Owner masuk. Token API instalasi
 juga disimpan sebagai hash di server. Endpoint pemulihan memiliki rate limit,
 dan setiap pemulihan dicatat tanpa menyimpan kode mentah.
 
@@ -222,9 +226,13 @@ bun run billing:reconcile "FRY-<uuid-order>"
 ```
 
 Jika proses mati/timeout setelah Snap membuat order tetapi sebelum URL checkout
-tersimpan, order `creating` sengaja tidak dibuat ulang dengan ID berbeda.
-Periksa order di dashboard, status API, dan log notifikasi sebelum tindakan
-manual. Jangan mengaktifkan akses lewat redirect atau mengubah database agar
+tersimpan, pilih **Lanjutkan checkout**. Backend memeriksa status Midtrans dan,
+jika belum ada status pembayaran, mengulang pembuatan Snap memakai order ID dan
+nominal tersimpan yang sama. Row lock menyerialisasi retry lintas proses. Status
+API yang gagal tidak menghapus order; coba lagi setelah koneksi pulih. Pembayaran
+yang sudah ada direkonsiliasi tanpa membuat order ID lain. Perilaku ini mengikuti
+[pembuatan ulang token Snap](https://docs.midtrans.com/docs/snap-advanced-feature).
+Jangan mengaktifkan akses lewat redirect atau mengubah database agar
 tampak sudah membayar. Untuk notifikasi gagal, gunakan fasilitas kirim ulang
 notifikasi Midtrans setelah endpoint diperbaiki. Notifikasi sukses yang berulang
 aman karena order dikunci dalam transaksi PostgreSQL dan memiliki `activated_at`.

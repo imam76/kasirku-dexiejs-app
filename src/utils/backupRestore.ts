@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import dayjs from 'dayjs';
 import { exportJson } from '@/utils/export';
-import { clearAuthSessionState, getCurrentSessionUser, writeActivityLog } from '@/auth/authService';
+import { clearAuthSessionState, getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { ensureAccountingDefaults } from '@/services/chartOfAccountService';
 import { ensureCompanyProfileSetting } from '@/services/companyProfileSettingService';
 import { ensureBaseCurrency } from '@/services/currencyService';
@@ -59,6 +59,7 @@ const normalizeStoredInventoryLotConsumption = (
 });
 
 export const backupDatabase = async () => {
+  await requireUserPermission(await getCurrentSessionUser(), 'SETTINGS_ACCESS');
   try {
     const data = {
       products: (await db.products.toArray()).map(normalizeStoredProduct),

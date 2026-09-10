@@ -10,7 +10,10 @@ import {
   requestCheckout,
   syncBilling,
   recoverSubscription,
+  revealRecoveryCode,
 } from './billingClient';
+import { useAuth } from '@/auth/useAuth';
+import { isOwnerAccessContext } from '@/services/setupKeyService';
 import { PlanPicker } from './OnboardingWizard';
 import { rupiah } from './presentation';
 import { PLAN_NAMES, type PlanId } from './catalog';
@@ -29,6 +32,11 @@ function SubscriptionPage({
   close?: () => void;
 }) {
   const { message } = App.useApp();
+  const { currentUser, currentRole, isPermissionLoading, can, logout } = useAuth();
+  const isOwner =
+    !isPermissionLoading && Boolean(currentUser?.is_active) &&
+    isOwnerAccessContext(currentUser, currentRole);
+  const canBackup = !isPermissionLoading && can('SETTINGS_ACCESS');
   const [plan, setPlan] = useState<PlanId>(subscription.access.plan);
   const [modules, setModules] = useState(subscription.access.modules);
   const [busy, setBusy] = useState(false);
@@ -38,7 +46,7 @@ function SubscriptionPage({
     amount: number;
     orderId: string;
   } | null>(null);
-  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const [recovery, setRecovery] = useState('');
   const active = hasAccess(subscription.access);
   const latestPending = status?.orders.find((order) =>
@@ -64,9 +72,13 @@ function SubscriptionPage({
     const key = `frayukti-checkout-${subscription.installationId}`;
     const requestId = localStorage.getItem(key) ?? crypto.randomUUID();
     localStorage.setItem(key, requestId);
-    const result = await requestCheckout(plan, modules, requestId);
-    setCheckout(result);
-    await refresh();
+    try {
+      const result = await requestCheckout(plan, modules, requestId);
+      setCheckout(result);
+    } finally {
+      // A failed response may still have created or reconciled the same order.
+      await refresh();
+    }
   }
   // A terminal order permits the next billing period to use a fresh idempotency key.
   useEffect(() => {
@@ -119,7 +131,7 @@ function SubscriptionPage({
           <Alert
             type="warning"
             showIcon
-            title="Transaksi, perubahan data, dan laporan operasional dikunci. Bayar atau pulihkan akses untuk melanjutkan. Ekspor backup tetap tersedia."
+            title="Transaksi, perubahan data, dan laporan operasional dikunci. Bayar atau hubungi Owner untuk memulihkan akses. Ekspor backup tersedia bagi pengguna dengan izin Pengaturan."
           />
         )}
         {subscription.leadPending && (
@@ -136,12 +148,17 @@ function SubscriptionPage({
           >
             Periksa status
           </Button>
-          <Button
-            icon={<Download size={16} />}
-            disabled={busy}
-            onClick={() => void action(backupDatabase)}
-          >
-            Ekspor backup data
+          {canBackup && (
+            <Button
+              icon={<Download size={16} />}
+              disabled={busy}
+              onClick={() => void action(backupDatabase)}
+            >
+              Ekspor backup data
+            </Button>
+          )}
+          <Button disabled={busy} onClick={() => void action(logout)}>
+            Ganti pengguna
           </Button>
         </div>
         <div className="onboarding-billing-grid">
@@ -176,7 +193,9 @@ function SubscriptionPage({
             {latestPending && (
               <Alert
                 type="info"
-                title={`Pembayaran ${PLAN_NAMES[latestPending.plan]} · ${rupiah(latestPending.amount)} menunggu verifikasi. Periksa status setelah kembali dari checkout.`}
+                title={latestPending.status === 'creating'
+                  ? 'Checkout belum selesai dibuat. Pilih Lanjutkan checkout untuk mencoba kembali.'
+                  : `Pembayaran ${PLAN_NAMES[latestPending.plan]} · ${rupiah(latestPending.amount)} menunggu verifikasi. Periksa status setelah kembali dari checkout.`}
               />
             )}
             <div className="onboarding-actions vertical">
@@ -236,23 +255,26 @@ function SubscriptionPage({
             </ul>
           )}
         </section>
-        <section className="onboarding-section">
+        {isOwner && <section className="onboarding-section">
           <h2>Identitas & pemulihan</h2>
           <p>
             Simpan kode rahasia di tempat aman. Pemilik kode dapat menghubungkan
             langganan di perangkat lain. Kode baru dapat digunakan di perangkat
             lain setelah registrasi tersinkron.
           </p>
-          <Button onClick={() => setShowRecovery(!showRecovery)}>
-            {showRecovery
+          <Button disabled={busy} onClick={() => void action(async () => {
+            if (recoveryCode) setRecoveryCode(null);
+            else setRecoveryCode(await revealRecoveryCode());
+          })}>
+            {recoveryCode
               ? 'Sembunyikan kode pemulihan'
               : 'Tampilkan kode pemulihan'}
           </Button>
-          {showRecovery && (
+          {recoveryCode && (
             <Input.TextArea
               readOnly
               aria-label="Kode pemulihan usaha"
-              value={subscription.recoveryCode}
+              value={recoveryCode}
               autoSize
               style={{ marginTop: 12 }}
             />
@@ -281,12 +303,14 @@ function SubscriptionPage({
               Pulihkan akses
             </Button>
           </details>
-        </section>
-        <section className="onboarding-section">
+        </section>}
+        {isOwner && <section className="onboarding-section">
           <h2>Preferensi komunikasi</h2>
           <Checkbox
             checked={subscription.consent.marketing}
+            disabled={busy}
             onChange={(e) => {
+              if (!isOwner) return;
               updateSubscription({
                 consent: {
                   ...subscription.consent,
@@ -307,13 +331,14 @@ function SubscriptionPage({
           {subscription.consentPending && (
             <p>Perubahan consent menunggu sinkronisasi.</p>
           )}
-        </section>
+        </section>}
         {error && <Alert role="alert" type="error" showIcon title={error} />}
       </main>
     </div>
   );
 }
 export function SubscriptionGate({ children }: { children: ReactNode }) {
+  const { currentUser } = useAuth();
   const subscription = useSubscription();
   const [manage, setManage] = useState(false);
   const [now, setNow] = useState(Date.now);
@@ -371,7 +396,7 @@ export function SubscriptionGate({ children }: { children: ReactNode }) {
     return (
       <>
         <SubscriptionPage
-          key={subscription.installationId}
+          key={`${subscription.installationId}:${currentUser?.id}`}
           subscription={subscription}
           status={
             status?.businessId === subscription.businessId ? status : null

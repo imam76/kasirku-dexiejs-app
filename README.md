@@ -8,6 +8,9 @@ Sandbox sudah terhubung ke layanan billing terpisah. Panduan env, database,
 webhook HTTPS, serta pengujiannya tersedia di
 [`docs/ONBOARDING-MIDTRANS-SANDBOX.md`](docs/ONBOARDING-MIDTRANS-SANDBOX.md).
 
+Status kesiapan staging/rilis dan tindak lanjut audit dicatat di
+[`onboarding belum staging belum siap rilis`](docs/ISSUE-ONBOARDING-BELUM-STAGING-BELUM-SIAP-RILIS.md).
+
 ## Prasyarat
 
 Pastikan sudah terpasang:

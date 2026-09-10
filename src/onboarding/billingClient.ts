@@ -13,6 +13,8 @@ import {
 } from './storage';
 import type { PlanId } from './catalog';
 import { isTauriRuntime } from '@/utils/export/platform';
+import { hasActiveOwner } from '@/auth/authService';
+import { requireSubscriptionOwner } from './ownerAccess';
 import {
   SETUP_CONFIG_CHANGED_EVENT,
   CURRENT_MODULE_CATALOG_VERSION,
@@ -28,6 +30,7 @@ async function api(
   body?: unknown,
   token?: string,
   method = 'POST',
+  timeoutMs = 12_000,
 ) {
   const url = new URL(BILLING_URL);
   if (
@@ -37,7 +40,7 @@ async function api(
     throw new Error('Layanan billing harus memakai HTTPS.');
   const response = await fetch(`${BILLING_URL}${path}`, {
     method: body === undefined ? 'GET' : method,
-    signal: AbortSignal.timeout(12_000),
+    signal: AbortSignal.timeout(timeoutMs),
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -139,6 +142,8 @@ export async function requestCheckout(
         '/v1/checkouts',
         { plan, customModules, requestId },
         local.token,
+        'POST',
+        30_000,
       ),
     );
 }
@@ -161,6 +166,8 @@ export async function openCheckout(url: string) {
 export async function recoverSubscription(
   recoveryCode: string,
 ): Promise<Subscription> {
+  // A fresh installation can recover before creating its first local Owner.
+  if (await hasActiveOwner()) await requireSubscriptionOwner();
   const token = randomSecret();
   await api('/v1/recovery', { recoveryCode: recoveryCode.trim(), token });
   const status = billingStatusSchema.parse(
@@ -187,4 +194,11 @@ export async function recoverSubscription(
   writeSubscription(recovered);
   applySubscriptionModules(recovered);
   return recovered;
+}
+
+export async function revealRecoveryCode(): Promise<string> {
+  await requireSubscriptionOwner();
+  const subscription = readSubscription();
+  if (!subscription) throw new Error('Identitas langganan belum tersedia.');
+  return subscription.recoveryCode;
 }

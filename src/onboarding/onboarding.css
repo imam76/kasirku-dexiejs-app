@@ -245,6 +245,53 @@
 .onboarding-error {
   margin-top: 20px;
 }
+.onboarding-welcome-shell .onboarding-sidebar > p {
+  font-size: 18px;
+  line-height: 1.6;
+  color: #d8e4fa;
+}
+.onboarding-welcome-shell .onboarding-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+.onboarding-welcome {
+  max-width: 430px;
+}
+.onboarding-welcome h1 {
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.2;
+  letter-spacing: -1px;
+  margin: 12px 0 16px;
+}
+.onboarding-welcome .onboarding-intro {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.onboarding-welcome .onboarding-actions {
+  gap: 12px;
+  margin: 28px 0 12px;
+}
+.onboarding-welcome .onboarding-actions .ant-btn {
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 20px;
+}
+.onboarding-welcome .onboarding-actions .ant-btn-primary {
+  box-shadow: 0 2px 4px #12398714;
+}
+.onboarding-host-link.ant-btn {
+  height: auto;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 0;
+  color: var(--on-muted);
+  font-size: 13px;
+  text-align: left;
+  white-space: normal;
+}
 .onboarding-mobile-progress {
   display: none;
 }

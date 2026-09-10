@@ -3,7 +3,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 async function registerTrial(page: Page) {
   await page
-    .getByRole('button', { name: 'Daftar usaha baru', exact: true })
+    .getByRole('button', { name: 'Buat usaha baru', exact: true })
     .click();
   await page.getByLabel('Nama pemilik').fill('Pemilik Sandbox');
   await page.getByLabel('Nama usaha', { exact: true }).fill('Usaha Sandbox');
@@ -76,7 +76,7 @@ for (const viewport of [
     await page.route('**/v1/**', (route) => route.abort());
     await page.goto('/');
     await expect(
-      page.getByRole('button', { name: 'Daftar usaha baru', exact: true }),
+      page.getByRole('button', { name: 'Buat usaha baru', exact: true }),
     ).toBeVisible();
     await context.setOffline(true);
     await registerTrial(page);
@@ -340,7 +340,7 @@ test('checkout stays trial until billing activation, then a new installation rec
   });
   await newPage.goto(new URL('/', page.url()).href);
   await newPage
-    .getByRole('button', { name: 'Sudah punya langganan / Hubungkan usaha' })
+    .getByRole('button', { name: 'Hubungkan langganan', exact: true })
     .click();
   await newPage
     .getByLabel('Kode pemulihan', { exact: true })

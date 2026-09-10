@@ -358,46 +358,73 @@ export function buildApp(
           existing: false,
         };
       });
-      if (order.redirect_url)
-        return {
-          orderId: order.order_id,
-          redirectUrl: order.redirect_url,
-          amount: order.amount,
-        };
-      if (order.existing)
-        return fail(
-          409,
-          'Checkout sebelumnya belum selesai dibuat. Periksa status atau hubungi dukungan; jangan membuat pembayaran ganda.',
-        );
-      const redirectUrl = await midtrans.checkout({
-        transaction_details: {
-          order_id: order.order_id,
-          gross_amount: order.amount,
-        },
-        item_details: [
-          {
-            id: order.plan,
-            name: `Frayukti ${PLAN_NAMES[order.plan]}`.slice(0, 50),
-            price: order.amount,
-            quantity: 1,
+      // Keep the persisted order across failures, and serialize Snap creation across
+      // processes. A crashed process releases this lock so a later request can retry.
+      const result = await transaction(async (client) => {
+        const current = (
+          await client.query<Order>(
+            'SELECT * FROM orders WHERE order_id=$1 FOR UPDATE',
+            [order.order_id],
+          )
+        ).rows[0];
+        if (!['creating', 'pending'].includes(current.status))
+          return fail(
+            409,
+            'Order sudah selesai. Periksa status sebelum membuat pembayaran berikutnya.',
+          );
+        if (current.redirect_url)
+          return {
+            orderId: current.order_id,
+            redirectUrl: current.redirect_url,
+            amount: current.amount,
+          };
+        if (order.existing) {
+          const status = await midtrans.status(current.order_id);
+          if (status) {
+            if (status.order_id !== current.order_id)
+              return fail(400, 'Status Midtrans tidak sesuai dengan order yang diperiksa.');
+            // Apply after releasing the order lock; notification processing also locks it.
+            return { status };
+          }
+          // A 404 does not prove Snap never created a token. Reuse the SAME order ID:
+          // Midtrans replaces an unselected token and rejects an already-used order ID.
+          // https://docs.midtrans.com/docs/snap-advanced-feature
+        }
+        const redirectUrl = await midtrans.checkout({
+          transaction_details: {
+            order_id: current.order_id,
+            gross_amount: current.amount,
           },
-        ],
-        customer_details: {
-          first_name: business.registration.owner,
-          phone: business.registration.whatsapp,
-          ...(business.registration.email
-            ? { email: business.registration.email }
-            : {}),
-        },
-        callbacks: { finish: config.MIDTRANS_FINISH_URL },
-        credit_card: { secure: true },
-        expiry: { unit: 'minutes', duration: 60 },
+          item_details: [
+            {
+              id: current.plan,
+              name: `Frayukti ${PLAN_NAMES[current.plan]}`.slice(0, 50),
+              price: current.amount,
+              quantity: 1,
+            },
+          ],
+          customer_details: {
+            first_name: business.registration.owner,
+            phone: business.registration.whatsapp,
+            ...(business.registration.email
+              ? { email: business.registration.email }
+              : {}),
+          },
+          callbacks: { finish: config.MIDTRANS_FINISH_URL },
+          credit_card: { secure: true },
+          expiry: { unit: 'minutes', duration: 60 },
+        });
+        await client.query(
+          "UPDATE orders SET redirect_url=$2,status=CASE WHEN status='creating' THEN 'pending' ELSE status END WHERE order_id=$1",
+          [current.order_id, redirectUrl],
+        );
+        return { orderId: current.order_id, redirectUrl, amount: current.amount };
       });
-      await db.billing.query(
-        "UPDATE orders SET redirect_url=$2,status=CASE WHEN status='creating' THEN 'pending' ELSE status END WHERE order_id=$1",
-        [order.order_id, redirectUrl],
-      );
-      return { orderId: order.order_id, redirectUrl, amount: order.amount };
+      if (result.status) {
+        await applyNotification(result.status);
+        return fail(409, 'Status pembayaran sudah diperbarui. Periksa status untuk melanjutkan.');
+      }
+      return result;
     },
   );
   async function applyNotification(status: MidtransStatus) {
