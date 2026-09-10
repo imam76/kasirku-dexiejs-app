@@ -5,6 +5,10 @@ import {
   requiresSupabaseUser,
 } from '../../services/billing/supabase/functions/billing/index';
 import { isPublicBillingRoute } from '../../services/billing/supabase/functions/billing-public/index';
+import {
+  billingPath,
+  canReturnBody,
+} from '../../services/billing/supabase/functions/_shared/billing-runtime';
 
 const publishableKey = 'sb_publishable_billing_test_key';
 const keyId = 'billing-test-key';
@@ -68,6 +72,53 @@ describe('@supabase/server billing Edge Function auth', () => {
       ),
     ).toBe(true);
     expect(isPublicBillingRoute(publicRequest('GET', '/v1/status'))).toBe(false);
+  });
+
+  test('normalizes external and Supabase internal function paths', () => {
+    expect(
+      billingPath(
+        'https://billing-test.supabase.co/functions/v1/billing/v1/status?refresh=1',
+        'billing',
+      ),
+    ).toBe('/v1/status?refresh=1');
+    expect(
+      billingPath(
+        'http://billing/billing/v1/registrations',
+        'billing',
+      ),
+    ).toBe('/v1/registrations');
+    expect(
+      billingPath(
+        'http://billing-public/billing-public/health',
+        'billing-public',
+      ),
+    ).toBe('/health');
+    expect(
+      billingPath(
+        'http://billing-public/billing-public/health',
+        'billing',
+      ),
+    ).toBe('/billing-public/health');
+
+    expect(
+      requiresSupabaseUser({
+        method: 'GET',
+        url: 'http://billing/billing/v1/status',
+      }),
+    ).toBe(true);
+    expect(
+      isPublicBillingRoute({
+        method: 'GET',
+        url: 'http://billing-public/billing-public/health',
+      }),
+    ).toBe(true);
+  });
+
+  test('does not attach a body to bodyless Fetch API responses', () => {
+    expect(canReturnBody('OPTIONS', 204)).toBe(false);
+    expect(canReturnBody('GET', 204)).toBe(false);
+    expect(canReturnBody('HEAD', 200)).toBe(false);
+    expect(canReturnBody('GET', 200)).toBe(true);
   });
 
   test('accepts a verified Supabase user JWT and returns its subject', async () => {

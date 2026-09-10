@@ -25,13 +25,20 @@ async function getRuntime() {
 
 export function billingPath(requestUrl: string, functionName: string) {
   const url = new URL(requestUrl);
-  const marker = `/functions/v1/${functionName}`;
-  const markerIndex = url.pathname.indexOf(marker);
-  const pathname =
-    markerIndex >= 0
-      ? url.pathname.slice(markerIndex + marker.length) || '/'
-      : url.pathname;
+  const marker = [`/functions/v1/${functionName}`, `/${functionName}`].find(
+    (candidate) =>
+      url.pathname === candidate || url.pathname.startsWith(`${candidate}/`),
+  );
+  const pathname = marker
+    ? url.pathname.slice(marker.length) || '/'
+    : url.pathname;
   return `${pathname}${url.search}`;
+}
+
+export function canReturnBody(method: string, status: number) {
+  return (
+    method.toUpperCase() !== 'HEAD' && ![204, 205, 304].includes(status)
+  );
 }
 
 export async function forwardToBilling(
@@ -67,8 +74,11 @@ export async function forwardToBilling(
       headers.set(name, String(value));
     }
   }
-  return new Response(response.body, {
-    status: response.statusCode,
-    headers,
-  });
+  return new Response(
+    canReturnBody(method, response.statusCode) ? response.body : null,
+    {
+      status: response.statusCode,
+      headers,
+    },
+  );
 }

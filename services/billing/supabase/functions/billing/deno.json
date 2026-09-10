@@ -6,7 +6,8 @@
   "imports": {
     "@fastify/cors": "npm:@fastify/cors@11.3.0",
     "@fastify/rate-limit": "npm:@fastify/rate-limit@11.2.0",
-    "@supabase/server": "npm:@supabase/server@1.6.0",
+    "@supabase/server/core": "npm:@supabase/server@1.6.0/core",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.116.0",
     "fastify": "npm:fastify@5.12.3",
     "pg": "npm:pg@8.23.0",
     "zod": "npm:zod@4.3.6"

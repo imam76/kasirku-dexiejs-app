@@ -1,7 +1,3 @@
-import {
-  createSupabaseContext,
-  type SupabaseEnv,
-} from '@supabase/server';
 import { AUTH_USER_HEADER } from '../../../app.ts';
 import {
   billingPath,
@@ -11,6 +7,8 @@ import {
 type EdgeEnvironment = typeof globalThis & {
   Deno?: { env: { toObject(): Record<string, string> } };
 };
+type VerifyAuth = (typeof import('@supabase/server/core'))['verifyAuth'];
+type SupabaseEnv = NonNullable<Parameters<VerifyAuth>[1]['env']>;
 
 const USER_ROUTES = new Set([
   'POST /v1/registrations',
@@ -52,7 +50,8 @@ export async function authorizeSupabaseUser(
   request: Request,
   env?: Partial<SupabaseEnv>,
 ): Promise<{ userId: string } | Response> {
-  const { data, error } = await createSupabaseContext(request, {
+  const { verifyAuth } = await import('@supabase/server/core');
+  const { data, error } = await verifyAuth(request, {
     auth: 'user',
     ...(env ? { env } : {}),
   });
