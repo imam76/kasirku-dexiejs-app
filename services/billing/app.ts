@@ -8,20 +8,20 @@ import {
   getPlan,
   getPlanModules,
   PLAN_NAMES,
-} from '../../src/onboarding/catalog.ts';
+} from './domain/catalog.ts';
 import {
   addBillingMonth,
   checkoutSchema,
   consentSchema,
   registerBillingSchema,
   type Access,
-} from '../../src/onboarding/contract.ts';
+} from './domain/contract.ts';
 import {
   TERMS_TEXT,
   TERMS_VERSION,
   PRIVACY_TEXT,
   PRIVACY_VERSION,
-} from '../../src/onboarding/legal.ts';
+} from './domain/legal.ts';
 import type { BillingConfig } from './config.ts';
 import type { Databases } from './db.ts';
 import {
