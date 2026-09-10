@@ -1,16 +1,14 @@
-import { useCallback, useState } from 'react';
-import { Alert, App, Button, Input, Typography } from 'antd';
-import { Check, Database, ServerCog } from 'lucide-react';
-import { postgresAdapter, type PostgresHealth } from '@/services/postgresAdapter';
 import { getStoredHostIdentity, saveHostIdentity } from '@/services/hostIdentityService';
 import {
   countUnsyncedQueueItems,
   hasLocalBusinessData,
   resetLocalDatabase,
 } from '@/services/localDatabaseResetService';
+import { postgresAdapter, type PostgresHealth } from '@/services/postgresAdapter';
 import { resolveHostSwitchDecision } from '@/utils/hostSwitch';
-
-const { Text, Title } = Typography;
+import { Alert, App, Button, Input } from 'antd';
+import { Check, Database } from 'lucide-react';
+import { useCallback, useState } from 'react';
 
 interface DatabaseParts {
   host: string;
@@ -176,20 +174,6 @@ export const HostDatabaseSetup = ({
   return (
     <div className={embedded ? '' : 'flex min-h-[100dvh] items-center justify-center bg-gray-50 p-4'}>
       <div className={embedded ? 'w-full' : 'w-full max-w-xl rounded-2xl border border-gray-100 bg-white p-6 shadow-sm'}>
-        <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white">
-            <ServerCog size={24} />
-          </div>
-          <div>
-            <Title level={3} className="!mb-0">
-              Setup Host Database
-            </Title>
-            <Text type="secondary">
-              Atur PostgreSQL pusat untuk sinkronisasi data antar perangkat.
-            </Text>
-          </div>
-        </div>
-
         {statusMessage && (
           <Alert
             className="mb-4"

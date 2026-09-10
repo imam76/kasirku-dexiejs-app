@@ -119,6 +119,13 @@ export function PlanPicker({
     </>
   );
 }
+const BUSINESS_TYPES = [
+  'Ritel / restoran',
+  'Perdagangan umum',
+  'Produksi',
+  'Koperasi',
+  'Lainnya',
+];
 const emptyRegistration: Registration = {
   owner: '',
   business: '',
@@ -130,9 +137,14 @@ const emptyRegistration: Registration = {
 const DRAFT_KEY = 'frayukti-onboarding-draft-v1';
 function readDraft(): Registration {
   try {
-    return registrationSchema.parse(
+    const draft = registrationSchema.parse(
       JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '{}'),
     );
+    // Older drafts may contain free text; require a selection without losing other fields.
+    return {
+      ...draft,
+      businessType: BUSINESS_TYPES.includes(draft.businessType) ? draft.businessType : '',
+    };
   } catch {
     return emptyRegistration;
   }
@@ -363,7 +375,7 @@ export function OnboardingWizard({ onJoinHost }: { onJoinHost?: () => void }) {
                 <Form
                   form={form}
                   layout="vertical"
-                  initialValues={registration}
+                  initialValues={{ ...registration, businessType: registration.businessType || undefined }}
                   onFinish={() => void next()}
                   requiredMark="optional"
                 >
@@ -382,9 +394,18 @@ export function OnboardingWizard({ onJoinHost }: { onJoinHost?: () => void }) {
                         key={name}
                         name={name}
                         label={label}
-                        rules={[{ required, message: `${label} wajib diisi.` }]}
+                        rules={name === 'businessType'
+                          ? [{ required: true, type: 'enum', enum: BUSINESS_TYPES, message: 'Pilih jenis usaha dari daftar.' }]
+                          : [{ required, message: `${label} wajib diisi.` }]}
                       >
-                        <Input
+                        {name === 'businessType' ? (
+                          <Select
+                            size="large"
+                            placeholder="Pilih jenis usaha"
+                            virtual={false}
+                            options={BUSINESS_TYPES.map((value) => ({ value, label: value }))}
+                          />
+                        ) : <Input
                           size="large"
                           autoComplete={
                             name === 'owner'
@@ -407,7 +428,7 @@ export function OnboardingWizard({ onJoinHost }: { onJoinHost?: () => void }) {
                                 ? 250
                                 : 100
                           }
-                        />
+                        />}
                       </Form.Item>
                     ))}
                   </div>

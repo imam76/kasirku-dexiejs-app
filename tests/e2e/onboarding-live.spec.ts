@@ -8,7 +8,8 @@ async function registerTrial(page: Page) {
   await page.getByLabel('Nama pemilik').fill('Pemilik Sandbox');
   await page.getByLabel('Nama usaha', { exact: true }).fill('Usaha Sandbox');
   await page.getByLabel('Nomor WhatsApp').fill('081234567890');
-  await page.getByLabel('Jenis usaha', { exact: true }).fill('Ritel');
+  await page.getByRole('combobox', { name: 'Jenis usaha', exact: true }).click();
+  await page.getByRole('option', { name: 'Ritel / restoran', exact: true }).click();
   await page.getByRole('button', { name: 'Lanjut', exact: true }).click();
   await expect(page.getByRole('radio', { name: /POS Ritel/ })).toHaveAttribute(
     'aria-checked',

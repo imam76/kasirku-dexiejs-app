@@ -52,14 +52,10 @@ export const JoinExistingHostModal = ({ open, onClose, onJoined }: JoinExistingH
       title={
         <div className="flex items-center gap-2">
           <Server size={18} className="text-blue-600" />
-          <span>Hubungkan ke Host yang Sudah Disetup</span>
+          <span>Hubungkan ke Host yang Sudah Ada</span>
         </div>
       }
     >
-      <p className="mb-4 text-sm text-gray-500">
-        Masukkan alamat database host yang sudah dipakai perangkat lain di toko ini. Module dan
-        konfigurasi akan otomatis mengikuti host — tidak perlu license key lagi di perangkat ini.
-      </p>
       <HostDatabaseSetup embedded health={null} onConfigured={handleConfigured} />
       {isChecking && (
         <p className="mt-3 text-xs text-gray-400">Memeriksa konfigurasi di host...</p>
