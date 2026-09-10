@@ -295,9 +295,7 @@ test('checkout stays trial until billing activation, then a new installation rec
     orders: [] as Record<string, unknown>[],
   };
   await page.unroute('**/v1/**');
-  const primaryAuth = anonymousAuthResponse(
-    '8870f7f2-a1c4-4d29-99dd-87c75c410010',
-  );
+  const primaryAuth = anonymousAuthResponse(crypto.randomUUID());
   await page.route('**/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/auth/v1/signup')
@@ -370,9 +368,7 @@ test('checkout stays trial until billing activation, then a new installation rec
     viewport: { width: 390, height: 844 },
   });
   const newPage = await other.newPage();
-  const recoveryAuth = anonymousAuthResponse(
-    '8870f7f2-a1c4-4d29-99dd-87c75c410011',
-  );
+  const recoveryAuth = anonymousAuthResponse(crypto.randomUUID());
   await newPage.route('**/v1/**', (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/auth/v1/signup')

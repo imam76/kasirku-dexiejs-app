@@ -121,9 +121,7 @@ test('a failed checkout refreshes the pending order and retries using the same r
     redirectUrl: null as string | null,
   };
   await page.unroute('**/v1/**');
-  const auth = anonymousAuthResponse(
-    '8870f7f2-a1c4-4d29-99dd-87c75c410012',
-  );
+  const auth = anonymousAuthResponse(crypto.randomUUID());
   await page.route('**/v1/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/auth/v1/signup') return route.fulfill({ json: auth });

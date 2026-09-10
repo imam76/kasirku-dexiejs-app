@@ -16,6 +16,8 @@ dist-ssr
 *.local
 playwright-report
 test-results
+services/billing/supabase/.temp/
+.claude/
 
 # Editor directories and files
 .vscode/*
