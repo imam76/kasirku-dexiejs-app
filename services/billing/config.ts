@@ -1,10 +1,19 @@
 import { z } from 'zod';
 
+const postgresUrl = z.string().regex(/^postgres(?:ql)?:\/\//);
 const schema = z.object({
   BILLING_HOST: z.string().default('127.0.0.1'),
   BILLING_PORT: z.coerce.number().int().min(1).max(65535).default(8787),
-  BILLING_DATABASE_URL: z.string().startsWith('postgresql://'),
-  LEADS_DATABASE_URL: z.string().startsWith('postgresql://'),
+  BILLING_DATABASE_URL: postgresUrl,
+  LEADS_DATABASE_URL: postgresUrl,
+  BILLING_DATABASE_SCHEMA: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{0,62}$/)
+    .default('public'),
+  LEADS_DATABASE_SCHEMA: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{0,62}$/)
+    .default('public'),
   BILLING_ALLOWED_ORIGINS: z
     .string()
     .default(
@@ -22,16 +31,41 @@ const schema = z.object({
 });
 export type BillingConfig = z.infer<typeof schema>;
 export function readConfig(env = process.env): BillingConfig {
-  const parsed = schema.safeParse(env);
+  const sharedDatabaseUrl = env.SUPABASE_DB_URL?.trim();
+  const parsed = schema.safeParse({
+    ...env,
+    BILLING_DATABASE_URL:
+      env.BILLING_DATABASE_URL?.trim() || sharedDatabaseUrl,
+    LEADS_DATABASE_URL: env.LEADS_DATABASE_URL?.trim() || sharedDatabaseUrl,
+    BILLING_DATABASE_SCHEMA:
+      env.BILLING_DATABASE_SCHEMA?.trim() ||
+      (sharedDatabaseUrl ? 'billing_private' : undefined),
+    LEADS_DATABASE_SCHEMA:
+      env.LEADS_DATABASE_SCHEMA?.trim() ||
+      (sharedDatabaseUrl ? 'leads_private' : undefined),
+  });
   if (!parsed.success)
     throw new Error(
       `Konfigurasi billing belum valid: ${parsed.error.issues.map((i) => i.path.join('.')).join(', ')}`,
     );
+  const billingUrl = new URL(parsed.data.BILLING_DATABASE_URL);
+  const leadsUrl = new URL(parsed.data.LEADS_DATABASE_URL);
+  const sameDatabase =
+    billingUrl.hostname === leadsUrl.hostname &&
+    billingUrl.port === leadsUrl.port &&
+    billingUrl.pathname === leadsUrl.pathname;
   if (
-    new URL(parsed.data.BILLING_DATABASE_URL).pathname ===
-    new URL(parsed.data.LEADS_DATABASE_URL).pathname
-  ) {
-    throw new Error('Database billing dan leads harus terpisah.');
-  }
+    sameDatabase &&
+    parsed.data.BILLING_DATABASE_SCHEMA === parsed.data.LEADS_DATABASE_SCHEMA
+  )
+    throw new Error('Database atau schema billing dan leads harus terpisah.');
+  if (
+    sharedDatabaseUrl &&
+    (parsed.data.BILLING_DATABASE_SCHEMA !== 'billing_private' ||
+      parsed.data.LEADS_DATABASE_SCHEMA !== 'leads_private')
+  )
+    throw new Error(
+      'Supabase billing hanya boleh memakai schema billing_private dan leads_private.',
+    );
   return parsed.data;
 }

@@ -51,13 +51,20 @@ sandbox. Tidak ada perubahan pada area ini dalam perbaikan nomor 1 dan 4.
 
 ## 3. Konfigurasi rilis dan staging belum lengkap
 
-- [ ] Workflow release mengisi `VITE_BILLING_API_URL` dengan URL HTTPS yang benar.
-- [ ] Build rilis menolak konfigurasi billing kosong atau fallback localhost.
+- [x] Workflow release mengisi `VITE_BILLING_API_URL` dari project ref Supabase billing.
+- [x] Build rilis menyertakan publishable key billing dan menolak project
+  ref/URL/key yang kosong atau tidak valid.
 - [ ] Layanan billing staging dan webhook HTTPS publik tersedia dan teruji.
 - [ ] Origin desktop/Android dan alur kembali dari browser eksternal diuji.
 
-Workflow `.github/workflows/release.yml` belum mengisi URL billing; fallback
-frontend masih `http://localhost:8787`.
+Keputusan staging: gunakan satu project Supabase Free khusus billing dan lead.
+Data ditempatkan pada schema privat `billing_private` dan `leads_private` melalui
+subproject `services/billing/supabase`; migrasi Supabase/tabel POS utama tidak
+ikut dalam workflow ini. Edge Function memakai logika yang sama dengan server
+Fastify dan menyediakan endpoint HTTPS serta webhook publik. Workflow deploy,
+migration, secret Midtrans sandbox, dan health check sudah ditambahkan. Project
+cloud dan GitHub secret belum disediakan, jadi item staging nyata tetap terbuka.
+Lihat [panduan Supabase billing staging](SUPABASE-BILLING-STAGING.md).
 
 ## 4. Checkout gagal meninggalkan order creating
 
@@ -117,8 +124,9 @@ Hasil 2026-09-10:
 | Pemeriksaan | Hasil |
 | --- | --- |
 | `bun run billing:check` | Lulus |
-| `bun run test:billing` | 14 tes lulus; PostgreSQL lokal, schema uji terpisah, Midtrans dimock |
-| `bun test tests/unit/onboarding-access.test.ts tests/unit/auth-user-access.test.ts` | 11 tes lulus |
+| `bun run test:billing` | 19 tes lulus; termasuk satu database, pembatasan schema public, dan migrasi Supabase |
+| Deno check + health adapter Edge Function | Lulus; entrypoint memanggil Fastify melalui runtime Deno dan PostgreSQL lokal |
+| `bun run test:unit` | 432 tes lulus |
 | Playwright Chromium: `onboarding-live.spec.ts` dan `onboarding-permissions.spec.ts` | 7 tes lulus |
 | ESLint pada file onboarding/billing dan tes baru yang diubah | Lulus |
 | `bun run build` | Lulus; warning aset beep dan ukuran chunk masih ada |
@@ -130,3 +138,7 @@ belum menjalankan APK/native atau pembayaran ke Midtrans sesungguhnya.
 
 Issue tetap terbuka sampai pekerjaan nomor 2, 3, dan 5 serta verifikasi staging
 selesai. Tidak ada pembayaran production atau deployment dalam pekerjaan ini.
+
+Catatan infrastruktur: Supabase Free dipakai untuk staging awal. Tier ini belum
+memenuhi kebutuhan backup otomatis/PITR, retensi log, dan SLA billing production;
+keputusan upgrade atau penyedia production lain tetap bagian dari go/no-go.

@@ -58,6 +58,14 @@ jobs:
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
+      - name: Validate Supabase billing endpoint
+        shell: bash
+        env:
+          SUPABASE_BILLING_PROJECT_ID: ${{ vars.SUPABASE_BILLING_PROJECT_ID }}
+          VITE_BILLING_API_URL: https://${{ vars.SUPABASE_BILLING_PROJECT_ID }}.supabase.co/functions/v1/billing
+          VITE_BILLING_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_BILLING_PUBLISHABLE_KEY }}
+        run: bun run billing:release-env:check
+
       # --- Buat .env dari GitHub Secrets (JANGAN commit .env asli) ---
       # Vite hanya meng-embed variabel berawalan VITE_ ke dalam frontend.
       - name: Create root .env from secrets
@@ -67,6 +75,8 @@ jobs:
           VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_SETUP_HASH_KEY=${{ secrets.VITE_SETUP_HASH_KEY }}
+          VITE_BILLING_API_URL=https://${{ vars.SUPABASE_BILLING_PROJECT_ID }}.supabase.co/functions/v1/billing
+          VITE_BILLING_SUPABASE_PUBLISHABLE_KEY=${{ vars.SUPABASE_BILLING_PUBLISHABLE_KEY }}
           TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
           EOF
@@ -130,6 +140,8 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_SETUP_HASH_KEY: ${{ secrets.VITE_SETUP_HASH_KEY }}
+          VITE_BILLING_API_URL: https://${{ vars.SUPABASE_BILLING_PROJECT_ID }}.supabase.co/functions/v1/billing
+          VITE_BILLING_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_BILLING_PUBLISHABLE_KEY }}
         with:
           tagName: app-v__VERSION__
           releaseName: "frayukti v__VERSION__"

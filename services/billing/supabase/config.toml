@@ -1,0 +1,8 @@
+project_id = "frayukti"
+
+[functions.billing]
+# @supabase/server verifies the publishable API key for application routes.
+# Health, payment finish, CORS preflight, and the Midtrans webhook stay public;
+# protected business routes additionally validate Frayukti's installation token.
+verify_jwt = false
+entrypoint = "./functions/billing/index.ts"

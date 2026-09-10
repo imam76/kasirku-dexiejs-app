@@ -68,7 +68,12 @@ export function buildApp(
     bodyLimit: 32_768,
     logger: {
       level: 'info',
-      redact: ['req.headers.authorization', 'req.body', 'res.headers'],
+      redact: [
+        'req.headers.authorization',
+        'req.headers.apikey',
+        'req.body',
+        'res.headers',
+      ],
     },
   });
   app.register(cors, {
@@ -155,9 +160,9 @@ export function buildApp(
   });
   app.get('/payment/finish', async (_request, reply) =>
     reply
-      .type('text/html')
+      .type('text/plain; charset=utf-8')
       .send(
-        '<!doctype html><html lang="id"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Frayukti</title><body style="font:18px system-ui;max-width:560px;margin:64px auto;padding:24px"><h1>Kembali ke Frayukti</h1><p>Buka aplikasi lalu pilih Periksa status. Akses aktif setelah pembayaran terverifikasi. Halaman ini tidak mengonfirmasi pembayaran.</p></body></html>',
+        'Kembali ke Frayukti\n\nBuka aplikasi lalu pilih Periksa status. Akses aktif setelah pembayaran terverifikasi. Halaman ini tidak mengonfirmasi pembayaran.',
       ),
   );
   app.post(

@@ -3,6 +3,8 @@
 Implementasi utama memakai `src/onboarding/` dan layanan terpisah
 `services/billing/`. Preview di `/onboarding-preview.html` tetap merupakan
 simulasi; onboarding sesungguhnya dibuka di `/` pada instalasi baru.
+Staging memakai Supabase khusus billing/lead sesuai
+[panduan Supabase billing staging](SUPABASE-BILLING-STAGING.md).
 
 ## Menjalankan
 
@@ -177,6 +179,12 @@ Keputusan implementasi untuk sandbox (perlu keputusan bisnis sebelum produksi):
 
 ## Kontrak endpoint
 
+Saat dipanggil melalui Supabase Edge Function, semua endpoint aplikasi pada
+tabel di bawah juga wajib membawa publishable key pada header `apikey`.
+`@supabase/server` memvalidasi key proyek sebelum Fastify menjalankan validasi
+akses domain. Health check, halaman payment finish, preflight CORS, dan webhook
+Midtrans tidak memakai gate publishable key.
+
 | Endpoint | Akses | Fungsi |
 | --- | --- | --- |
 | `POST /v1/registrations` | Secret instalasi pada body registrasi | Registrasi idempoten dan sinkronisasi lead |
@@ -187,9 +195,12 @@ Keputusan implementasi untuk sandbox (perlu keputusan bisnis sebelum produksi):
 | `POST /v1/midtrans/notifications` | Signature + status API Midtrans | Aktivasi idempoten dan audit status |
 
 Body registrasi/checkout memakai schema ketat; field transaksi bisnis ditolak.
-Lead tersimpan di database `leads`; identitas langganan, token hash, order,
-entitlement dan audit webhook/pemulihan di `billing`. Kegagalan database lead
-setelah identitas tersimpan dapat dicoba ulang tanpa membuat usaha kedua.
+Pada pengembangan lokal, lead tersimpan di database `leads`; identitas
+langganan, token hash, order, entitlement dan audit webhook/pemulihan di
+`billing`. Pada Supabase staging, pemisahan yang sama memakai schema privat
+`leads_private` dan `billing_private` dalam satu project khusus billing. Tabel
+transaksi POS tidak masuk project ini. Kegagalan penyimpanan lead setelah
+identitas tersimpan dapat dicoba ulang tanpa membuat usaha kedua.
 
 ## Operasional dan pengujian
 
@@ -237,7 +248,8 @@ tampak sudah membayar. Untuk notifikasi gagal, gunakan fasilitas kirim ulang
 notifikasi Midtrans setelah endpoint diperbaiki. Notifikasi sukses yang berulang
 aman karena order dikunci dalam transaksi PostgreSQL dan memiliki `activated_at`.
 
-Sebelum produksi: tetapkan kontak/identitas penyedia, tinjauan hukum dan PSE,
+Supabase Free hanya dipakai staging; sebelum production diperlukan project dan
+kebijakan backup/SLA yang sesuai. Sebelum produksi: tetapkan kontak/identitas penyedia, tinjauan hukum dan PSE,
 domain, pajak, kebijakan refund/perubahan paket, pemulihan kode hilang, kontrak
 infrastruktur Jakarta, akun DB terpisah dengan hak minimum, backup terenkripsi
 di Indonesia, uji restore, serta job retensi lead/billing. Naskah di

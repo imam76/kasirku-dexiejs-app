@@ -21,9 +21,21 @@ import {
   saveSetupConfig,
 } from '@/services/setupKeyService';
 
-const meta = import.meta as unknown as { env?: Record<string, string> };
+const meta = import.meta as unknown as {
+  env?: Record<string, string | boolean | undefined>;
+};
+const rawBillingUrl = meta.env?.VITE_BILLING_API_URL;
+const configuredBillingUrl =
+  typeof rawBillingUrl === 'string' ? rawBillingUrl.trim() : '';
+const rawBillingPublishableKey =
+  meta.env?.VITE_BILLING_SUPABASE_PUBLISHABLE_KEY;
+const billingPublishableKey =
+  typeof rawBillingPublishableKey === 'string'
+    ? rawBillingPublishableKey.trim()
+    : '';
 export const BILLING_URL = (
-  meta.env?.VITE_BILLING_API_URL ?? 'http://localhost:8787'
+  configuredBillingUrl ||
+  (meta.env?.DEV === true ? 'http://localhost:8787' : '')
 ).replace(/\/$/, '');
 async function api(
   path: string,
@@ -32,6 +44,10 @@ async function api(
   method = 'POST',
   timeoutMs = 12_000,
 ) {
+  if (!BILLING_URL)
+    throw new Error(
+      'URL layanan billing belum dikonfigurasi pada build aplikasi.',
+    );
   const url = new URL(BILLING_URL);
   if (
     url.protocol !== 'https:' &&
@@ -43,6 +59,7 @@ async function api(
     signal: AbortSignal.timeout(timeoutMs),
     headers: {
       'Content-Type': 'application/json',
+      ...(billingPublishableKey ? { apikey: billingPublishableKey } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),

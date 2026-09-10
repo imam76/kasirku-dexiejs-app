@@ -6,7 +6,7 @@ import { buildApp } from './app.ts';
 const config = readConfig();
 const db = createDatabases(config);
 try {
-  await migrate(db);
+  await migrate(db, config);
   const app = buildApp(config, db, createMidtrans(config));
   app.addHook('onClose', async () => {
     await Promise.all([db.billing.end(), db.leads.end()]);
@@ -18,7 +18,7 @@ try {
     });
 } catch {
   console.error(
-    'Billing gagal dimulai. Periksa konfigurasi env dan koneksi kedua database PostgreSQL.',
+    'Billing gagal dimulai. Periksa env dan koneksi database/schema billing serta leads.',
   );
   await Promise.all([db.billing.end(), db.leads.end()]);
   process.exitCode = 1;

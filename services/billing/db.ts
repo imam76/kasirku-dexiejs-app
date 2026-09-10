@@ -1,22 +1,52 @@
 import pg from 'pg';
 import type { BillingConfig } from './config.ts';
 
-export function createDatabases(config: BillingConfig) {
+function poolConfig(connectionString: string, schema: string, max: number) {
   return {
-    billing: new pg.Pool({
-      connectionString: config.BILLING_DATABASE_URL,
-      max: 5,
-      connectionTimeoutMillis: 5000,
-    }),
-    leads: new pg.Pool({
-      connectionString: config.LEADS_DATABASE_URL,
-      max: 3,
-      connectionTimeoutMillis: 5000,
-    }),
+    connectionString,
+    max,
+    connectionTimeoutMillis: 5000,
+    // Every pool is confined to one validated schema name.
+    options: `-c search_path=${schema}`,
+  };
+}
+
+export function createDatabases(config: BillingConfig) {
+  const sharedDatabase =
+    config.BILLING_DATABASE_URL === config.LEADS_DATABASE_URL;
+  return {
+    billing: new pg.Pool(
+      poolConfig(
+        config.BILLING_DATABASE_URL,
+        config.BILLING_DATABASE_SCHEMA,
+        sharedDatabase ? 1 : 3,
+      ),
+    ),
+    leads: new pg.Pool(
+      poolConfig(
+        config.LEADS_DATABASE_URL,
+        config.LEADS_DATABASE_SCHEMA,
+        sharedDatabase ? 1 : 2,
+      ),
+    ),
   };
 }
 export type Databases = ReturnType<typeof createDatabases>;
-export async function migrate({ billing, leads }: Databases) {
+export async function migrate(
+  { billing, leads }: Databases,
+  config?: Pick<
+    BillingConfig,
+    'BILLING_DATABASE_SCHEMA' | 'LEADS_DATABASE_SCHEMA'
+  >,
+) {
+  if (config) {
+    await billing.query(
+      `CREATE SCHEMA IF NOT EXISTS ${config.BILLING_DATABASE_SCHEMA}`,
+    );
+    await leads.query(
+      `CREATE SCHEMA IF NOT EXISTS ${config.LEADS_DATABASE_SCHEMA}`,
+    );
+  }
   await billing.query(`
     CREATE TABLE IF NOT EXISTS businesses (
       id uuid PRIMARY KEY, installation_id uuid UNIQUE NOT NULL,
