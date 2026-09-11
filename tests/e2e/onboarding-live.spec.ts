@@ -277,6 +277,85 @@ test('paid offline cache survives unavailable billing and queues consent withdra
   await expect(expiryReminder).toHaveCount(0);
 });
 
+test('queued consent retries do not block checkout or a paid activation', async ({ page }) => {
+  await page.route('**/v1/**', (route) => route.abort());
+  await page.goto('/');
+  await registerTrial(page);
+  const trial = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('frayukti-subscription-v1')!),
+  );
+  const auth = anonymousAuthResponse(crypto.randomUUID());
+  const server = {
+    businessId: crypto.randomUUID(),
+    registration: trial.registration,
+    access: trial.access,
+    orders: [] as Record<string, unknown>[],
+  };
+  let consentUnavailable = true;
+  const sentPreferences: boolean[] = [];
+  await page.unroute('**/v1/**');
+  await page.route('**/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/auth/v1/signup') return route.fulfill({ json: auth });
+    if (path === '/auth/v1/user') return route.fulfill({ json: auth.user });
+    if (path === '/v1/registrations')
+      return route.fulfill({ json: { businessId: server.businessId } });
+    if (path === '/v1/status') return route.fulfill({ json: server });
+    if (path === '/v1/consent') {
+      sentPreferences.push(route.request().postDataJSON().marketing);
+      return route.fulfill(consentUnavailable
+        ? { status: 503, json: { error: 'Layanan billing sementara tidak tersedia. Coba lagi.' } }
+        : { json: { saved: true } });
+    }
+    if (path === '/v1/checkouts') {
+      const order = {
+        orderId: 'FRY-consent-retry', plan: 'pos', amount: 149000,
+        status: 'pending', createdAt: new Date().toISOString(),
+        accessStart: null, accessEnd: null,
+        redirectUrl: 'https://app.sandbox.midtrans.com/snap/v4/redirection/consent-retry',
+      };
+      server.orders = [order];
+      return route.fulfill({ json: order });
+    }
+    return route.abort();
+  });
+  await openSubscription(page);
+  await page.getByRole('button', { name: 'Periksa status', exact: true }).click();
+  await expect.poll(() => page.evaluate(() =>
+    JSON.parse(localStorage.getItem('frayukti-subscription-v1')!).leadPending,
+  )).toBe(false);
+
+  await page.getByRole('checkbox', { name: /Izinkan follow-up/ }).check();
+  await expect(page.getByText('Perubahan consent menunggu sinkronisasi.')).toBeVisible();
+  await page.getByRole('button', { name: 'Siapkan pembayaran', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Buka Midtrans Sandbox' })).toBeVisible();
+  expect(server.orders).toHaveLength(1);
+
+  server.access = {
+    ...trial.access, kind: 'subscription', start: new Date().toISOString(),
+    end: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+  };
+  server.orders[0] = {
+    ...server.orders[0], status: 'paid',
+    accessStart: server.access.start, accessEnd: server.access.end,
+  };
+  await page.getByRole('button', { name: 'Periksa status', exact: true }).click();
+  await expect(page.getByText('Langganan aktif', { exact: true })).toBeVisible();
+  await expect(page.getByText('Perubahan consent menunggu sinkronisasi.')).toBeVisible();
+
+  consentUnavailable = false;
+  await page.getByRole('checkbox', { name: /Izinkan follow-up/ }).uncheck();
+  await expect(page.getByText('Perubahan consent menunggu sinkronisasi.')).toHaveCount(0);
+  expect(sentPreferences).toContain(true);
+  expect(sentPreferences.at(-1)).toBe(false);
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('frayukti-subscription-v1')!),
+  );
+  expect(saved.consentPending).toBe(false);
+  expect(saved.consent.marketing).toBe(false);
+  expect(saved.access).toEqual(server.access);
+});
+
 test('checkout stays trial until billing activation, then a new installation recovers without a local role', async ({
   page,
   browser,

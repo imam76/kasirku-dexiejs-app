@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "services/billing/**"
+      - "tests/edge/**"
       - "src/onboarding/catalog.ts"
       - "src/onboarding/contract.ts"
       - "src/onboarding/legal.ts"
@@ -47,6 +48,9 @@ jobs:
 
       - name: Check billing Edge Function
         run: deno check services/billing/supabase/functions/billing/index.ts services/billing/supabase/functions/billing-public/index.ts
+
+      - name: Test Midtrans in Edge runtime
+        run: deno test --no-lock --config services/billing/supabase/functions/billing/deno.json tests/edge/midtrans.test.ts
 
       - name: Validate staging inputs
         shell: bash

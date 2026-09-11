@@ -74,8 +74,29 @@ Pemeriksaan tanpa deploy:
 ```bash
 bun run billing:check
 bun run billing:edge:check
+bun run billing:edge:test
 bun run test:billing
 ```
+
+## Diagnosis checkout berhenti pada `creating`
+
+Health yang berhasil hanya memeriksa koneksi database. Jika checkout gagal,
+status pembayaran menjadi `unavailable`, dan webhook juga merespons HTTP 500,
+periksa log Edge Function `billing` dan `billing-public`.
+
+Adapter Midtrans wajib mengimpor `Buffer` dari `node:buffer`. Mengandalkan global
+Node dapat menghasilkan `ReferenceError: Buffer is not defined` di bundle Edge,
+walaupun tes Bun/Node atau Deno CLI yang lebih baru lulus. Tes
+`billing:edge:test` menjalankan checkout, status, dan signature tanpa global
+tersebut; workflow staging menjalankannya sebelum deploy.
+
+Setelah perbaikan adapter, deploy ulang **kedua** function karena keduanya
+menggunakan adapter yang sama. Order `creating` tetap disimpan: pilih
+**Lanjutkan checkout** untuk mencoba ulang dengan order ID yang sama.
+
+Kegagalan pengiriman preferensi komunikasi tetap menyimpan `consentPending`
+untuk dicoba lagi. Untuk usaha yang sudah terdaftar, antrean ini tidak
+menghalangi pembaruan akses berbayar atau pembuatan checkout.
 
 ## Membuat staging
 

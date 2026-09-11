@@ -192,13 +192,20 @@ async function sync(): Promise<BillingStatus | null> {
       await api('/v1/recovery', { recoveryCode: local.recoveryCode });
     }
   }
+  if (!sameIdentity()) return null;
   local = readSubscription()!;
   if (local.consentPending) {
     const sentAt = local.consent.marketingUpdatedAt;
-    await api('/v1/consent', local.consent, 'PATCH');
+    try {
+      await api('/v1/consent', local.consent, 'PATCH');
+      if (!sameIdentity()) return null;
+      if (readSubscription()?.consent.marketingUpdatedAt === sentAt)
+        updateSubscription({ consentPending: false });
+    } catch {
+      // Keep the preference queued for retry. A leads/consent outage must not
+      // block reading paid access or preparing a checkout for a registered business.
+    }
     if (!sameIdentity()) return null;
-    if (readSubscription()?.consent.marketingUpdatedAt === sentAt)
-      updateSubscription({ consentPending: false });
   }
   status ??= billingStatusSchema.parse(
     await api('/v1/status', undefined, 'GET'),

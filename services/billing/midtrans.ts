@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import { z } from 'zod';
 import type { BillingConfig } from './config.ts';
 
@@ -57,7 +58,7 @@ export function createMidtrans(config: BillingConfig, request = fetch) {
     if (!response.ok)
       throw Object.assign(
         new Error(
-          'Midtrans sementara tidak tersedia. Periksa status sebelum mencoba lagi.',
+          `Midtrans sementara tidak tersedia (HTTP ${response.status}). Periksa status sebelum mencoba lagi.`,
         ),
         { statusCode: 502 },
       );

@@ -13,6 +13,7 @@
     "billing:reconcile": "bun --env-file=services/billing/.env scripts/billing-reconcile.ts",
     "billing:release-env:check": "node scripts/validate-billing-release-env.mjs",
     "billing:edge:check": "bunx deno check services/billing/supabase/functions/billing/index.ts services/billing/supabase/functions/billing-public/index.ts",
+    "billing:edge:test": "bunx deno test --no-lock --config services/billing/supabase/functions/billing/deno.json tests/edge/midtrans.test.ts",
     "supabase:start": "bunx supabase --workdir services/billing start",
     "supabase:billing:serve": "bunx supabase --workdir services/billing functions serve",
     "dev": "vite --config vite.config.ts",

@@ -7,6 +7,29 @@ const required = {
   MIDTRANS_CLIENT_KEY: 'Mid-client-test',
 };
 
+describe('Midtrans access key config', () => {
+  const databases = {
+    BILLING_DATABASE_URL: 'postgres://localhost/billing',
+    LEADS_DATABASE_URL: 'postgres://localhost/leads',
+  };
+  test('accepts sandbox-prefixed keys and trims copied whitespace', () => {
+    const config = readConfig({
+      ...databases, ...required,
+      MIDTRANS_SERVER_KEY: ' SB-Mid-server-sandbox-test\n',
+      MIDTRANS_CLIENT_KEY: ' SB-Mid-client-sandbox-test\n',
+    });
+    expect(config.MIDTRANS_SERVER_KEY).toBe('SB-Mid-server-sandbox-test');
+    expect(config.MIDTRANS_CLIENT_KEY).toBe('SB-Mid-client-sandbox-test');
+  });
+  test('continues to accept existing Midtrans keys without the SB prefix', () => {
+    expect(readConfig({ ...databases, ...required }).MIDTRANS_SERVER_KEY).toBe(required.MIDTRANS_SERVER_KEY);
+  });
+  test('rejects empty keys and a client key in the server key field', () => {
+    for (const key of ['Mid-server-', 'SB-Mid-server-', 'Mid-client-test'])
+      expect(() => readConfig({ ...databases, ...required, MIDTRANS_SERVER_KEY: key })).toThrow('MIDTRANS_SERVER_KEY');
+  });
+});
+
 describe('billing database isolation config', () => {
   test('uses only private billing and lead schemas for Supabase', () => {
     const config = readConfig({

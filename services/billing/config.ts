@@ -20,9 +20,9 @@ const schema = z.object({
       'http://localhost:1420,http://127.0.0.1:1420,http://127.0.0.1:5173,tauri://localhost,http://tauri.localhost,https://tauri.localhost',
     ),
   MIDTRANS_ENVIRONMENT: z.literal('sandbox').default('sandbox'),
-  MIDTRANS_MERCHANT_ID: z.string().min(1),
-  MIDTRANS_SERVER_KEY: z.string().startsWith('Mid-server-'),
-  MIDTRANS_CLIENT_KEY: z.string().startsWith('Mid-client-'),
+  MIDTRANS_MERCHANT_ID: z.string().trim().min(1),
+  MIDTRANS_SERVER_KEY: z.string().trim().regex(/^(?:SB-)?Mid-server-\S+$/),
+  MIDTRANS_CLIENT_KEY: z.string().trim().regex(/^(?:SB-)?Mid-client-\S+$/),
   MIDTRANS_NOTIFICATION_URL: z
     .union([z.literal(''), z.url().startsWith('https://')])
     .default(''),

@@ -85,9 +85,10 @@ export function buildApp(
     methods: ['GET', 'POST', 'PATCH'],
   });
   app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     const err = error as Error & { statusCode?: number };
     const status = error instanceof ZodError ? 400 : (err.statusCode ?? 500);
+    if (status >= 500) request.log.error({ err }, 'Billing request failed');
     reply.status(status).send({
       error:
         error instanceof ZodError
@@ -308,7 +309,11 @@ export function buildApp(
           ? 'verified'
           : 'waiting';
         business = await authenticate(authUserId);
-      } catch {
+      } catch (error) {
+        request.log.warn(
+          { err: error, orderId: pending.rows[0].order_id },
+          'Midtrans reconciliation failed',
+        );
         // Provider outages must not prevent reading already issued/offline access.
         paymentCheck = 'unavailable';
       }
@@ -404,7 +409,7 @@ export function buildApp(
       // Keep the persisted order across failures, and serialize Snap creation across
       // processes. A crashed process releases this lock so a later request can retry.
       const result = await transaction(async (client) => {
-        const current = (
+        const current: Order = (
           await client.query<Order>(
             'SELECT * FROM orders WHERE order_id=$1 FOR UPDATE',
             [order.order_id],

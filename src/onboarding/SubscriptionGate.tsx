@@ -243,11 +243,13 @@ function SubscriptionPage({
                     <small>
                       {order.status === 'paid'
                         ? 'Berhasil, akses diaktifkan'
-                        : order.status === 'pending'
-                          ? 'Menunggu pembayaran'
-                          : order.status === 'review_required'
-                            ? 'Memerlukan pemeriksaan dukungan'
-                            : order.status}
+                        : order.status === 'creating'
+                          ? 'Checkout belum selesai dibuat'
+                          : order.status === 'pending'
+                            ? 'Menunggu pembayaran'
+                            : order.status === 'review_required'
+                              ? 'Memerlukan pemeriksaan dukungan'
+                              : order.status}
                     </small>
                   </div>
                 </li>
