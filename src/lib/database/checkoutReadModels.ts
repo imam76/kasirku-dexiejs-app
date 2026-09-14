@@ -22,7 +22,30 @@ export interface PosCatalogProduct {
   sku: string;
   normalized_sku: string;
   category: string;
+  search_tokens: string[];
 }
+
+/**
+ * Substring search used to filter the whole catalog on every keystroke. These
+ * tokens are the suffixes of each word in the name and SKU, indexed multiEntry,
+ * so a search can seek candidates through the index instead of reading every row.
+ *
+ * A term's first word never spans whitespace, so whenever the text contains the
+ * term, some word suffix starts with that first word: probing the index with it
+ * cannot miss a match. Callers still verify candidates with `matchesProductSearch`,
+ * which keeps the result set identical to a full scan.
+ */
+export const POS_CATALOG_TOKEN_MAX_LENGTH = 32;
+
+export const buildPosCatalogSearchTokens = (name: string, sku: string): string[] => {
+  const tokens = new Set<string>();
+  `${name} ${sku}`.toLowerCase().split(/\s+/).forEach((word) => {
+    for (let start = 0; start < word.length; start += 1) {
+      tokens.add(word.slice(start, start + POS_CATALOG_TOKEN_MAX_LENGTH));
+    }
+  });
+  return [...tokens];
+};
 
 export interface PosCatalogCount {
   category: string;
@@ -34,6 +57,7 @@ export const toPosCatalogProduct = (product: Product): PosCatalogProduct | undef
     id: product.id, name: product.name, sku: product.sku || '',
     normalized_sku: (product.sku || '').trim().toLowerCase(),
     category: product.category || 'non_consumable',
+    search_tokens: buildPosCatalogSearchTokens(product.name, product.sku || ''),
   } : undefined
 );
 

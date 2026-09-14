@@ -148,4 +148,85 @@ Validasi tambahan menggunakan IndexedDB nyata:
 
 Validasi akhir v134: **401 unit test**, **11 tes integrasi checkout/pertumbuhan data**, serta **6 tes alur numpad/scanner dan rekonsiliasi HPP** lulus. TypeScript, ESLint pada file yang diubah, syntax check script diagnostik, dan build produksi lulus. Warning build terkait URL beep, import Tauri statis/dinamis, dan ukuran chunk tetap seperti tahap sebelumnya.
 
-Batas pengukuran: render React lengkap, database client nyata, lock dari worker yang sudah aktif, waktu transport printer, dan p50/p95 checkout lengkap belum diukur. Pencarian substring masih menyaring metadata katalog ketika teks/katalog berubah; halaman jauh memakai offset. Pemilihan member masih membaca daftar member aktif, dan penomoran jurnal masih menghitung entri per tanggal. Riwayat tetap memakai ruang penyimpanan; perbaikan ini membatasi pembacaan pada jalur yang dioptimasi, bukan menetapkan waktu tetap untuk seluruh operasi aplikasi. Gunakan trace lokal di atas untuk menentukan tahap berikutnya bila client masih lambat setelah memakai build ini.
+Batas pengukuran: render React lengkap, database client nyata, lock dari worker yang sudah aktif, waktu transport printer, dan p50/p95 checkout lengkap belum diukur. Halaman jauh memakai offset. Riwayat tetap memakai ruang penyimpanan; perbaikan ini membatasi pembacaan pada jalur yang dioptimasi, bukan menetapkan waktu tetap untuk seluruh operasi aplikasi. Gunakan trace lokal di atas untuk menentukan tahap berikutnya bila client masih lambat setelah memakai build ini.
+
+Penomoran jurnal dan overhead tetap
+-----------------------------------
+
+Lanjutan setelah v134, tanpa perubahan skema dan tanpa mengubah jaminan atomisitas checkout.
+
+- **Penomoran jurnal:** `createJournalEntryNumber()` mengambil satu key terakhir dari indeks `entry_number` pada rentang tanggalnya, bukan menghitung seluruh jurnal hari itu. Ini satu-satunya pekerjaan di dalam transaksi tulis checkout yang biayanya masih bertambah mengikuti jumlah transaksi. Melanjutkan dari nomor tertinggi juga tidak lagi memakai ulang nomor ketika ada celah, misalnya karena jurnal dari perangkat lain sudah tersinkron; `count()` sebelumnya dapat mengeluarkan nomor yang sudah terpakai. Di atas lebar 4 digit penomoran kembali memakai `count()` seperti sebelumnya.
+- **Pembacaan akun jurnal:** `postPosSaleJournal()` dulu memuat seluruh bagan akun lewat `chartOfAccounts.toArray()`. Sekarang hanya akun yang mungkin diposting jurnal itu yang dibaca, lewat primary key dan indeks `code`: kandidat penjualan POS, kas/bank, HPP, persediaan, serta akun posting tiap pembayaran. Hasil diurutkan menurut `id` agar pemilihan akun tetap identik dengan urutan `toArray()` bila ada dua akun berbagi satu `code`. Biaya mengikuti jumlah kandidat, bukan besar bagan akun.
+- **Index lookup akun:** satu jurnal memanggil `getPostableAccount()` sampai empat kali, dan tiap panggilan membangun ulang dua `Map` atas array akun yang diterima. Index sekarang di-memo pada identitas array, sehingga setiap pembacaan baru tetap membangun index baru dan tidak ada data akun usang yang terpakai.
+- **Worker sync:** `recoverStaleProcessingSyncQueueItems()` dijalankan sekali per drain, bukan sekali per batch 20 row. Drain memakai loop, bukan rekursi, sehingga satu query `syncQueue` per batch ikut hilang. Untuk backlog 2.000 row: dari sekitar 300 query menjadi 101. Manfaatnya pada kontensi lock, bukan biaya query, dan belum diukur pada perangkat nyata.
+
+Hasil benchmark penomoran (median tiga pengulangan hangat, jurnal pada satu tanggal yang sama):
+
+| Jurnal pada tanggal itu | Penomoran sebelum | Penomoran sekarang |
+| ---: | ---: | ---: |
+| 1.000 | 4,8 ms | 0,4 ms |
+| 10.000 | 50,9 ms | 0,3 ms |
+| 50.000 | 211,4 ms | 0,3 ms |
+
+Angka 50.000 jurnal dalam satu hari adalah stress case, bukan asumsi data client. Ukuran yang relevan adalah jumlah jurnal pada tanggal yang sedang diposting.
+
+Pembacaan akun untuk satu jurnal penjualan POS:
+
+| Jumlah akun di bagan | Seluruh bagan | Kandidat saja |
+| ---: | ---: | ---: |
+| 100 | 0,8 ms | 0,6 ms |
+| 300 | 3,0 ms | 0,8 ms |
+| 1.000 | 6,9 ms | 0,8 ms |
+
+Bagan akun tumbuh mengikuti kebutuhan pembukuan, bukan jumlah transaksi; ini overhead tetap per checkout, bukan growth path. Angka kandidat tetap rata karena jumlah akun yang dibaca tidak berubah.
+
+Validasi: 406 unit test dan 13 tes e2e checkout/pertumbuhan data lulus, termasuk tes baru yang membuktikan penomoran pada riwayat 5.000 jurnal sehari membaca **nol row jurnal** dan melakukan **nol count**, tidak memakai ulang nomor pada celah, dan tetap memberi nomor berbeda untuk dua jurnal dalam satu transaksi. Tes lain memposting jurnal penjualan POS pada bagan 200 dan 1.000 akun tambahan: baris jurnal identik, **nol akun noise dibaca**, dan jumlah row akun yang dibaca sama pada kedua ukuran. TypeScript, ESLint pada file yang diubah, dan syntax check script diagnostik lulus.
+
+Yang **tidak** dikerjakan pada tahap ini, beserta alasannya:
+
+- Indeks `active` pada `promos`/`lotteries` tidak dapat dipakai: nilainya boolean, dan IndexedDB tidak menerima boolean sebagai key, sehingga row tersebut tidak masuk indeks sama sekali. Memperbaikinya butuh migrasi yang menyimpan 0/1. Kedua tabel juga terbatas jumlah promo yang dibuat, bukan riwayat transaksi.
+- Cache in-memory untuk `chartOfAccounts` tidak dibuat, dan tidak diperlukan: pembacaan bertarget di atas menghilangkan biayanya tanpa menambah invalidasi lintas transaksi ke kode akuntansi. Catatan koreksi: angka 0,065 ms yang sempat dipakai untuk menolak cache hanya mengukur pembangunan `Map` di JS, bukan pembacaan IndexedDB-nya yang ternyata 3,1 ms pada 300 akun.
+- `accountingPeriods.toArray()` masih dibaca penuh, dan terjadi dua kali per checkout karena `isGeneralLedgerPostingEnabled()` dipanggil di `postPosSaleJournal()` dan sekali lagi di `postBalancedJournalEntry()`. Biayanya 0,9 ms per pembacaan pada 120 periode (sepuluh tahun periode bulanan). Versi berindeksnya perlu memilih periode dengan `start_date` terbesar yang mencakup tanggal; semantik tumpang-tindih periode menentukan boleh/tidaknya posting ke periode LOCKED, sehingga tidak diubah hanya untuk angka tersebut.
+- Posting jurnal, finance income, profit log, dan poin membership masih berada di dalam transaksi tulis checkout, dan jaminan atomisitasnya tidak diubah. Biaya ketiga item selain jurnal adalah O(1): satu `get` dan satu `put` pada saldo, plus baris log. Setelah penomoran dan pembacaan akun diperbaiki, sisa biaya jalur jurnal di dalam transaksi adalah beberapa pembacaan konfigurasi dan penulisan O(1), sehingga memindahkannya ke worker background — yang mengubah buku besar menjadi konsisten secara eventual — tidak lagi sepadan dengan risikonya.
+
+Daftar member dan retensi antrean
+---------------------------------
+
+Dua perbaikan di luar transaksi tulis checkout, tanpa perubahan skema.
+
+- **Daftar member POS:** [posMemberReadService.ts](../src/services/posMemberReadService.ts) menggantikan pembacaan seluruh tabel `memberships` pada layar POS. Sebelumnya satu live query memuat semua member aktif dan dijalankan ulang setiap kali ada row membership berubah — termasuk pembaruan poin dari checkout member dan setiap merge sync background. Sekarang picker membaca satu halaman terbatas (50) menurut indeks `member_number`, pencarian nomor dan telepon lewat indeks masing-masing, dan member terpilih lewat primary key. Member terpilih selalu diletakkan di depan daftar agar label pilihan tetap ada walau di luar halaman. `is_active` bertipe boolean sehingga tidak dapat diindeks IndexedDB, dan `status` tidak ada pada row lama; keduanya tetap diperiksa di callback.
+- **Retensi antrean synced:** [syncQueueRetentionService.ts](../src/services/syncQueueRetentionService.ts) menghapus row `synced` yang lebih tua dari tujuh hari, dalam batch 500 agar backlog besar tidak menjadi satu transaksi tulis panjang. Row synced terbaru selalu dipertahankan karena indikator membaca timestamp-nya sebagai "terakhir tersinkron"; perangkat yang lama menganggur tidak kehilangan waktu tersebut. Jumlah status tetap benar karena middleware read model menerapkan delta delete pada `syncQueueSummary` di transaksi yang sama. Retensi dipanggil dari `processPendingSyncQueue()` setelah drain, maksimal sekali per jam, dan tidak membutuhkan koneksi.
+
+Perubahan perilaku yang perlu diketahui: picker member kini menampilkan 50 member pertama, bukan seluruh daftar. Toko dengan member sampai 50 tidak melihat perbedaan; di atas itu kasir mengetik untuk mencari. Pencarian nama masih berjalan tanpa indeks — dibatasi jumlah hasil, minimal dua karakter, dan hanya saat picker dipakai, bukan saat checkout.
+
+Validasi: 406 unit test dan 15 tes e2e checkout/pertumbuhan data lulus, ditambah 5 tes e2e alur POS (shortcut keyboard dan diagnosa qty) yang menjalankan layar Transaction sungguhan. Tes baru membuktikan halaman member membaca jumlah row yang sama pada 500 dan 5.000 member, tidak memuat member nonaktif, mencari nomor lewat indeks, dan mengambil member terpilih dengan **tepat satu** pembacaan primary key. Tes retensi membuktikan 1.200 row kedaluwarsa terhapus dalam batch, row pending/processing/failed tidak tersentuh, ringkasan cocok dengan hitungan manual, dan satu row synced tetap dipertahankan ketika semuanya sudah kedaluwarsa.
+
+Yang masih terbuka setelah tahap ini: pencarian riwayat transaksi, offset pada halaman jauh, laporan yang membaca seluruh `journalEntries` dan `journalEntryLines` sebelum memfilter tanggal, serta 14 query key yang di-invalidate setiap checkout. Arsip riwayat transaksi lama juga belum ada; retensi di atas hanya membatasi antrean sync, bukan riwayat penjualan.
+
+Pencarian katalog berindeks (v135)
+----------------------------------
+
+Pencarian produk adalah satu-satunya jalur interaktif yang tersisa dengan biaya sebesar seluruh katalog, dan ia dijalankan **setiap ketikan** melalui live query di [useTransaction.tsx](../src/hooks/useTransaction.tsx). Ini juga satu-satunya angka yang terukur berada di rentang keluhan awal.
+
+Semantik pencarian tidak berubah. `matchesProductSearch()` memakai `includes()` pada nama dan SKU, jadi menurunkannya menjadi pencocokan awalan akan membuat "domie" berhenti menemukan "Indomie". Yang dilakukan: indeks multiEntry `*search_tokens` pada `posProductCatalog` berisi **sufiks setiap kata** dari nama dan SKU.
+
+Dasar kebenarannya: kata pertama sebuah istilah tidak pernah melewati spasi. Jika teks memuat istilah itu, istilah tersebut mulai di dalam satu kata, sehingga ada sufiks kata yang berawalan kata pertama istilah. Maka memakai kata pertama sebagai probe indeks tidak mungkin melewatkan hasil. Setiap kandidat masih diverifikasi dengan `matchesProductSearch()` yang sama, sehingga himpunan hasil identik dengan memindai seluruh katalog. Istilah yang lebih panjang dari token terindeks tidak dapat diprobe dan kembali memakai pemindaian.
+
+Indeks ini berada di tabel turunan, bukan di `products`. Perubahan stok dan harga tidak mengubah proyeksi katalog, sehingga checkout tidak menulis ulang token — pemisahan itu sudah dibuat di v134 dan tetap berlaku.
+
+Median tiga pengulangan hangat, istilah selektif (1 hasil) dan istilah luas (~111 hasil):
+
+| Jumlah produk | Selektif sebelum | Selektif sekarang | Luas sebelum | Luas sekarang |
+| ---: | ---: | ---: | ---: | ---: |
+| 1.000 | 14,8 ms | 0,5 ms | 14,6 ms | 2,4 ms |
+| 10.000 | 135,8 ms | 0,3 ms | 137,5 ms | 2,5 ms |
+| 50.000 | 724,0 ms | 0,4 ms | 727,6 ms | 2,7 ms |
+
+Biaya sekarang mengikuti jumlah hasil, bukan besar katalog: istilah luas tetap lebih mahal daripada istilah selektif, tetapi keduanya rata terhadap ukuran tabel.
+
+Harga yang dibayar adalah ruang indeks. Produk sintetis pada benchmark menghasilkan 17 token per produk; nama produk nyata yang lebih panjang menghasilkan lebih banyak. Token dibatasi 32 karakter per entri. Ini menambah ukuran database dan biaya tulis saat metadata produk berubah — bukan saat penjualan.
+
+[Migrasi v135](../src/lib/database/migrations/versions/v135.ts) menambahkan indeks dan mengisi token dari nama serta SKU yang sudah ada di `posProductCatalog`, satu lintasan atas metadata katalog saja, tanpa membaca ulang `products`.
+
+Validasi: 406 unit test dan 22 tes e2e POS lulus, termasuk pemeriksaan kesetaraan yang membandingkan hasil `readPosCatalogPage()` terhadap pemindaian penuh pada katalog 3.000 produk untuk 13 istilah kali 2 filter kategori — kata utuh, awalan kata, tengah kata, melewati spasi, dua kata, huruf besar, angka di tengah kata, SKU utuh dan sebagian, satu huruf, tanpa hasil, istilah 40 karakter, dan istilah tidak ter-trim — beserta halaman dalam dan quick-add. Tes yang sama membuktikan jumlah row katalog yang dibaca **sama dengan jumlah hasil** pada katalog 500 maupun 3.000. Tes upgrade membuktikan database yang sudah di v134 mendapatkan token setelah dibuka di v135, dan probe tengah kata, lintas kata, serta SKU menemukan row yang benar. TypeScript, ESLint pada file yang diubah, dan build produksi lulus dengan warning yang sama seperti tahap sebelumnya.
+

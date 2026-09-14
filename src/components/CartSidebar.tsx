@@ -32,6 +32,7 @@ interface CartSidebarProps {
   membershipPreview: MembershipCheckoutEvaluation;
   activePromos: Promo[];
   activeMembers: Membership[];
+  onMemberSearch: (search: string) => void;
   selectedMember: Membership | null;
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
@@ -69,6 +70,7 @@ export default function CartSidebar({
   membershipPreview,
   activePromos,
   activeMembers,
+  onMemberSearch,
   setShowPayment,
   updatePaymentDraft,
   removePaymentDraft,
@@ -159,6 +161,7 @@ export default function CartSidebar({
         memberId={memberId}
         activePromos={activePromos}
         activeMembers={activeMembers}
+        onMemberSearch={onMemberSearch}
         promoPreview={promoPreview}
         membershipPreview={membershipPreview}
         onVoucherCodeChange={setVoucherCode}

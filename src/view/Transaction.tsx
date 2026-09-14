@@ -169,6 +169,7 @@ export default function Transaction() {
     membershipPreview,
     activePromos,
     activeMembers,
+    onMemberSearch,
     selectedMember,
     membershipSetting,
     createMember,
@@ -1293,6 +1294,7 @@ export default function Transaction() {
           membershipPreview={membershipPreview}
           activePromos={activePromos}
           activeMembers={activeMembers}
+          onMemberSearch={onMemberSearch}
           selectedMember={selectedMember}
           membershipSetting={membershipSetting}
           setShowPayment={setShowPayment}
@@ -1363,6 +1365,7 @@ export default function Transaction() {
         membershipPreview={membershipPreview}
         activePromos={activePromos}
         activeMembers={activeMembers}
+        onMemberSearch={onMemberSearch}
         selectedMember={selectedMember}
         membershipSetting={membershipSetting}
         setShowPayment={setShowPayment}

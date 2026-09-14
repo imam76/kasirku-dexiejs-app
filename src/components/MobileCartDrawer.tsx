@@ -37,6 +37,7 @@ interface MobileCartDrawerProps {
   membershipPreview: MembershipCheckoutEvaluation;
   activePromos: Promo[];
   activeMembers: Membership[];
+  onMemberSearch: (search: string) => void;
   selectedMember: Membership | null;
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
@@ -75,6 +76,7 @@ export default function MobileCartDrawer({
   membershipPreview,
   activePromos,
   activeMembers,
+  onMemberSearch,
   selectedMember,
   membershipSetting,
   setShowPayment,
@@ -183,6 +185,7 @@ export default function MobileCartDrawer({
                 membershipPreview={membershipPreview}
                 activePromos={activePromos}
                 activeMembers={activeMembers}
+                onMemberSearch={onMemberSearch}
                 selectedMember={selectedMember}
                 membershipSetting={membershipSetting}
                 setShowPayment={setShowPayment}

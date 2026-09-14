@@ -25,6 +25,7 @@ export interface CartSummaryProps {
   membershipPreview: MembershipCheckoutEvaluation;
   activePromos: Promo[];
   activeMembers: Membership[];
+  onMemberSearch: (search: string) => void;
   selectedMember: Membership | null;
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
@@ -55,6 +56,7 @@ export default function CartSummary(props: CartSummaryProps) {
   const membershipPanel = (
     <MembershipCheckoutPanel
       members={props.activeMembers}
+      onMemberSearch={props.onMemberSearch}
       selectedMember={props.selectedMember}
       memberId={props.memberId}
       voucherCode={props.voucherCode}

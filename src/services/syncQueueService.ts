@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { readPendingSyncQueueBatch } from './pendingSyncQueueReadService';
+import { pruneSyncedSyncQueueItems } from './syncQueueRetentionService';
 import {
   mergeRemoteAuthUsersIntoDexie,
   mergeRemoteRolePermissionsIntoDexie,
@@ -303,6 +304,8 @@ const PAYMENT_METHOD_ENTITY = 'paymentMethods';
 const INVENTORY_OPENING_BALANCE_SOURCE_EVENT = 'INVENTORY_OPENING_BALANCE_POSTED';
 
 let isProcessingSyncQueue = false;
+const SYNC_QUEUE_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+let lastSyncedQueuePruneAt = 0;
 
 const getErrorMessage = (error: unknown) => (
   error instanceof Error
@@ -6872,22 +6875,29 @@ export const processPendingSyncQueue = async (limit = SYNC_QUEUE_BATCH_SIZE) => 
 
   isProcessingSyncQueue = true;
   try {
+    // Recovery reads the processing partition: once per drain, not once per batch.
     await recoverStaleProcessingSyncQueueItems();
 
-    const isPostgresAvailable = await isPostgresAvailableForSync();
-    if (!isPostgresAvailable) return;
+    if (await isPostgresAvailableForSync()) {
+      // Drain batch by batch through the queue index. A failed item is marked failed,
+      // so it leaves the pending partition and cannot be read again by the next batch.
+      for (;;) {
+        const pendingQueueItems = await readPendingSyncQueueBatch(limit);
+        if (pendingQueueItems.length === 0) break;
 
-    const pendingQueueItems = await readPendingSyncQueueBatch(limit);
-    for (const queueItem of pendingQueueItems) {
-      await processSyncQueueItem(queueItem);
+        for (const queueItem of pendingQueueItems) {
+          await processSyncQueueItem(queueItem);
+        }
+      }
+    }
+
+    // Local retention, off the checkout path and independent of the connection.
+    if (Date.now() - lastSyncedQueuePruneAt >= SYNC_QUEUE_PRUNE_INTERVAL_MS) {
+      lastSyncedQueuePruneAt = Date.now();
+      await pruneSyncedSyncQueueItems();
     }
   } finally {
     isProcessingSyncQueue = false;
-  }
-
-  const pendingQueueKeys = await db.syncQueue.where('status').equals('pending').limit(1).primaryKeys();
-  if (pendingQueueKeys.length > 0) {
-    void processPendingSyncQueue(limit);
   }
 };
 

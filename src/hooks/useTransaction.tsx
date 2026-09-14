@@ -20,6 +20,11 @@ import {
   getMembershipSetting,
   type QuickCreateMemberInput,
 } from '@/services/membershipService';
+import {
+  readPosMember,
+  readPosMemberOptions,
+  withSelectedMemberFirst,
+} from '@/services/posMemberReadService';
 import { normalizeProductSearchTerm } from '@/utils/productSearch';
 import { findFirstPosProduct, findPosProductBySku, readPosCatalogPage } from '@/services/posCatalogReadService';
 import { createPosPerformanceTrace } from '@/utils/posPerformance';
@@ -134,17 +139,23 @@ export const useTransaction = (draftScope?: string) => {
     queryKey: ['membershipSetting'],
     queryFn: getMembershipSetting,
   });
-  const activeMembers = useLiveQuery(
-    () => db.memberships
-      .orderBy('member_number')
-      .filter((membership) => Boolean(membership.is_active && (membership.status ?? 'ACTIVE') === 'ACTIVE'))
-      .toArray(),
-    [],
+  const [memberSearch, setMemberSearch] = useState('');
+  // Bounded page instead of the whole member table: a member checkout writes the
+  // point balance, and re-running a full scan on that write is what made the POS
+  // screen slower as the customer list grew.
+  const memberOptions = useLiveQuery(
+    () => readPosMemberOptions(memberSearch),
+    [memberSearch],
     [] as Membership[],
   );
-  const selectedMember = useMemo(
-    () => activeMembers.find((member) => member.id === memberId) ?? null,
-    [activeMembers, memberId],
+  const selectedMember = useLiveQuery(
+    () => readPosMember(memberId).then((member) => member ?? null),
+    [memberId],
+    null as Membership | null,
+  );
+  const activeMembers = useMemo(
+    () => withSelectedMemberFirst(memberOptions, selectedMember),
+    [memberOptions, selectedMember],
   );
   const createMemberMutation = useMutation({
     mutationFn: createRetailMemberFromPos,
@@ -536,6 +547,7 @@ export const useTransaction = (draftScope?: string) => {
     membershipPreview,
     activePromos,
     activeMembers,
+    onMemberSearch: setMemberSearch,
     selectedMember,
     membershipSetting,
     createMember: createMemberMutation.mutateAsync as (input: QuickCreateMemberInput) => Promise<Membership>,

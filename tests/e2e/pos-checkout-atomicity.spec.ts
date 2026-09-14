@@ -341,3 +341,98 @@ test('receipt dispatch releases background work before slow transport finishes a
   expect(result.noPrinter.success).toBe(false);
   expect(result.noPrinterCallback).toBe(1);
 });
+
+test('POS sale journal reads only the accounts it posts to, whatever the chart size', async ({ page }) => {
+  await prepareCheckout(page);
+  const result = await page.evaluate(async () => {
+    const { db } = await import('/src/lib/db.ts');
+    const { postPosSaleJournal } = await import('/src/services/generalLedgerService.ts');
+    const now = '2026-09-14T10:00:00.000Z';
+
+    // Noise accounts use the 9xxxxx code range so no journal candidate can match them.
+    const seedChart = async (count) => {
+      await db.chartOfAccounts.where('id').startsWith('noise-').delete();
+      for (let start = 0; start < count; start += 500) {
+        await db.chartOfAccounts.bulkPut(Array.from({ length: Math.min(500, count - start) }, (_, i) => ({
+          id: `noise-${String(start + i).padStart(5, '0')}`, code: `9${String(start + i).padStart(5, '0')}`,
+          name: `Noise ${start + i}`, type: 'EXPENSE', normal_balance: 'DEBIT',
+          is_active: true, is_postable: true, created_at: now, updated_at: now,
+        })));
+      }
+    };
+
+    const reads = { accounts: 0, noise: 0 };
+    db.close();
+    db.use({ stack: 'dbcore', level: -2, name: 'account-read-probe', create: (down) => ({
+      ...down, table(name) {
+        const table = down.table(name);
+        if (name !== 'chartOfAccounts') return table;
+        const track = (rows) => rows.forEach((row) => {
+          if (!row) return;
+          reads.accounts++;
+          if (String(row.id).startsWith('noise-')) reads.noise++;
+        });
+        return { ...table,
+          getMany: (req) => table.getMany(req).then((rows) => { track(rows); return rows; }),
+          query: (req) => table.query(req).then((res) => { if (req.values) track(res.result); return res; }),
+        };
+      },
+    }) });
+    await db.open();
+
+    const post = async (suffix) => {
+      const transaction = {
+        id: `sale-${suffix}`, transaction_number: `TRX-${suffix}`, status: 'COMPLETED',
+        created_at: now, total_amount: 10000, payment_method: 'TUNAI', payment_method_name: 'Tunai',
+      };
+      const items = [{
+        id: `item-${suffix}`, transaction_id: transaction.id, product_id: 'test-product',
+        quantity: 1, subtotal: 10000, profit: 5000,
+      }];
+      const payments = [{
+        id: `pay-${suffix}`, transaction_id: transaction.id, payment_posting_account_id: 'cash',
+        applied_amount: 10000, tendered_amount: 10000, change_amount: 0,
+        payment_method: 'TUNAI', payment_method_name: 'Tunai', payment_method_category: 'CASH',
+      }];
+      const entry = await postPosSaleJournal(
+        transaction, items, { id: 'test-owner', name: 'Test owner' }, payments, { syncInTransaction: true },
+      );
+      const lines = await db.journalEntryLines.where('journal_entry_id').equals(entry.id).toArray();
+      return {
+        debit: entry.total_debit,
+        credit: entry.total_credit,
+        lines: lines.map((line) => `${line.account_id}:${line.debit || 0}:${line.credit || 0}`).sort(),
+      };
+    };
+
+    await seedChart(200);
+    reads.accounts = 0;
+    reads.noise = 0;
+    const smallChart = await post('small');
+    const smallReads = { ...reads };
+
+    await seedChart(1000);
+    reads.accounts = 0;
+    reads.noise = 0;
+    const largeChart = await post('large');
+    const largeReads = { ...reads };
+
+    return {
+      smallChart, largeChart, smallReads, largeReads,
+      noiseAccounts: await db.chartOfAccounts.where('id').startsWith('noise-').count(),
+    };
+  });
+
+  expect(result.smallChart.lines).toEqual([
+    'cash:10000:0', 'cogs:5000:0', 'inventory:0:5000', 'sales-pos:0:10000',
+  ]);
+  expect(result.largeChart.lines).toEqual(result.smallChart.lines);
+  expect(result.smallChart.debit).toBe(15000);
+  expect(result.smallChart.credit).toBe(15000);
+  expect(result.largeChart.debit).toBe(15000);
+  expect(result.largeReads.noise).toBe(0);
+  expect(result.largeReads.accounts).toBe(result.smallReads.accounts);
+  expect(result.noiseAccounts).toBe(1000);
+  // The whole point: the journal touched a handful of rows out of a chart this size.
+  expect(result.largeReads.accounts).toBeLessThan(16);
+});

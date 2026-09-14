@@ -19,6 +19,7 @@ const helperCode = ts.transpileModule(
 const modules = Object.fromEntries([
   'utils/productAvailability', 'utils/productSearch', 'lib/database/checkoutReadModels',
   'lib/database/checkoutReadModelsMiddleware', 'lib/database/migrations/versions/v134',
+  'lib/database/migrations/versions/v135',
   'services/syncStatusReadService', 'services/pendingSyncQueueReadService',
   'services/posCatalogReadService', 'utils/inventory/readFifoLots',
 ].map((path) => [path, ts.transpileModule(read(`src/${path}.ts`), {
@@ -63,12 +64,15 @@ try {
       window.db = db;
       db.version(133).stores({
         journalEntries: 'id, entry_number, source_type, source_id',
+        chartOfAccounts: 'id, code',
+        accountingPeriods: 'id, start_date',
         products: 'id, name, sku, category',
         syncQueue: 'id, entity, entity_id, status, updated_at, [status+updated_at]',
         inventoryLots: 'id, product_id',
         inventoryLotConsumptions: 'id, lot_id, product_id',
       });
       window.loadPosModule('lib/database/migrations/versions/v134').registerMigrationV134(db);
+      window.loadPosModule('lib/database/migrations/versions/v135').registerMigrationV135(db);
       window.loadPosModule('lib/database/checkoutReadModelsMiddleware').registerCheckoutReadModels(db);
       await db.open();
       try {
@@ -127,6 +131,43 @@ try {
         const journalCurrent = await measure(() => db.transaction('rw', db.journalEntries, () => (
           window.lookupJournal('POS_TRANSACTION', 'new-transaction', 'POS_SALE_POSTED')
         )));
+        // Config reads the journal path performs inside the checkout write transaction.
+        // Account and period counts follow the chart and years of use, not sales volume.
+        const configReads = {};
+        for (const accountCount of [100, 300, 1000]) {
+          await db.chartOfAccounts.clear();
+          await db.chartOfAccounts.bulkAdd(Array.from({ length: accountCount }, (_, i) => ({
+            id: `account-${i}`, code: `${1000 + i}`, name: `Account ${i}`, type: 'ASSET',
+            is_active: true, is_postable: true, created_at: date, updated_at: date,
+          })));
+          // Journal candidates: the ids and codes one POS sale journal can post to.
+          const candidateIds = ['sales-pos', 'template-sales-pos', 'cash', 'bank', 'cogs',
+            'template-cogs', 'inventory', 'template-inventory'];
+          const candidateCodes = ['4000', '4010', '1010', '1020', '5000', '5010', '1200'];
+          configReads[accountCount] = {
+            whole: await measure(() => db.transaction('rw', db.chartOfAccounts,
+              () => db.chartOfAccounts.toArray())),
+            candidates: await measure(() => db.transaction('rw', db.chartOfAccounts, () => Promise.all([
+              db.chartOfAccounts.bulkGet(candidateIds),
+              db.chartOfAccounts.where('code').anyOf(candidateCodes).toArray(),
+            ]))),
+          };
+        }
+        await db.accountingPeriods.bulkAdd(Array.from({ length: 120 }, (_, i) => ({
+          id: `period-${i}`, name: `Period ${i}`, period_type: 'MONTHLY', status: 'OPEN',
+          start_date: date, end_date: date, created_at: date, updated_at: date,
+        })));
+        const periodRead = await measure(() => db.transaction('rw', db.accountingPeriods,
+          () => db.accountingPeriods.toArray()));
+        // Journal numbering: counting the day's entries versus one index key.
+        const numberBefore = await measure(() => db.transaction('rw', db.journalEntries, () => (
+          db.journalEntries.where('entry_number').startsWith('JRN-20260901-').count()
+        )));
+        const numberCurrent = await measure(() => db.transaction('rw', db.journalEntries, () => (
+          db.journalEntries.where('entry_number')
+            .between('JRN-20260901-', 'JRN-20260901-￿')
+            .lastKey()
+        )));
         // Mirrors the queueSnapshot callback before optimization.
         const syncStatusBefore = await measure(async () => {
           const queueItems = await db.syncQueue.toArray();
@@ -159,8 +200,29 @@ try {
           return db.products.bulkGet(page.ids);
         });
         const batchCurrent = await measure(() => window.loadPosModule('services/pendingSyncQueueReadService').readPendingSyncQueueBatch(20));
+        // Catalog substring search: full-catalog filter versus the token index.
+        const { matchesProductSearch } = window.loadPosModule('utils/productSearch');
+        const searchTerm = '000123';
+        const searchBefore = await measure(() => db.posProductCatalog.orderBy('name')
+          .filter((product) => matchesProductSearch(product, searchTerm)).toArray());
+        const searchCurrent = await measure(() => window.loadPosModule('services/posCatalogReadService')
+          .readPosCatalogPage(1, 12, searchTerm));
+        const searchMatches = (await db.posProductCatalog.orderBy('name')
+          .filter((product) => matchesProductSearch(product, searchTerm)).toArray()).length;
+        // A broad term costs what its matched set costs, so measure that case too.
+        const broadTerm = '0001';
+        const broadBefore = await measure(() => db.posProductCatalog.orderBy('name')
+          .filter((product) => matchesProductSearch(product, broadTerm)).toArray());
+        const broadCurrent = await measure(() => window.loadPosModule('services/posCatalogReadService')
+          .readPosCatalogPage(1, 12, broadTerm));
+        const broadMatches = (await db.posProductCatalog.orderBy('name')
+          .filter((product) => matchesProductSearch(product, broadTerm)).toArray()).length;
+        const catalogTokens = (await db.posProductCatalog.limit(1).toArray())[0]?.search_tokens?.length ?? 0;
         return { rowsPerTable: rows, lotsForOneProduct: lotCount, journalBefore, journalCurrent,
-          syncStatusBefore, syncStatusCurrent, fifoBefore, fifoCurrent, catalogBefore, catalogCurrent, batchCurrent };
+          numberBefore, numberCurrent, configReads, periodRead,
+          syncStatusBefore, syncStatusCurrent, fifoBefore, fifoCurrent, catalogBefore, catalogCurrent, batchCurrent,
+          searchBefore, searchCurrent, searchMatches,
+          broadBefore, broadCurrent, broadMatches, catalogTokens };
       } finally {
         await db.delete();
       }
