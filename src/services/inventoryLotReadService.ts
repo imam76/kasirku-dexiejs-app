@@ -217,11 +217,8 @@ export const refreshInventoryLotsFromPostgres = async (): Promise<InventoryLotRe
 };
 
 const getLatestLocalInventoryLotConsumptionCreatedAt = async () => {
-  const consumptions = await db.inventoryLotConsumptions.toArray();
-  return consumptions.reduce<string | undefined>(
-    (latest, consumption) => getLaterUpdatedAt(latest, consumption.created_at),
-    undefined,
-  );
+  const keys = await db.inventoryLotConsumptions.orderBy('created_at').reverse().limit(1).keys();
+  return typeof keys[0] === 'string' ? keys[0] : undefined;
 };
 
 const getLatestRemoteInventoryLotConsumptionCreatedAt = (remoteConsumptions: RemoteInventoryLotConsumptionDto[]) => (

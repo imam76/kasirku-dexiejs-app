@@ -442,7 +442,7 @@ export default function Transaction() {
 
     addFromSearchInFlightRef.current = true;
     try {
-      const exactSkuMatch = findProductByScannedCode(inputSearchTerm);
+      const exactSkuMatch = await findProductByScannedCode(inputSearchTerm);
       const visibleMatchingProduct = filteredProducts.find((product) => (
         matchesProductSearch(product, normalizedSearchTerm)
       ));
@@ -468,6 +468,9 @@ export default function Transaction() {
       if (!handleAddProduct(product)) return;
       setSearchTerm('');
       window.requestAnimationFrame(focusSearch);
+    } catch (error) {
+      console.error('Failed to look up POS product', error);
+      message.error(t('transaction.productLookupFailed'));
     } finally {
       addFromSearchInFlightRef.current = false;
     }
@@ -484,8 +487,15 @@ export default function Transaction() {
     t,
   ]);
 
-  const handleScan = useCallback((text: string) => {
-    const match = findProductByScannedCode(text);
+  const handleScan = useCallback(async (text: string) => {
+    let match: Product | undefined;
+    try {
+      match = await findProductByScannedCode(text);
+    } catch (error) {
+      console.error('Failed to look up scanned POS product', error);
+      message.error(t('transaction.productLookupFailed'));
+      return;
+    }
 
     if (match) {
       if (handleAddProduct(match)) {

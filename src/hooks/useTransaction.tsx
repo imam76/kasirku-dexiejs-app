@@ -20,12 +20,13 @@ import {
   getMembershipSetting,
   type QuickCreateMemberInput,
 } from '@/services/membershipService';
-import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
-import { isProductVisibleInPos } from '@/utils/productAvailability';
+import { normalizeProductSearchTerm } from '@/utils/productSearch';
+import { findFirstPosProduct, findPosProductBySku, readPosCatalogPage } from '@/services/posCatalogReadService';
+import { createPosPerformanceTrace } from '@/utils/posPerformance';
 
 const TRANSACTION_PRODUCT_PAGE_SIZE = 12;
 const EMPTY_TRANSACTION_PRODUCT_PAGE = {
-  products: [] as Product[],
+  ids: [] as string[],
   total: 0,
   currentPage: 1,
 };
@@ -107,67 +108,23 @@ export const useTransaction = (draftScope?: string) => {
   }, [setProductPage]);
 
   const productPageResult = useLiveQuery(
-    async () => {
-      const matchedProducts = await db.products
-        .orderBy('name')
-        .filter((product) => (
-          isProductVisibleInPos(product)
-          && (!selectedProductCategory || (product.category || 'non_consumable') === selectedProductCategory)
-          && (!productSearchTerm || matchesProductSearch(product, productSearchTerm))
-        ))
-        .toArray();
-
-      if (productSearchTerm) {
-        return {
-          products: matchedProducts,
-          total: matchedProducts.length,
-          currentPage: 1,
-        };
-      }
-
-      const total = matchedProducts.length;
-      const lastPage = Math.max(1, Math.ceil(total / TRANSACTION_PRODUCT_PAGE_SIZE));
-      const currentPage = Math.min(productPage, lastPage);
-      const offset = (currentPage - 1) * TRANSACTION_PRODUCT_PAGE_SIZE;
-      const pageProducts = matchedProducts.slice(offset, offset + TRANSACTION_PRODUCT_PAGE_SIZE);
-
-      return {
-        products: pageProducts,
-        total,
-        currentPage,
-      };
-    },
+    () => readPosCatalogPage(productPage, TRANSACTION_PRODUCT_PAGE_SIZE, productSearchTerm, selectedProductCategory),
     [productPage, productSearchTerm, selectedProductCategory],
     EMPTY_TRANSACTION_PRODUCT_PAGE,
   );
   const productTotal = productPageResult.total;
-  const skuLookupProducts = useLiveQuery(
-    () => db.products.toArray(),
-    [],
-    [] as Product[],
-  );
-  const productBySku = useMemo(() => {
-    const lookup = new Map<string, Product>();
-
-    skuLookupProducts.forEach((product) => {
-      if (!isProductVisibleInPos(product)) return;
-      const normalizedSku = (product.sku || '').trim().toLowerCase();
-      if (normalizedSku && !lookup.has(normalizedSku)) {
-        lookup.set(normalizedSku, product);
-      }
-    });
-
-    return lookup;
-  }, [skuLookupProducts]);
-  const availableProductCategories = useMemo(() => Array.from(new Set(
-    skuLookupProducts
-      .filter(isProductVisibleInPos)
-      .map((product) => product.category || 'non_consumable'),
-  )).sort((left, right) => left.localeCompare(right, 'id')), [skuLookupProducts]);
+  // Reading current stock/prices is separate from searching/paging catalog metadata.
+  const pageProducts = useLiveQuery(async () => (
+    await db.products.bulkGet(productPageResult.ids)
+  ).filter((product): product is Product => !!product), [productPageResult.ids], [] as Product[]);
+  const availableProductCategories = useLiveQuery(async () => (
+    await db.posCatalogCounts.toArray()
+  ).filter((row) => row.count > 0).map((row) => row.category)
+    .sort((left, right) => left.localeCompare(right, 'id')), [], [] as string[]);
 
   useEffect(() => {
-    setProducts(productPageResult.products);
-  }, [productPageResult.products, setProducts]);
+    setProducts(pageProducts);
+  }, [pageProducts, setProducts]);
 
   const { data: activePromos = [] } = useQuery({
     queryKey: ['activePromos'],
@@ -198,14 +155,12 @@ export const useTransaction = (draftScope?: string) => {
   });
 
   const filteredProducts = products;
-  const productPagination = productSearchTerm
-    ? undefined
-    : {
-        currentPage: productPageResult.currentPage,
-        pageSize: TRANSACTION_PRODUCT_PAGE_SIZE,
-        total: productTotal,
-        onChange: setProductPage,
-      };
+  const productPagination = {
+    currentPage: productPageResult.currentPage,
+    pageSize: TRANSACTION_PRODUCT_PAGE_SIZE,
+    total: productTotal,
+    onChange: setProductPage,
+  };
 
   const calculateSubtotal = useCallback(() => {
     return cart.reduce((sum, item) => sum + getCartItemPrice(item) * item.quantity, 0);
@@ -374,26 +329,11 @@ export const useTransaction = (draftScope?: string) => {
     return result.success;
   };
 
-  const findProductByScannedCode = useCallback((scanCode: string) => {
-    const normalizedScanCode = scanCode.trim().toLowerCase();
-    if (!normalizedScanCode) return undefined;
-
-    return productBySku.get(normalizedScanCode);
-  }, [productBySku]);
-
-  const findFirstProductBySearchTerm = useCallback(async (search: string) => {
-    const normalizedSearch = normalizeProductSearchTerm(search);
-    if (!normalizedSearch) return undefined;
-
-    return db.products
-      .orderBy('name')
-      .filter((product) => (
-        isProductVisibleInPos(product) && matchesProductSearch(product, normalizedSearch)
-      ))
-      .first();
-  }, []);
+  const findProductByScannedCode = findPosProductBySku;
+  const findFirstProductBySearchTerm = findFirstPosProduct;
 
   const handleCheckout = async () => {
+    const performanceTrace = createPosPerformanceTrace();
     if (paymentPreview.errors.length > 0 || !paymentPreview.isComplete) {
       modal.error({
         title: t('payment.invalidTitle'),
@@ -413,8 +353,39 @@ export const useTransaction = (draftScope?: string) => {
         voucherCode,
         memberId,
         redeemPoints: Number(redeemPoints || 0),
+        deferSyncProcessing: true,
+        performanceTrace,
       });
       const { transaction, items, payments, warnings } = checkoutResult;
+
+      void printReceiptAfterTransaction(
+        { ...transaction, items, payments },
+        {
+          openCashDrawer: true,
+          performanceTrace,
+          onPrintDispatched: () => {
+            [
+              'transactions-history', 'posSalesReport', 'transactionDetailReport',
+              'financeTransactions', 'incomeReport', 'cashFlowReport', 'journalEntries',
+              'trialBalance', 'incomeStatement', 'balanceSheet', 'contacts',
+              'memberships', 'membershipSetting',
+            ].forEach((key) => { void queryClient.invalidateQueries({ queryKey: [key] }); });
+            window.dispatchEvent(new Event('check-feedback'));
+          },
+        },
+      )
+        .then((result) => {
+          void queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
+          if (result.success) {
+            message.success(t('checkout.receiptPrinted'));
+          } else {
+            message.warning(result.error || t('checkout.receiptPrintFailed'));
+          }
+        })
+        .catch((error) => {
+          console.error('Receipt print process failed:', error);
+          message.warning(t('checkout.receiptPrintProcessFailed'));
+        });
 
       modal.success({
         title: t('checkout.successTitle'),
@@ -467,44 +438,11 @@ export const useTransaction = (draftScope?: string) => {
         message.warning(warning);
       });
 
-      queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
-      queryClient.invalidateQueries({ queryKey: ['posSalesReport'] });
-      queryClient.invalidateQueries({ queryKey: ['transactionDetailReport'] });
-      queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
-      queryClient.invalidateQueries({ queryKey: ['incomeReport'] });
-      queryClient.invalidateQueries({ queryKey: ['cashFlowReport'] });
-      queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
-      queryClient.invalidateQueries({ queryKey: ['trialBalance'] });
-      queryClient.invalidateQueries({ queryKey: ['incomeStatement'] });
-      queryClient.invalidateQueries({ queryKey: ['balanceSheet'] });
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      queryClient.invalidateQueries({ queryKey: ['memberships'] });
-      queryClient.invalidateQueries({ queryKey: ['membershipSetting'] });
       reset();
-
-      void printReceiptAfterTransaction(
-        { ...transaction, items, payments },
-        { openCashDrawer: true },
-      )
-        .then((result) => {
-          queryClient.invalidateQueries({ queryKey: ['transactions-history'] });
-
-          if (result.success) {
-            message.success(t('checkout.receiptPrinted'));
-            return;
-          }
-
-          message.warning(result.error || t('checkout.receiptPrintFailed'));
-        })
-        .catch((error) => {
-          console.error('Receipt print process failed:', error);
-          message.warning(t('checkout.receiptPrintProcessFailed'));
-        });
-      
-      // Trigger feedback check
-      window.dispatchEvent(new Event('check-feedback'));
       return true;
     } catch (error) {
+      performanceTrace.checkpoint('checkout_failed');
+      performanceTrace.report('checkout_failed');
       console.error('Checkout failed:', error);
       if (error instanceof PosStockShortageConfirmationRequiredError) {
         const affectedIds = new Set(error.details.map((detail) => detail.productId));

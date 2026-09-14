@@ -7,7 +7,7 @@ import {
   ReceiptPrintStatus,
   TransactionReceiptInput,
 } from '@/types';
-import { enqueueTransactionBundleSync } from '@/services/syncQueueService';
+import { buildTransactionBundleOutboxItem, schedulePendingSyncQueue } from '@/services/syncQueueService';
 import {
   getStoredBluetoothPrinter,
   normalizePrinterError,
@@ -21,12 +21,16 @@ import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 import { getTransactionPaymentsOrLegacyFallback } from '@/utils/posSplitPayment';
 import { getStoredReceiptPaperSize } from '@/utils/printer/receiptPaperSize';
 import { isTransactionExpense } from '@/utils/transactions';
+import { createPosPerformanceTrace, type PosPerformanceTrace } from '@/utils/posPerformance';
 
 const DEFAULT_MERCHANT_NAME = 'Frayukti';
 const DEFAULT_RECEIPT_FOOTER = 'Terima kasih';
 
 interface ReceiptPrintOptions {
   openCashDrawer?: boolean;
+  performanceTrace?: PosPerformanceTrace;
+  /** Called in a later task after transport starts, including failed/no-printer paths. */
+  onPrintDispatched?: () => void;
 }
 
 const updateReceiptStatus = async (
@@ -36,20 +40,23 @@ const updateReceiptStatus = async (
 ) => {
   try {
     const now = new Date().toISOString();
-    await db.transactions.update(transactionId, {
-      receipt_status: status,
-      receipt_printed_at: status === 'printed' ? now : undefined,
-      receipt_print_error: error || '',
-      updated_at: now,
-      sync_status: 'pending',
-      sync_error: undefined,
-    });
+    await db.transaction('rw', [db.transactions, db.transactionItems, db.syncQueue], async () => {
+      await db.transactions.update(transactionId, {
+        receipt_status: status,
+        receipt_printed_at: status === 'printed' ? now : undefined,
+        receipt_print_error: error || '',
+        updated_at: now,
+        sync_status: 'pending',
+        sync_error: undefined,
+      });
 
-    const transaction = await db.transactions.get(transactionId);
-    if (transaction) {
-      const items = await db.transactionItems.where('transaction_id').equals(transactionId).toArray();
-      await enqueueTransactionBundleSync(transaction, items, 'update');
-    }
+      const transaction = await db.transactions.get(transactionId);
+      if (transaction) {
+        const items = await db.transactionItems.where('transaction_id').equals(transactionId).toArray();
+        await db.syncQueue.add(buildTransactionBundleOutboxItem(transaction, items, 'update', now));
+      }
+    });
+    schedulePendingSyncQueue();
   } catch (dbError) {
     console.error('Failed to update receipt print status:', dbError);
   }
@@ -115,49 +122,73 @@ export const printReceiptAfterTransaction = async (
   transaction: TransactionReceiptInput,
   options: ReceiptPrintOptions = {},
 ): Promise<ReceiptPrintResult> => {
-  if (isTransactionExpense(transaction)) {
-    return {
-      success: false,
-      status: 'print_failed',
-      error: 'Pengeluaran internal tidak memiliki struk penjualan.',
-    };
-  }
-  const companyProfile = await db.companyProfileSetting.get('default');
-  const receipt = buildReceiptPayload(
-    transaction,
-    companyProfile?.company_name,
-    getStoredReceiptPaperSize(),
-    options,
-  );
+  const trace = options.performanceTrace ?? createPosPerformanceTrace();
+  trace.checkpoint('print_start');
+  let dispatched = false;
+  const notifyDispatched = () => {
+    if (dispatched) return;
+    dispatched = true;
+    setTimeout(() => {
+      try {
+        options.onPrintDispatched?.();
+      } catch (error) {
+        console.error('Post-receipt refresh failed:', error);
+      } finally {
+        schedulePendingSyncQueue();
+      }
+    }, 0);
+  };
 
-  // Try USB printer first, then fall back to Bluetooth
-  const usbPrinter = getStoredUsbPrinter();
-  if (usbPrinter) {
+  try {
+    if (isTransactionExpense(transaction)) {
+      return {
+        success: false,
+        status: 'print_failed',
+        error: 'Pengeluaran internal tidak memiliki struk penjualan.',
+      };
+    }
+    const companyProfile = await db.companyProfileSetting.get('default');
+    const receipt = buildReceiptPayload(
+      transaction,
+      companyProfile?.company_name,
+      getStoredReceiptPaperSize(),
+      options,
+    );
+
+    trace.checkpoint('receipt_prepare');
+    // Use the selected USB printer when present, otherwise use Bluetooth.
+    const usbPrinter = getStoredUsbPrinter();
+    const bluetoothPrinter = usbPrinter ? null : getStoredBluetoothPrinter();
+    if (!usbPrinter && !bluetoothPrinter) {
+      const message = 'Printer belum dipilih (Bluetooth maupun USB).';
+      notifyDispatched();
+      await updateReceiptStatus(transaction.id, 'print_failed', message);
+      trace.checkpoint('receipt_status');
+      trace.report('printer_not_selected');
+      return { success: false, status: 'print_failed', error: message };
+    }
+
     try {
-      await printReceiptUsb(usbPrinter, receipt);
+      const printing = usbPrinter
+        ? printReceiptUsb(usbPrinter, receipt)
+        : printReceiptBluetooth(bluetoothPrinter!, receipt);
+      notifyDispatched();
+      await printing;
+      trace.checkpoint('printer_transport');
       await updateReceiptStatus(transaction.id, 'printed');
+      trace.checkpoint('receipt_status');
+      trace.report('receipt_printed');
       return { success: true, status: 'printed' };
     } catch (error) {
       const printerError: PrinterError = normalizePrinterError(error);
+      trace.checkpoint('printer_transport_failed');
       await updateReceiptStatus(transaction.id, 'print_failed', printerError.message);
+      trace.checkpoint('receipt_status');
+      trace.report('receipt_failed');
       return { success: false, status: 'print_failed', error: printerError.message };
     }
-  }
-
-  const bluetoothPrinter = getStoredBluetoothPrinter();
-  if (!bluetoothPrinter) {
-    const message = 'Printer belum dipilih (Bluetooth maupun USB).';
-    await updateReceiptStatus(transaction.id, 'print_failed', message);
-    return { success: false, status: 'print_failed', error: message };
-  }
-
-  try {
-    await printReceiptBluetooth(bluetoothPrinter, receipt);
-    await updateReceiptStatus(transaction.id, 'printed');
-    return { success: true, status: 'printed' };
-  } catch (error) {
-    const printerError: PrinterError = normalizePrinterError(error);
-    await updateReceiptStatus(transaction.id, 'print_failed', printerError.message);
-    return { success: false, status: 'print_failed', error: printerError.message };
+  } finally {
+    // A preparation error must not strand committed checkout outbox rows.
+    notifyDispatched();
   }
 };

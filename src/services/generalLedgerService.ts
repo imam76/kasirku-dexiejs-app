@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
-import { enqueueGeneralLedgerSettingSync } from '@/services/syncQueueService';
+import { buildJournalEntryBundleOutboxItem, enqueueGeneralLedgerSettingSync } from '@/services/syncQueueService';
 import type {
   AccountNormalBalance,
   AccountType,
@@ -125,6 +125,8 @@ export interface PostJournalEntryInput {
   description: string;
   lines: JournalLineDraft[];
   actor?: Pick<AuthUser, 'id' | 'name'> | null;
+  /** Caller includes syncQueue in its transaction and starts the worker after commit. */
+  syncInTransaction?: boolean;
 }
 
 interface OpeningBalanceLineInput {
@@ -146,6 +148,7 @@ interface CreateJournalEntryInput {
   lines: NormalizedJournalLine[];
   actor?: Pick<AuthUser, 'id' | 'name'> | null;
   scheduleSync?: boolean;
+  syncInTransaction?: boolean;
 }
 
 export interface JournalEntryWithLines extends JournalEntry {
@@ -644,11 +647,11 @@ const getPostedJournalEntryForSource = async (
   if (!sourceId) return undefined;
 
   return db.journalEntries
-    .where('source_type')
-    .equals(sourceType)
+    .where('source_id')
+    .equals(sourceId)
     .filter((entry) => (
       entry.status === 'POSTED' &&
-      entry.source_id === sourceId &&
+      entry.source_type === sourceType &&
       entry.source_event === sourceEvent
     ))
     .first();
@@ -673,6 +676,7 @@ const createPostedJournalEntry = async ({
   lines,
   actor,
   scheduleSync = true,
+  syncInTransaction = false,
 }: CreateJournalEntryInput): Promise<JournalEntry> => {
   const { totalDebit, totalCredit } = assertBalancedLines(lines);
   const now = new Date().toISOString();
@@ -703,7 +707,9 @@ const createPostedJournalEntry = async ({
 
   await db.journalEntries.add(entry);
   await db.journalEntryLines.bulkAdd(entryLines);
-  if (scheduleSync) {
+  if (syncInTransaction) {
+    await db.syncQueue.add(buildJournalEntryBundleOutboxItem(entry, entryLines, 'create', now));
+  } else if (scheduleSync) {
     scheduleJournalEntryBundleSync(entry.id, 'create');
   }
 
@@ -715,6 +721,7 @@ const reverseJournalEntry = async (
   reason: string,
   entryDate: string,
   actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  syncInTransaction = false,
 ) => {
   const existingReversal = await db.journalEntries
     .where('reversed_entry_id')
@@ -751,6 +758,7 @@ const reverseJournalEntry = async (
     reversed_entry_id: entry.id,
     lines: reversalLines,
     actor,
+    syncInTransaction,
   });
 
   const updatedEntry = withUpdatedJournalEntrySync({
@@ -759,7 +767,11 @@ const reverseJournalEntry = async (
     reversed_entry_id: reversal.id,
   }, actor);
   await db.journalEntries.put(updatedEntry);
-  scheduleJournalEntryBundleSync(updatedEntry.id, 'update');
+  if (syncInTransaction) {
+    await db.syncQueue.add(buildJournalEntryBundleOutboxItem(updatedEntry, lines, 'update'));
+  } else {
+    scheduleJournalEntryBundleSync(updatedEntry.id, 'update');
+  }
 
   return reversal;
 };
@@ -769,7 +781,11 @@ export const postBalancedJournalEntry = async (input: PostJournalEntryInput) => 
     return undefined;
   }
 
-  return db.transaction('rw', [db.journalEntries, db.journalEntryLines], async () => {
+  return db.transaction('rw', [
+    db.journalEntries,
+    db.journalEntryLines,
+    ...(input.syncInTransaction ? [db.syncQueue] : []),
+  ], async () => {
     const lines = normalizeLines(input.lines);
     const existingEntry = await getPostedJournalEntryForSource(input.source_type, input.source_id, input.source_event);
 
@@ -788,6 +804,7 @@ export const postBalancedJournalEntry = async (input: PostJournalEntryInput) => 
         `Pembalikan jurnal ${existingEntry.entry_number} karena source berubah.`,
         input.entry_date,
         input.actor,
+        input.syncInTransaction,
       );
     }
 
@@ -803,7 +820,11 @@ export const postBalancedJournalEntry = async (input: PostJournalEntryInput) => 
 export const postNonCashBalancedJournalEntry = async (input: PostJournalEntryInput) => {
   await assertNonCashGeneralLedgerPostingEnabled(input.entry_date);
 
-  return db.transaction('rw', [db.journalEntries, db.journalEntryLines], async () => {
+  return db.transaction('rw', [
+    db.journalEntries,
+    db.journalEntryLines,
+    ...(input.syncInTransaction ? [db.syncQueue] : []),
+  ], async () => {
     const lines = normalizeLines(input.lines);
     const existingEntry = await getPostedJournalEntryForSource(input.source_type, input.source_id, input.source_event);
 
@@ -1238,6 +1259,7 @@ export const postPosSaleJournal = async (
   items: TransactionItem[] = [],
   actor?: Pick<AuthUser, 'id' | 'name'> | null,
   payments: PosTransactionPayment[] = [],
+  options: { syncInTransaction?: boolean } = {},
 ) => {
   if (transaction.status === 'VOIDED') return undefined;
   if (!await isGeneralLedgerPostingEnabled(transaction.created_at)) return undefined;
@@ -1301,6 +1323,7 @@ export const postPosSaleJournal = async (
     description: `Penjualan POS ${transaction.transaction_number}`,
     lines,
     actor,
+    syncInTransaction: options.syncInTransaction,
   });
 };
 

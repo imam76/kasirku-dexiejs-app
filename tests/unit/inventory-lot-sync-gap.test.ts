@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { buildInventoryLotOutboxItem } from '../../src/services/syncQueueService';
+import { getSyncQueuePriority } from '../../src/lib/database/checkoutReadModels';
 import type { InventoryLot } from '../../src/types';
 
 const readSource = (relativePath: string) => readFileSync(
@@ -85,11 +86,7 @@ describe('inventory lot sync gap protection', () => {
     expect(queueSource).toContain(
       'await inventoryLotPostgresAdapter.upsert(mapInventoryLotToRemoteDto(localLot))',
     );
-    expect(queueSource).toContain(
-      'if (queueItem.entity === INVENTORY_LOT_ENTITY) return 1',
-    );
-    expect(queueSource).toContain(
-      'if (queueItem.entity === INVENTORY_LOT_CONSUMPTION_ENTITY) return 4',
-    );
+    expect(getSyncQueuePriority({ entity: 'inventoryLots' }))
+      .toBeLessThan(getSyncQueuePriority({ entity: 'inventoryLotConsumptions' }));
   });
 });

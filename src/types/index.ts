@@ -443,6 +443,8 @@ export interface DashboardPreference {
 
 export interface SyncQueueItem {
   id: string;
+  /** Local derived ordering key, maintained with the queue mutation. */
+  queue_priority?: number;
   entity: string;
   entity_id: string;
   operation: SyncQueueOperation;
@@ -3983,6 +3985,12 @@ export interface InventoryLot {
   source_line_id?: string;  // ID of the specific line item for traceability
   quantity_received: number; // Original quantity when lot was created (in product's purchase_unit)
   quantity_remaining: number; // Remaining quantity not yet consumed by sales (in purchase_unit)
+  /** Local read model maintained from the consumption ledger, including remote merges. */
+  fifo_remaining?: number;
+  fifo_available?: number;
+  /** Explicit opening-balance replacement; unlike consumption it has no ledger row. */
+  fifo_excluded?: boolean;
+  fifo_untracked_consumed?: number;
   cost_per_unit: number;     // HPP per unit (in purchase_unit)
   cost_status?: PurchaseCostStatus;
   estimate_source?: PurchaseCostEstimateSource;
