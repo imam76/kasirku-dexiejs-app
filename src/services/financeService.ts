@@ -188,7 +188,10 @@ export const recalculateFinance = async () => {
       const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.SALES);
       const cashAccount = await getCashOrBankAccountForPayment(transaction.payment_method);
       newAutoTransactions.push(withPendingFinanceTransactionSync({
-        id: crypto.randomUUID(),
+        // Stable across recalculations and devices. Random IDs made every
+        // rebuild look like a new sale in PostgreSQL when an older tombstone
+        // had not reached the server yet.
+        id: `auto-finance-pos-sale-${transaction.id}`,
         type: 'INCOME',
         category: FINANCE_CATEGORIES.SALES,
         amount: transaction.total_amount,
@@ -207,7 +210,7 @@ export const recalculateFinance = async () => {
       const accountSnapshot = await getFinanceAccountSnapshotForCategory(FINANCE_CATEGORIES.STOCK_PURCHASE);
       const cashAccount = await getCashOrBankAccountForPayment('TUNAI');
       newAutoTransactions.push(withPendingFinanceTransactionSync({
-        id: crypto.randomUUID(),
+        id: `auto-finance-stock-purchase-${stockPurchase.id}`,
         type: 'EXPENSE',
         category: FINANCE_CATEGORIES.STOCK_PURCHASE,
         amount: stockPurchase.total_cost,

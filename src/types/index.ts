@@ -3206,6 +3206,7 @@ export interface OpeningAdvanceBalanceRow {
 
 export type JournalSourceType =
   | 'POS_TRANSACTION'
+  | 'STOCK_OPNAME'
   | 'STOCK_PURCHASE'
   | 'SALES_INVOICE'
   | 'SALES_INVOICE_PAYMENT'

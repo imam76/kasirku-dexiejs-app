@@ -7,7 +7,11 @@ import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
 import { evaluateLotteryForTransaction, getActiveLotteries } from '@/services/lotteryService';
-import { postPosExpenseJournal, postPosSaleJournal } from '@/services/generalLedgerService';
+import {
+  postPosExpenseJournal,
+  postPosPhysicalStockFoundJournal,
+  postPosSaleJournal,
+} from '@/services/generalLedgerService';
 import {
   buildPosPaymentSnapshot,
 } from '@/services/posPaymentMethodService';
@@ -770,6 +774,11 @@ export const checkout = async ({
       await db.transactions.add(transaction);
       await db.transactionItems.bulkAdd(items);
 
+      const discrepancyIds = checkoutDiscrepancies.map((row) => row.id);
+      const discrepancyLots = discrepancyIds.length > 0
+        ? await db.inventoryLots.where('source_id').anyOf(discrepancyIds).toArray()
+        : [];
+
       if (membershipEvaluation.member && memberBalanceAfter !== undefined) {
         let runningBalance = memberStartingBalance;
 
@@ -820,6 +829,12 @@ export const checkout = async ({
       financeTransactions = await recordFinanceIncome(transaction, createdAt, paymentRecords, currentUser);
       await db.posTransactionPayments.bulkAdd(paymentRecords);
       performanceTrace.checkpoint('sale_records');
+      await postPosPhysicalStockFoundJournal(
+        transaction,
+        discrepancyLots,
+        currentUser,
+        { syncInTransaction: true },
+      );
       await postPosSaleJournal(transaction, items, currentUser, paymentRecords, { syncInTransaction: true });
       performanceTrace.checkpoint('journal_and_outbox');
       const saleStock = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
@@ -836,10 +851,6 @@ export const checkout = async ({
         await db.stockMutations.bulkPut(stockMutations);
       }
       performanceTrace.checkpoint('stock_mutations');
-      const discrepancyIds = checkoutDiscrepancies.map((row) => row.id);
-      const discrepancyLots = discrepancyIds.length > 0
-        ? await db.inventoryLots.where('source_id').anyOf(discrepancyIds).toArray()
-        : [];
       const consumptions = await db.inventoryLotConsumptions
         .where('source_id')
         .equals(transaction.id)

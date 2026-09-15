@@ -14,6 +14,7 @@ import type {
   EmployeeCashAdvance,
   FinanceTransaction,
   GeneralLedgerSetting,
+  InventoryLot,
   InventoryAccountingPolicy,
   JournalEntry,
   JournalEntryLine,
@@ -36,6 +37,8 @@ import type {
   SalesReturn,
   SalesReturnItem,
   StockPurchase,
+  StockOpname,
+  StockOpnameItem,
   Transaction,
   TransactionItem,
 } from '@/types';
@@ -56,6 +59,8 @@ const JOURNAL_TOLERANCE = 0.01;
 const SOURCE_EVENTS = {
   POS_SALE_POSTED: 'POS_SALE_POSTED',
   POS_EXPENSE_POSTED: 'POS_EXPENSE_POSTED',
+  POS_PHYSICAL_STOCK_FOUND_POSTED: 'POS_PHYSICAL_STOCK_FOUND_POSTED',
+  STOCK_OPNAME_POSTED: 'STOCK_OPNAME_POSTED',
   STOCK_PURCHASE_POSTED: 'STOCK_PURCHASE_POSTED',
   SALES_INVOICE_ISSUED: 'SALES_INVOICE_ISSUED',
   SALES_INVOICE_PAYMENT_POSTED: 'SALES_INVOICE_PAYMENT_POSTED',
@@ -1471,6 +1476,89 @@ export const reversePosExpenseJournal = async (
   reason,
   actor,
 });
+
+export const postPosPhysicalStockFoundJournal = async (
+  transaction: Transaction,
+  lots: InventoryLot[] = [],
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  options: { syncInTransaction?: boolean } = {},
+) => {
+  if (transaction.status === 'VOIDED' || lots.length === 0) return undefined;
+  if (!await isGeneralLedgerPostingEnabled(transaction.created_at)) return undefined;
+  if (await getInventoryPolicy() !== 'PERPETUAL_INVENTORY') return undefined;
+
+  const amount = roundCurrency(lots.reduce((sum, lot) => (
+    sum + amountOrZero(lot.quantity_received) * amountOrZero(lot.cost_per_unit)
+  ), 0));
+  if (amount <= 0) return undefined;
+
+  const accounts = await readCandidateAccounts([
+    ACCOUNT_CANDIDATES.inventory,
+    ACCOUNT_CANDIDATES.otherIncome,
+  ]);
+  const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
+  const otherIncomeAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.otherIncome, 'Pendapatan Selisih Persediaan');
+
+  return postBalancedJournalEntry({
+    source_type: 'POS_TRANSACTION',
+    source_id: transaction.id,
+    source_number: transaction.transaction_number,
+    source_event: SOURCE_EVENTS.POS_PHYSICAL_STOCK_FOUND_POSTED,
+    entry_date: transaction.created_at,
+    description: `Stok fisik ditemukan saat transaksi ${transaction.transaction_number}`,
+    lines: [
+      createDebitLine(inventoryAccount, amount, 'Persediaan fisik yang belum tercatat ditemukan di POS'),
+      createCreditLine(otherIncomeAccount, amount, 'Pendapatan selisih persediaan yang ditemukan di POS'),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+    syncInTransaction: options.syncInTransaction,
+  });
+};
+
+export const postStockOpnameJournal = async (
+  opname: StockOpname,
+  items: StockOpnameItem[] = [],
+  actor?: Pick<AuthUser, 'id' | 'name'> | null,
+  options: { syncInTransaction?: boolean } = {},
+) => {
+  if (opname.status !== 'POSTED' || !opname.posted_at) return undefined;
+  if (!await isGeneralLedgerPostingEnabled(opname.posted_at)) return undefined;
+  if (await getInventoryPolicy() !== 'PERPETUAL_INVENTORY') return undefined;
+
+  const adjustmentIn = roundCurrency(items.reduce((sum, item) => (
+    item.quantity_delta > 0 ? sum + Math.abs(amountOrZero(item.variance_value)) : sum
+  ), 0));
+  const adjustmentOut = roundCurrency(items.reduce((sum, item) => (
+    item.quantity_delta < 0 ? sum + Math.abs(amountOrZero(item.variance_value)) : sum
+  ), 0));
+  if (adjustmentIn <= 0 && adjustmentOut <= 0) return undefined;
+
+  const accounts = await readCandidateAccounts([
+    ACCOUNT_CANDIDATES.inventory,
+    ACCOUNT_CANDIDATES.otherIncome,
+    ACCOUNT_CANDIDATES.otherExpense,
+  ]);
+  const inventoryAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.inventory, 'Persediaan Barang');
+  const otherIncomeAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.otherIncome, 'Pendapatan Selisih Persediaan');
+  const otherExpenseAccount = getPostableAccount(accounts, ACCOUNT_CANDIDATES.otherExpense, 'Beban Selisih Persediaan');
+
+  return postBalancedJournalEntry({
+    source_type: 'STOCK_OPNAME',
+    source_id: opname.id,
+    source_number: opname.opname_number,
+    source_event: SOURCE_EVENTS.STOCK_OPNAME_POSTED,
+    entry_date: opname.posted_at,
+    description: `Penyesuaian persediaan dari stock opname ${opname.opname_number}`,
+    lines: [
+      createDebitLine(inventoryAccount, adjustmentIn, 'Persediaan bertambah dari stock opname'),
+      createCreditLine(otherIncomeAccount, adjustmentIn, 'Pendapatan selisih lebih stock opname'),
+      createDebitLine(otherExpenseAccount, adjustmentOut, 'Beban selisih kurang stock opname'),
+      createCreditLine(inventoryAccount, adjustmentOut, 'Persediaan berkurang dari stock opname'),
+    ].filter((line): line is JournalLineDraft => Boolean(line)),
+    actor,
+    syncInTransaction: options.syncInTransaction,
+  });
+};
 
 export const postStockPurchaseJournal = async (
   purchase: StockPurchase,

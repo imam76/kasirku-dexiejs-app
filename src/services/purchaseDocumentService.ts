@@ -798,6 +798,13 @@ export const issuePurchaseDocument = async (id: string) => {
   }, document, currentUser);
 
   await db.transaction('rw', purchaseDocumentTables, async () => {
+    // The document was read before entering this transaction. Re-read it
+    // after Dexie's write lock is acquired so two quick issue actions cannot
+    // add stock lots twice from the same document lines.
+    const currentDocument = await db.purchaseDocuments.get(id);
+    if (!currentDocument) throw new Error('Dokumen tidak ditemukan.');
+    assertDraft(currentDocument);
+
     if (shouldApplyPurchaseReturnStockImpact(issuedDocument, config)) {
       ({ stockMutations, touchedProductIds } = await removePurchaseReturnStock(issuedDocument, items, currentUser, now));
     } else if (shouldApplyPurchaseStockInImpact(issuedDocument, config)) {

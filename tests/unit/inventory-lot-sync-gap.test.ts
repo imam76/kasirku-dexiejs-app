@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { buildInventoryLotOutboxItem } from '../../src/services/syncQueueService';
 import { getSyncQueuePriority } from '../../src/lib/database/checkoutReadModels';
+import { buildInventoryLotId } from '../../src/utils/inventory/addInventoryLot';
 import type { InventoryLot } from '../../src/types';
 
 const readSource = (relativePath: string) => readFileSync(
@@ -10,6 +11,19 @@ const readSource = (relativePath: string) => readFileSync(
 );
 
 describe('inventory lot sync gap protection', () => {
+  test('uses one stable lot ID for the same business source line', () => {
+    const source = {
+      sourceType: 'PURCHASE_INVOICE' as const,
+      sourceId: 'purchase-1',
+      sourceLineId: 'purchase-line-1',
+    };
+
+    expect(buildInventoryLotId(source)).toBe(
+      'inventory-lot:PURCHASE_INVOICE:purchase-1:purchase-line-1',
+    );
+    expect(buildInventoryLotId(source)).toBe(buildInventoryLotId(source));
+  });
+
   test('seeds a new remote lot from received quantity instead of an already-consumed balance', () => {
     const lot: InventoryLot = {
       id: 'lot-parent-1',
