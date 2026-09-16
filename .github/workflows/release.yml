@@ -43,7 +43,8 @@ jobs:
             exit 1
           fi
 
-          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" 2>/dev/null || true)"
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            | jq -c --arg tag "$tag" 'map(select(.tag_name == $tag))[0] // empty')"
 
           if [ -n "$release_json" ]; then
             if [ "$(jq -r '.draft' <<< "$release_json")" != "true" ]; then
