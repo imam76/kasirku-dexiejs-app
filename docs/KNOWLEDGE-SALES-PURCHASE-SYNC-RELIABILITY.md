@@ -6,9 +6,11 @@ Dokumen ini menyimpan hasil pembahasan mengenai dokumen sales/purchase yang suda
 posting dan terlihat tersinkron, tetapi belum tampil atau belum diperbarui pada
 perangkat lain setelah gangguan listrik, koneksi, atau pergantian IP.
 
-Status: hasil audit kode dan rekomendasi desain. Penyebab insiden operasional belum
+Status: hasil audit kode, rekomendasi desain, dan implementasi pemulihan awal
+(lihat bagian 7). Penyebab insiden operasional belum
 dikonfirmasi menggunakan dokumen terdampak dari perangkat pengirim, PostgreSQL,
-dan perangkat penerima. Rekomendasi di sini belum merupakan implementasi.
+dan perangkat penerima. Bagian 1–6 mencatat kondisi audit awal dan rancangan;
+tidak semua rekomendasi sudah diimplementasikan.
 
 Dokumen terkait: [Tech Debt Phase 1: Sync Architecture](TECH-DEBT-PHASE-1-SYNC-ARCHITECTURE.md).
 
@@ -252,3 +254,93 @@ verifikasi untuk implementasi berikutnya, bukan daftar pengujian yang sudah sele
 - [Sequence manipulation functions](https://www.postgresql.org/docs/current/functions-sequence.html):
   alokasi sequence terjadi sebelum transaksi selesai dan tidak dibatalkan bersama
   rollback; sequence unik tidak dengan sendirinya membuktikan urutan commit.
+
+## 7. Implementasi pemulihan awal — 16 September 2026
+
+### Cara menggunakan
+
+Pada perangkat yang kehilangan transaksi, buka **Sync DB → Kelengkapan dokumen
+sales & purchase → Periksa & perbaiki dokumen**. Fitur memerlukan aplikasi Tauri
+dan koneksi PostgreSQL yang sehat. Tidak perlu menghapus data lokal atau cursor.
+
+Pemeriksaan membaca ulang seluruh dokumen sales/purchase, 100 bundle per halaman,
+tanpa menggunakan atau mengubah cursor delta. Dengan demikian dokumen yang datang
+terlambat dan berada di belakang cursor tetap dapat ditemukan. Dokumen yang belum
+ada di lokal dan item lokal yang hilang dipulihkan dari server. Item hilang hanya
+dipulihkan otomatis bila header dan seluruh item lokal yang masih ada cocok.
+Versi server yang lebih baru diterapkan mengikuti urutan version/updated_at yang
+sudah digunakan aplikasi. Pemeriksaan isi menggunakan field yang tercakup mapper
+sync saat ini, bukan semua field lokal yang belum mempunyai kontrak PostgreSQL.
+
+Hasil menampilkan jumlah diperiksa, dipulihkan, dan perlu ditinjau. Tombol
+**Ekspor hasil pemeriksaan** menghasilkan JSON berisi laporan dan snapshot
+perbandingan lokal/server. Snapshot lokal sebelum penggantian serta perbedaan
+yang belum diselesaikan disimpan di Dexie, terpisah dari antrean upload. Ekspor
+dapat mengandung rincian transaksi; simpan bersama bukti insiden internal.
+
+### Tindakan untuk setiap hasil
+
+| Kondisi | Perilaku |
+| --- | --- |
+| Ada di server, tidak ada di perangkat | Tarik header dan item otomatis. |
+| Item lokal hilang, header/item lain cocok | Pulihkan bundle server otomatis. |
+| Server lebih baru, lokal tidak pending | Simpan snapshot lokal lalu terapkan bundle server. |
+| Lokal pending/failed atau ada queue aktif | Pertahankan lokal; tampilkan belum selesai dikirim. Gunakan Sync sekarang/Retry lalu periksa ulang. |
+| Lokal synced, server tidak punya ID tersebut | Konfirmasi dengan get-by-ID lalu catat `missing_remote`; tidak upload ulang secara buta. |
+| Lokal lebih baru atau isi berbeda pada revisi sama | Simpan kedua salinan untuk ditinjau; tidak memilih pemenang otomatis. |
+| Identitas database berbeda | Hentikan pemeriksaan; periksa pengaturan host. |
+| Koneksi putus di tengah pemeriksaan | Tandai gagal, pertahankan hasil halaman yang sudah commit, ulang dari awal pada percobaan berikutnya. |
+
+Data yang hilang di **server** masih memerlukan penentuan salinan yang benar
+(termasuk kemungkinan restore database), beserta pemeriksaan stok/jurnal terkait.
+Fitur ini belum menyediakan pemulihan server atau penyelesaian konflik posting
+otomatis. Ekspor dari kedua perangkat membantu membandingkan kasus tersebut.
+
+### Otomatisasi dan penjagaan
+
+- Worker melakukan catch-up normal paling sering setiap 60 detik setelah health
+  check sukses, termasuk ketika realtime kehilangan notifikasi. Health check tetap
+  berjalan setiap 10 detik. Satu worker tidak menjalankan recovery tumpang tindih.
+- Rekonsiliasi penuh berjalan pada startup/koneksi pulih dan setiap 15 menit
+  selama aplikasi aktif. Kembali ke aplikasi menjalankan pemeriksaan koneksi;
+  interval tetap membatasi frekuensi pekerjaan. Pemanggilan manual/otomatis yang
+  bersamaan menunggu promise pemeriksaan yang sama.
+- Revisi lokal, queue aktif, penyimpanan snapshot dan penerapan bundle diperiksa
+  dalam transaksi Dexie yang sama. Edit lokal selama request jaringan dilindungi.
+- Pull normal/realtime juga mempertahankan queue aktif dan konflik terbuka yang
+  sudah tercatat. Konflik dapat ditutup ketika pemeriksaan berikutnya membuktikan
+  data cocok; snapshot terakhir tetap tersedia.
+- Identitas host dibandingkan sebelum drain queue, full refresh, dan selama
+  rekonsiliasi. Ini bukan jaminan deteksi restore yang mempertahankan instance ID,
+  ataupun pengikatan atomik seluruh request ke satu generasi koneksi backend.
+- Upload sales/purchase memeriksa ID/status/version/updated_at pada respons.
+  Respons dengan revisi berbeda menghasilkan error `CONFLICT`, mempertahankan
+  payload queue dan tidak membuat revisi lokal menjadi synced. Ini belum kontrak
+  `operation_id`, belum mendeteksi seluruh konflik dengan revisi sama, dan belum
+  membuat posting beserta efek stok/jurnal atomik.
+
+Implementasi utama:
+
+- [documentSyncReconciliationService.ts](../src/services/documentSyncReconciliationService.ts)
+- [documentSyncComparison.ts](../src/services/shared/documentSyncComparison.ts)
+- [DocumentSyncReconciliationPanel.tsx](../src/components/DocumentSyncReconciliationPanel.tsx)
+- [migrasi Dexie v139](../src/lib/database/migrations/versions/v139.ts)
+
+Ini adalah rekonsiliasi berkala yang memulihkan celah cursor lama, **belum migrasi
+ke server_revision**. Perubahan yang commit di belakang halaman selama scan bisa
+baru ditemukan pada scan berikutnya. Biaya scan tumbuh mengikuti jumlah dokumen;
+interval 15 menit dan ukuran halaman 100 belum diuji terhadap beban produksi.
+Verifikasi kelengkapan stok, pembayaran, jurnal, transactional outbox, receipt
+operasi server, dan resolusi konflik domain tetap merupakan pekerjaan lanjutan.
+
+### Verifikasi implementasi
+
+- Unit test menguji klasifikasi perbedaan, perlindungan pending, normalisasi waktu,
+  item duplikat, dan penolakan acknowledgement revisi berbeda.
+- Integrasi Playwright menggunakan IndexedDB asli dan transport Tauri yang
+  disimulasikan: upload terlambat di belakang cursor, lebih dari satu halaman,
+  item hilang, konflik bertahan setelah refresh, pemeriksaan idempoten, laporan
+  bertahan setelah database dibuka ulang, koneksi terputus pada halaman kedua,
+  retry, host berbeda, serta upload konflik yang tetap failed.
+- Pengujian transport simulasi bukan pembuktian insiden produksi atau pengujian
+  commit bersamaan pada PostgreSQL sesungguhnya.

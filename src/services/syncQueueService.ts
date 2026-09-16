@@ -1,4 +1,6 @@
 import { db } from '@/lib/db';
+import { sameDocumentRevision } from '@/services/shared/documentSyncComparison';
+import { assertCurrentHostIdentity } from '@/services/hostIdentityService';
 import { readPendingSyncQueueBatch } from './pendingSyncQueueReadService';
 import { pruneSyncedSyncQueueItems } from './syncQueueRetentionService';
 import {
@@ -325,6 +327,7 @@ const normalizeRemoteNumber = (value: number | undefined) => (
 
 const isPostgresAvailableForSync = async () => {
   const health = await postgresAdapter.healthCheck();
+  if (health.available) await assertCurrentHostIdentity();
   return health.available;
 };
 
@@ -1989,7 +1992,7 @@ const mapTransactionBundleToRemoteDto = (
   items: items.map(mapTransactionItemToRemoteDto),
 });
 
-const mapSalesDocumentBundleToRemoteDto = (
+export const mapSalesDocumentBundleToRemoteDto = (
   document: SalesDocument,
   items: SalesDocumentItem[],
 ): RemoteSalesDocumentBundleDto => ({
@@ -2143,7 +2146,7 @@ const mapPurchaseDocumentItemToRemoteDto = (item: PurchaseDocumentItem): RemoteP
   created_at: item.created_at,
 });
 
-const mapPurchaseDocumentBundleToRemoteDto = (
+export const mapPurchaseDocumentBundleToRemoteDto = (
   document: PurchaseDocument,
   items: PurchaseDocumentItem[],
 ): RemotePurchaseDocumentBundleDto => ({
@@ -5367,7 +5370,11 @@ const processPurchaseDocumentQueueItem = async (queueItem: SyncQueueItem) => {
     throw new Error('Payload purchase document sync queue tidak valid.');
   }
 
-  return purchaseDocumentPostgresAdapter.upsert(queueItem.payload);
+  const remote = await purchaseDocumentPostgresAdapter.upsert(queueItem.payload);
+  if (remote && !sameDocumentRevision(queueItem.payload.document, remote.document)) {
+    throw new Error('CONFLICT: Revisi dokumen pembelian ditolak server. Periksa sinkronisasi dokumen di Sync DB.');
+  }
+  return remote;
 };
 
 const processPurchaseCostReconciliationQueueItem = async (queueItem: SyncQueueItem) => {
@@ -5391,7 +5398,11 @@ const processSalesDocumentQueueItem = async (queueItem: SyncQueueItem) => {
     throw new Error('Payload sales document sync queue tidak valid.');
   }
 
-  return salesDocumentPostgresAdapter.upsert(queueItem.payload);
+  const remote = await salesDocumentPostgresAdapter.upsert(queueItem.payload);
+  if (remote && !sameDocumentRevision(queueItem.payload.document, remote.document)) {
+    throw new Error('CONFLICT: Revisi dokumen penjualan ditolak server. Periksa sinkronisasi dokumen di Sync DB.');
+  }
+  return remote;
 };
 
 const processTransactionQueueItem = async (queueItem: SyncQueueItem) => {

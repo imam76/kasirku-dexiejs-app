@@ -24,7 +24,7 @@ import { getCompanyProfileSetting } from '@/services/companyProfileSettingServic
 import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/cooperativeCollectionEventService';
 import { refreshCurrenciesFromPostgres, refreshCurrencyRatesFromPostgres } from '@/services/currencyReadService';
 import { refreshDepartmentsFromPostgres } from '@/services/departmentReadService';
-import { bindHostIdentityIfUnbound } from '@/services/hostIdentityService';
+import { assertCurrentHostIdentity } from '@/services/hostIdentityService';
 import { refreshEmployeesFromPostgres } from '@/services/employeeReadService';
 import { refreshHrDataFromPostgres } from '@/services/hrReadService';
 import { refreshFinanceTransactionsFromPostgres } from '@/services/financeTransactionReadService';
@@ -155,7 +155,7 @@ export const refreshAllDataFromPostgres = async () => {
     };
   }
 
-  await bindHostIdentityIfUnbound();
+  await assertCurrentHostIdentity();
 
   const refreshResults = {
     roles: await refreshRolesFromPostgres(),

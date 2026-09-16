@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { hasOpenDocumentSyncConflict } from '@/services/shared/documentSyncIssueGuard';
 import {
   isPostgresUnavailableError,
   isTauriRuntime,
@@ -106,7 +107,7 @@ const toPositiveVersion = (version: number | null | undefined) => (
   typeof version === 'number' && Number.isFinite(version) && version > 0 ? version : 1
 );
 
-const mapRemoteSalesDocumentToLocal = (
+export const mapRemoteSalesDocumentToLocal = (
   remoteDocument: RemoteSalesDocumentDto,
   syncedAt: string,
 ): SalesDocument => ({
@@ -196,7 +197,7 @@ const mapRemoteSalesDocumentToLocal = (
   remote_updated_at: toCanonicalIsoTimestamp(remoteDocument.updated_at),
 });
 
-const mapRemoteSalesDocumentItemToLocal = (
+export const mapRemoteSalesDocumentItemToLocal = (
   remoteItem: RemoteSalesDocumentItemDto,
 ): SalesDocumentItem => ({
   id: remoteItem.id,
@@ -301,10 +302,11 @@ export const mergeRemoteSalesDocumentBundlesIntoDexie = async (
   };
   if (remoteBundles.length === 0) return result;
 
-  await db.transaction('rw', db.salesDocuments, db.salesDocumentItems, async () => {
+  await db.transaction('rw', [db.salesDocuments, db.salesDocumentItems, db.documentSyncIssues, db.syncQueue], async () => {
     for (const remoteBundle of remoteBundles) {
       const localDocument = await db.salesDocuments.get(remoteBundle.document.id);
-      if (!shouldApplyRemoteSalesDocument(localDocument, remoteBundle.document)) {
+      if (!shouldApplyRemoteSalesDocument(localDocument, remoteBundle.document)
+        || await hasOpenDocumentSyncConflict('salesDocuments', remoteBundle.document.id)) {
         result.skipped += 1;
         continue;
       }

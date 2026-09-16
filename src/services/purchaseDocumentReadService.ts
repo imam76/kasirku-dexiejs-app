@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { hasOpenDocumentSyncConflict } from '@/services/shared/documentSyncIssueGuard';
 import {
   isTauriRuntime,
   purchaseDocumentPostgresAdapter,
@@ -105,7 +106,7 @@ const toPositiveVersion = (version: number | null | undefined) => (
   typeof version === 'number' && Number.isFinite(version) && version > 0 ? version : 1
 );
 
-const mapRemotePurchaseDocumentToLocal = (
+export const mapRemotePurchaseDocumentToLocal = (
   remoteDocument: RemotePurchaseDocumentDto,
   syncedAt: string,
 ): PurchaseDocument => ({
@@ -208,7 +209,7 @@ const mapRemotePurchaseDocumentToLocal = (
   remote_updated_at: toCanonicalIsoTimestamp(remoteDocument.updated_at),
 });
 
-const mapRemotePurchaseDocumentItemToLocal = (
+export const mapRemotePurchaseDocumentItemToLocal = (
   remoteItem: RemotePurchaseDocumentItemDto,
 ): PurchaseDocumentItem => ({
   id: remoteItem.id,
@@ -310,10 +311,11 @@ export const mergeRemotePurchaseDocumentBundlesIntoDexie = async (
   };
   if (remoteBundles.length === 0) return result;
 
-  await db.transaction('rw', db.purchaseDocuments, db.purchaseDocumentItems, async () => {
+  await db.transaction('rw', [db.purchaseDocuments, db.purchaseDocumentItems, db.documentSyncIssues, db.syncQueue], async () => {
     for (const remoteBundle of remoteBundles) {
       const localDocument = await db.purchaseDocuments.get(remoteBundle.document.id);
-      if (!shouldApplyRemotePurchaseDocument(localDocument, remoteBundle.document)) {
+      if (!shouldApplyRemotePurchaseDocument(localDocument, remoteBundle.document)
+        || await hasOpenDocumentSyncConflict('purchaseDocuments', remoteBundle.document.id)) {
         result.skipped += 1;
         continue;
       }
