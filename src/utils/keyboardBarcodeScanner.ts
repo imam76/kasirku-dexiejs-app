@@ -47,3 +47,19 @@ export const finishKeyboardBarcodeScan = (
   const normalizedCode = buffer.value.trim();
   return normalizedCode.length >= minLength ? normalizedCode : undefined;
 };
+
+const QUANTITY_LIKE_CHARACTERS = /^[0-9.,]+$/;
+
+/**
+ * Quantity fields need a stricter barcode heuristic than the global POS
+ * listener. A cashier can reasonably type a short number very quickly, so a
+ * numeric sequence is only treated as a scan once it reaches six digits.
+ * Alphanumeric SKUs can be recognized from the normal scanner minimum.
+ */
+export const isLikelyBarcodeWhileEditingQuantity = (value: string) => {
+  const normalizedValue = value.trim();
+  if (normalizedValue.length < KEYBOARD_BARCODE_MIN_LENGTH) return false;
+
+  return !QUANTITY_LIKE_CHARACTERS.test(normalizedValue)
+    || normalizedValue.replace(/[.,]/g, '').length >= 6;
+};

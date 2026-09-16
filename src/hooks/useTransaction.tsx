@@ -36,6 +36,7 @@ import {
 import { createPosPerformanceTrace } from '@/utils/posPerformance';
 
 const TRANSACTION_PRODUCT_PAGE_SIZE = 12;
+const PRODUCT_SEARCH_DEBOUNCE_MS = 120;
 const FALLBACK_MEMBERSHIP_SETTING: MembershipSetting = {
   ...DEFAULT_MEMBERSHIP_SETTING,
   created_at: '',
@@ -83,8 +84,17 @@ export const useTransaction = (draftScope?: string) => {
   } = useTransactionStore();
   const { options: paymentMethods, validMethods } = usePosPaymentMethods();
   const [selectedProductCategory, setSelectedProductCategoryState] = useState<string>();
-  const productSearchTerm = normalizeProductSearchTerm(searchTerm);
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState(searchTerm);
+  const productSearchTerm = normalizeProductSearchTerm(debouncedProductSearch);
   const isPosProcessReady = activeDraftScope === draftScope;
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedProductSearch(searchTerm);
+    }, PRODUCT_SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchTerm]);
 
   useLayoutEffect(() => {
     switchDraftScope(draftScope);

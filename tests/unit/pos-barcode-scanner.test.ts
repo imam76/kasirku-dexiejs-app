@@ -4,6 +4,7 @@ import { useTransactionStore } from '@/store/transactionStore';
 import {
   appendKeyboardBarcodeCharacter,
   finishKeyboardBarcodeScan,
+  isLikelyBarcodeWhileEditingQuantity,
   isKeyboardBarcodeBufferActive,
   type KeyboardBarcodeBuffer,
 } from '@/utils/keyboardBarcodeScanner';
@@ -59,6 +60,13 @@ describe('POS barcode scanner', () => {
 
     expect(isKeyboardBarcodeBufferActive(buffer, 1_050)).toBe(true);
     expect(isKeyboardBarcodeBufferActive(buffer, 1_250)).toBe(false);
+  });
+
+  test('distinguishes a barcode scan from rapidly typed quantities', () => {
+    expect(isLikelyBarcodeWhileEditingQuantity('POS-BOX')).toBe(true);
+    expect(isLikelyBarcodeWhileEditingQuantity('8991234567890')).toBe(true);
+    expect(isLikelyBarcodeWhileEditingQuantity('12')).toBe(false);
+    expect(isLikelyBarcodeWhileEditingQuantity('12.5')).toBe(false);
   });
 
   test('repeated scans add quantity to one cart line', () => {
