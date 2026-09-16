@@ -274,6 +274,7 @@ const restoreInventoryOpeningLots = async (
       lotsToPut.set(lot.id, {
         ...lot,
         quantity_remaining: 0,
+        fifo_excluded: true,
         updated_at: syncedAt,
       });
     }

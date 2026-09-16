@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Table, Button, Card, Tag, Typography, Statistic, Select, Row, Col, Divider, Empty } from 'antd';
+import { useState } from 'react';
+import { Table, Button, Card, DatePicker, Tag, Typography, Statistic, Select, Row, Col, Divider, Empty } from 'antd';
 import { useFinance } from '@/hooks/useFinance';
 import { useCashBankTransfer } from '@/hooks/useCashBankTransfer';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -30,112 +30,47 @@ import { FinanceTransaction, FinanceTransactionType } from '@/types';
 import {
   FINANCE_CATEGORIES,
   getFinanceTransactionBusinessType,
-  isInternalCashMovementFinanceCategory,
 } from '@/constants/finance';
+import dayjs from '@/lib/dayjs';
 
 const { Title, Text } = Typography;
 
 export default function FinanceManagement() {
-  const { balance, transactions, isLoading, addTransaction, isAdding, recalculate, isRecalculating } = useFinance();
-  const { cashBankAccounts, recordTransfer, isRecordingTransfer } = useCashBankTransfer();
-  const { t } = useI18n();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [modalType, setModalType] = useState<FinanceTransactionType>('INCOME');
   const [accountFilter, setAccountFilter] = useState<string>('ALL');
   const [accountTypeFilter, setAccountTypeFilter] = useState<string>('ALL');
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>(() => [
+    dayjs.tz().startOf('month'),
+    dayjs.tz().endOf('day'),
+  ]);
+  const {
+    balance,
+    transactions,
+    overview,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    loadMore,
+    addTransaction,
+    isAdding,
+    recalculate,
+    isRecalculating,
+  } = useFinance({
+    startDate: dateRange[0].startOf('day').toISOString(),
+    endDate: dateRange[1].endOf('day').toISOString(),
+    accountId: accountFilter === 'ALL' ? undefined : accountFilter,
+    accountType: accountTypeFilter === 'ALL' ? undefined : accountTypeFilter,
+  });
+  const { cashBankAccounts, recordTransfer, isRecordingTransfer } = useCashBankTransfer();
+  const { t } = useI18n();
   const isMobile = useIsMobile();
-
-  const summary = useMemo(() => {
-    return transactions.reduce((acc, t) => {
-      if (isInternalCashMovementFinanceCategory(t.category)) return acc;
-
-      const businessType = getFinanceTransactionBusinessType(t);
-
-      if (businessType === 'OPENING_BALANCE') acc.opening += t.amount;
-      else if (businessType === 'INCOME') acc.income += t.amount;
-      else if (businessType === 'EXPENSE') acc.expense += t.amount;
-      return acc;
-    }, { opening: 0, income: 0, expense: 0 });
-  }, [transactions]);
-
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter((transaction) => {
-      const accountKey = transaction.account_id ?? 'UNMAPPED';
-      const matchesAccount = accountFilter === 'ALL' || accountFilter === accountKey;
-      const matchesAccountType =
-        accountTypeFilter === 'ALL' ||
-        (accountTypeFilter === 'UNMAPPED' ? !transaction.account_type : transaction.account_type === accountTypeFilter);
-
-      return matchesAccount && matchesAccountType;
-    });
-  }, [accountFilter, accountTypeFilter, transactions]);
-
-  const accountOptions = useMemo(() => {
-    const options = new Map<string, string>();
-    transactions.forEach((transaction) => {
-      if (transaction.account_id && transaction.account_code && transaction.account_name) {
-        options.set(transaction.account_id, `${transaction.account_code} - ${transaction.account_name}`);
-      }
-    });
-
-    return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
-  }, [transactions]);
-
-  const accountTypeSummary = useMemo(() => {
-    return filteredTransactions.reduce<Record<string, number>>((acc, transaction) => {
-      const key = transaction.account_type ?? 'UNMAPPED';
-      acc[key] = (acc[key] || 0) + transaction.amount;
-      return acc;
-    }, {});
-  }, [filteredTransactions]);
-
-  const cashBankSummary = useMemo(() => {
-    const summaryMap = new Map<string, {
-      key: string;
-      label: string;
-      balance: number;
-      inflow: number;
-      outflow: number;
-      count: number;
-    }>();
-
-    transactions.forEach((transaction) => {
-      const cashAccountId = transaction.cash_account_id
-        ?? (transaction.account_type === 'ASSET' ? transaction.account_id : undefined);
-      const cashAccountCode = transaction.cash_account_code
-        ?? (transaction.account_type === 'ASSET' ? transaction.account_code : undefined);
-      const cashAccountName = transaction.cash_account_name
-        ?? (transaction.account_type === 'ASSET' ? transaction.account_name : undefined);
-
-      if (!cashAccountId || !cashAccountName) return;
-
-      const businessType = getFinanceTransactionBusinessType(transaction);
-      const signedAmount = businessType === 'EXPENSE'
-        ? -transaction.amount
-        : transaction.amount;
-      const existing = summaryMap.get(cashAccountId) ?? {
-        key: cashAccountId,
-        label: cashAccountCode ? `${cashAccountCode} - ${cashAccountName}` : cashAccountName,
-        balance: 0,
-        inflow: 0,
-        outflow: 0,
-        count: 0,
-      };
-
-      existing.balance += signedAmount;
-      if (signedAmount >= 0) {
-        existing.inflow += signedAmount;
-      } else {
-        existing.outflow += Math.abs(signedAmount);
-      }
-      existing.count += 1;
-      summaryMap.set(cashAccountId, existing);
-    });
-
-    return Array.from(summaryMap.values())
-      .sort((left, right) => left.label.localeCompare(right.label));
-  }, [transactions]);
+  const summary = overview ?? { opening: 0, income: 0, expense: 0 };
+  const filteredTransactions = transactions;
+  const accountOptions = overview?.accountOptions ?? [];
+  const accountTypeSummary = overview?.accountTypeSummary ?? {};
+  const cashBankSummary = overview?.cashBankSummary ?? [];
 
   const handleAddTransaction = async (values: FinanceTransactionFormValues) => {
     await addTransaction({
@@ -333,6 +268,20 @@ export default function FinanceManagement() {
         }
       </div>
 
+      <Card size="small" className="shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <Text type="secondary">{t('finance.transactionPeriod')}</Text>
+          <DatePicker.RangePicker
+            value={dateRange}
+            allowClear={false}
+            format="DD MMM YYYY"
+            onChange={(value) => {
+              if (value?.[0] && value[1]) setDateRange([value[0], value[1]]);
+            }}
+          />
+        </div>
+      </Card>
+
       <Row gutter={[16, 16]}>
         <Col xs={0} md={24}>
           <Card className="shadow-sm border-l-4 border-l-blue-500">
@@ -507,7 +456,7 @@ export default function FinanceManagement() {
                     </div>
                   </div>
                   <Tag color={item.balance >= 0 ? 'green' : 'red'}>
-                    Rp {formatCurrency(item.balance)}
+                    {t('finance.cashBankNetMovement')}: Rp {formatCurrency(item.balance)}
                   </Tag>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
@@ -579,7 +528,7 @@ export default function FinanceManagement() {
             </div>
           ) : filteredTransactions.length > 0 ? (
             <>
-              {filteredTransactions.slice(0, 10).map((transaction) => {
+              {filteredTransactions.map((transaction) => {
                 const businessType = getFinanceTransactionBusinessType(transaction);
                 const { icon, label } = getFinanceTypeMeta(transaction);
 
@@ -628,11 +577,6 @@ export default function FinanceManagement() {
                   </div>
                 );
               })}
-              {filteredTransactions.length > 10 && (
-                <div className="text-center py-2">
-                  <Text type="secondary" className="text-xs">{t('finance.viewMoreDesktop')}</Text>
-                </div>
-              )}
             </>
           ) : (
             <div className="text-center py-8 text-gray-400 text-sm">
@@ -646,9 +590,16 @@ export default function FinanceManagement() {
             columns={columns}
             rowKey="id"
             loading={isLoading}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             scroll={{ x: 800 }}
           />
+        )}
+        {hasMore && (
+          <div className="mt-4 flex justify-center">
+            <Button loading={isLoadingMore} onClick={() => void loadMore()}>
+              {t('finance.loadOlder')}
+            </Button>
+          </div>
         )}
       </Card>
 

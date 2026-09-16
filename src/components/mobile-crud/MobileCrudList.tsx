@@ -48,6 +48,9 @@ export type MobileCrudListProps<T> = {
   initialVisibleCount?: number;
   visibleStep?: number;
   resetKey?: string;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void | Promise<void>;
   loadMoreLabel: (remaining: number) => ReactNode;
   resultSummary?: ReactNode;
 };
@@ -72,6 +75,9 @@ function MobileCrudListStateful<T>({
   emptyAction,
   initialVisibleCount = 20,
   visibleStep = 20,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
   loadMoreLabel,
   resultSummary,
 }: MobileCrudListProps<T>) {
@@ -87,6 +93,8 @@ function MobileCrudListStateful<T>({
     [items, visibleCount],
   );
   const remainingCount = getMobileCrudRemainingCount(items.length, visibleItems.length);
+  const canRevealLoadedItems = remainingCount > 0;
+  const canLoadMoreItems = canRevealLoadedItems || hasMore;
   const activeActions = actionItem
     ? (getActions?.(actionItem) ?? []).filter((action) => !action.hidden)
     : [];
@@ -208,16 +216,26 @@ function MobileCrudListStateful<T>({
         })}
       </div>
 
-      {remainingCount > 0 ? (
+      {canLoadMoreItems ? (
         <Button
           block
           size="large"
           className="h-12"
-          onClick={() => setVisibleCount((current) => (
-            getNextMobileCrudVisibleCount(items.length, current, visibleStep)
-          ))}
+          loading={loadingMore}
+          onClick={() => {
+            if (canRevealLoadedItems) {
+              setVisibleCount((current) => (
+                getNextMobileCrudVisibleCount(items.length, current, visibleStep)
+              ));
+              return;
+            }
+            void (async () => {
+              await onLoadMore?.();
+              setVisibleCount((current) => current + visibleStep);
+            })();
+          }}
         >
-          {loadMoreLabel(remainingCount)}
+          {loadMoreLabel(canRevealLoadedItems ? remainingCount : visibleStep)}
         </Button>
       ) : null}
 

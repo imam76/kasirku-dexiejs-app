@@ -25,6 +25,7 @@ interface PosPaymentModalProps {
   memberId?: string;
   activePromos: Promo[];
   activeMembers: Membership[];
+  onMemberSearch: (search: string) => void;
   promoPreview: PromoEvaluationResult;
   membershipPreview: MembershipCheckoutEvaluation;
   onVoucherCodeChange: (voucherCode: string) => void;
@@ -47,6 +48,7 @@ export default function PosPaymentModal({
   memberId,
   activePromos,
   activeMembers,
+  onMemberSearch,
   promoPreview,
   membershipPreview,
   onVoucherCodeChange,
@@ -64,7 +66,6 @@ export default function PosPaymentModal({
   const memberOptions = useMemo(() => activeMembers.map((member) => ({
     value: member.id,
     label: `${member.member_number} - ${member.name ?? member.phone}`,
-    searchText: `${member.member_number} ${member.name ?? ''} ${member.phone}`,
   })), [activeMembers]);
   const selectedMember = useMemo(
     () => activeMembers.find((member) => member.id === memberId),
@@ -106,10 +107,13 @@ export default function PosPaymentModal({
                 className="ml-auto w-48 min-w-0 flex-none"
                 value={memberId}
                 placeholder="Pilih member"
-                optionFilterProp="label"
                 onChange={(value) => onMemberChange(value)}
                 options={memberOptions}
-                filterOption={(input, option) => String(option?.searchText ?? option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                // Already the matching page for the typed term; do not narrow twice.
+                filterOption={false}
+                onSearch={onMemberSearch}
+                onBlur={() => onMemberSearch('')}
+                notFoundContent="Member tidak ditemukan"
                 styles={{ popup: { root: { zIndex: 1200 } } }}
               />
             </div>

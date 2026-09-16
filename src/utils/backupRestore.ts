@@ -13,6 +13,8 @@ import type {
   AuthUser,
   InventoryLot,
   InventoryLotConsumption,
+  JournalEntry,
+  JournalEntryLine,
   Lottery,
   Product,
 } from '@/types';
@@ -57,6 +59,22 @@ const normalizeStoredInventoryLotConsumption = (
   sync_status: consumption.sync_status ?? 'pending',
   sync_error: consumption.sync_status ? consumption.sync_error : undefined,
 });
+
+const normalizeStoredJournalEntryLines = (
+  entries: JournalEntry[] | undefined,
+  lines: JournalEntryLine[] | undefined,
+) => {
+  const entryDateById = new Map(
+    (entries ?? []).map((entry) => [entry.id, entry.entry_date]),
+  );
+
+  return (lines ?? []).map((line) => ({
+    ...line,
+    entry_date: line.entry_date
+      ?? entryDateById.get(line.journal_entry_id)
+      ?? line.created_at,
+  }));
+};
 
 export const backupDatabase = async () => {
   await requireUserPermission(await getCurrentSessionUser(), 'SETTINGS_ACCESS');
@@ -429,7 +447,12 @@ export const restoreDatabase = async (file: File) => {
           if (data.openingBalanceBatches?.length) await db.openingBalanceBatches.bulkAdd(data.openingBalanceBatches);
           if (data.openingBalanceLines?.length) await db.openingBalanceLines.bulkAdd(data.openingBalanceLines);
           if (data.journalEntries?.length) await db.journalEntries.bulkAdd(data.journalEntries);
-          if (data.journalEntryLines?.length) await db.journalEntryLines.bulkAdd(data.journalEntryLines);
+          if (data.journalEntryLines?.length) {
+            await db.journalEntryLines.bulkAdd(normalizeStoredJournalEntryLines(
+              data.journalEntries,
+              data.journalEntryLines,
+            ));
+          }
           if (data.cooperativeMembers?.length) await db.cooperativeMembers.bulkAdd(data.cooperativeMembers);
           if (data.cooperativeSavingTransactions?.length) await db.cooperativeSavingTransactions.bulkAdd(data.cooperativeSavingTransactions);
           if (data.cooperativeMemberSavingBalances?.length) await db.cooperativeMemberSavingBalances.bulkAdd(data.cooperativeMemberSavingBalances);

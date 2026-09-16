@@ -35,14 +35,6 @@ import {
 } from '@/utils/keyboardBarcodeScanner';
 
 const SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS = 80;
-const SEARCH_INPUT_MANUAL_FLUSH_DELAY_MS = SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS + 20;
-
-interface PendingSearchKeySequence {
-  barcodeBuffer: KeyboardBarcodeBuffer;
-  baseValue: string;
-  selectionStart: number;
-  selectionEnd: number;
-}
 
 interface OpenCashierFormValues {
   opening_cash_amount: number;
@@ -169,6 +161,7 @@ export default function Transaction() {
     membershipPreview,
     activePromos,
     activeMembers,
+    onMemberSearch,
     selectedMember,
     membershipSetting,
     createMember,
@@ -208,8 +201,7 @@ export default function Transaction() {
   const quantityInputRefs = useRef(new Map<string, HTMLInputElement>());
   const addFromSearchInFlightRef = useRef(false);
   const keyboardScannerBufferRef = useRef<KeyboardBarcodeBuffer | null>(null);
-  const pendingSearchKeySequenceRef = useRef<PendingSearchKeySequence | null>(null);
-  const pendingSearchFlushTimeoutRef = useRef<number | null>(null);
+  const searchInputScannerBufferRef = useRef<KeyboardBarcodeBuffer | null>(null);
   const searchTermRef = useRef(searchTerm);
   searchTermRef.current = searchTerm;
   const [activeCartItemId, setActiveCartItemId] = useState<string>();
@@ -278,20 +270,16 @@ export default function Transaction() {
     return () => window.removeEventListener(OPEN_MOBILE_CASHIER_CLOSE_EVENT, openCloseCashierModal);
   }, [isMobile]);
 
-  const resetPendingSearchKeySequence = useCallback(() => {
-    if (pendingSearchFlushTimeoutRef.current !== null) {
-      window.clearTimeout(pendingSearchFlushTimeoutRef.current);
-      pendingSearchFlushTimeoutRef.current = null;
-    }
-    pendingSearchKeySequenceRef.current = null;
+  const resetSearchInputScannerBuffer = useCallback(() => {
+    searchInputScannerBufferRef.current = null;
   }, []);
 
   const clearSearch = useCallback(() => {
-    resetPendingSearchKeySequence();
+    resetSearchInputScannerBuffer();
     searchTermRef.current = '';
     setSearchTerm('');
     searchInputRef.current?.focus();
-  }, [resetPendingSearchKeySequence, setSearchTerm]);
+  }, [resetSearchInputScannerBuffer, setSearchTerm]);
 
   const focusSearch = useCallback(() => {
     searchInputRef.current?.focus();
@@ -436,13 +424,16 @@ export default function Transaction() {
     }
   }, [activeCartItemId, cart, message, t]);
 
-  const addProductFromSearch = useCallback(async (inputSearchTerm = searchTerm) => {
+  const addProductFromSearch = useCallback(async (
+    inputSearchTerm = searchTermRef.current,
+    isScannerInput = false,
+  ) => {
     const normalizedSearchTerm = normalizeProductSearchTerm(inputSearchTerm);
     if (!normalizedSearchTerm || addFromSearchInFlightRef.current) return;
 
     addFromSearchInFlightRef.current = true;
     try {
-      const exactSkuMatch = findProductByScannedCode(inputSearchTerm);
+      const exactSkuMatch = await findProductByScannedCode(inputSearchTerm);
       const visibleMatchingProduct = filteredProducts.find((product) => (
         matchesProductSearch(product, normalizedSearchTerm)
       ));
@@ -452,7 +443,9 @@ export default function Transaction() {
 
       if (!product) {
         if (canQuickAddItem) {
-          setQuickItemDraft({ barcode: '', name: inputSearchTerm.trim() });
+          setQuickItemDraft(isScannerInput
+            ? { barcode: inputSearchTerm.trim(), name: '' }
+            : { barcode: '', name: inputSearchTerm.trim() });
           return;
         }
 
@@ -466,8 +459,12 @@ export default function Transaction() {
       }
 
       if (!handleAddProduct(product)) return;
+      searchTermRef.current = '';
       setSearchTerm('');
       window.requestAnimationFrame(focusSearch);
+    } catch (error) {
+      console.error('Failed to look up POS product', error);
+      message.error(t('transaction.productLookupFailed'));
     } finally {
       addFromSearchInFlightRef.current = false;
     }
@@ -479,13 +476,19 @@ export default function Transaction() {
     focusSearch,
     handleAddProduct,
     message,
-    searchTerm,
     setSearchTerm,
     t,
   ]);
 
-  const handleScan = useCallback((text: string) => {
-    const match = findProductByScannedCode(text);
+  const handleScan = useCallback(async (text: string) => {
+    let match: Product | undefined;
+    try {
+      match = await findProductByScannedCode(text);
+    } catch (error) {
+      console.error('Failed to look up scanned POS product', error);
+      message.error(t('transaction.productLookupFailed'));
+      return;
+    }
 
     if (match) {
       if (handleAddProduct(match)) {
@@ -499,6 +502,17 @@ export default function Transaction() {
       message.error(t('transaction.productNotFound', { code: text }));
     }
   }, [canQuickAddItem, findProductByScannedCode, handleAddProduct, message, setSearchTerm, t]);
+
+  const handleQuantityEditingComplete = useCallback(() => {
+    if (cartOpen) setCartOpen(false);
+    window.requestAnimationFrame(focusSearch);
+  }, [cartOpen, focusSearch]);
+
+  const handleQuantityBarcodeScan = useCallback((barcode: string) => {
+    if (cartOpen) setCartOpen(false);
+    void handleScan(barcode);
+    window.requestAnimationFrame(focusSearch);
+  }, [cartOpen, focusSearch, handleScan]);
 
   const handleQuickItemResolved = useCallback((product: Product) => {
     setQuickItemDraft(null);
@@ -520,43 +534,6 @@ export default function Transaction() {
     setEditingCartProduct(null);
   }, [updateCartProduct]);
 
-  const flushPendingSearchInput = useCallback((restoreFocus: boolean) => {
-    const pending = pendingSearchKeySequenceRef.current;
-    if (!pending) return searchTermRef.current;
-
-    resetPendingSearchKeySequence();
-    const nextSearchTerm = [
-      pending.baseValue.slice(0, pending.selectionStart),
-      pending.barcodeBuffer.value,
-      pending.baseValue.slice(pending.selectionEnd),
-    ].join('');
-    const nextCaretPosition = pending.selectionStart + pending.barcodeBuffer.value.length;
-
-    searchTermRef.current = nextSearchTerm;
-    setSearchTerm(nextSearchTerm);
-
-    if (restoreFocus) {
-      window.requestAnimationFrame(() => {
-        const input = searchInputRef.current?.input;
-        input?.focus();
-        input?.setSelectionRange(nextCaretPosition, nextCaretPosition);
-      });
-    }
-
-    return nextSearchTerm;
-  }, [resetPendingSearchKeySequence, setSearchTerm]);
-
-  const schedulePendingSearchInputFlush = useCallback(() => {
-    if (pendingSearchFlushTimeoutRef.current !== null) {
-      window.clearTimeout(pendingSearchFlushTimeoutRef.current);
-    }
-
-    pendingSearchFlushTimeoutRef.current = window.setTimeout(() => {
-      pendingSearchFlushTimeoutRef.current = null;
-      flushPendingSearchInput(true);
-    }, SEARCH_INPUT_MANUAL_FLUSH_DELAY_MS);
-  }, [flushPendingSearchInput]);
-
   const handleSearchKeyDownCapture = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (
       event.nativeEvent.isComposing
@@ -567,7 +544,6 @@ export default function Transaction() {
     ) return;
 
     const keyAt = event.timeStamp;
-    const pending = pendingSearchKeySequenceRef.current;
     const isModifierKey = event.key === 'Shift'
       || event.key === 'Control'
       || event.key === 'Alt'
@@ -581,125 +557,65 @@ export default function Transaction() {
 
     if (isTerminator) {
       const scannedCode = finishKeyboardBarcodeScan(
-        pending?.barcodeBuffer ?? null,
+        searchInputScannerBufferRef.current,
         keyAt,
         KEYBOARD_BARCODE_MIN_LENGTH,
         SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS,
       );
 
-      if (scannedCode) {
+      resetSearchInputScannerBuffer();
+
+      if (event.code === 'Enter' || event.code === 'NumpadEnter' || scannedCode) {
         event.preventDefault();
         event.stopPropagation();
-        resetPendingSearchKeySequence();
-        handleScan(scannedCode);
+        const currentSearchTerm = searchTermRef.current;
+        if (currentSearchTerm.trim()) {
+          void addProductFromSearch(currentSearchTerm, Boolean(scannedCode));
+        }
         return;
       }
-
-      if (pending && (event.code === 'Enter' || event.code === 'NumpadEnter')) {
-        event.preventDefault();
-        event.stopPropagation();
-        const nextSearchTerm = flushPendingSearchInput(false);
-        void addProductFromSearch(nextSearchTerm);
-        return;
-      }
-
-      if (pending) flushPendingSearchInput(false);
       return;
     }
 
-    if (event.key === 'Escape' && pending) {
-      event.preventDefault();
-      event.stopPropagation();
-      clearSearch();
-      return;
-    }
-
-    if (event.key === 'Backspace' && pending) {
-      event.preventDefault();
-      event.stopPropagation();
-      const nextBufferedValue = pending.barcodeBuffer.value.slice(0, -1);
-
-      if (!nextBufferedValue) {
-        resetPendingSearchKeySequence();
-        return;
-      }
-
-      pending.barcodeBuffer = {
-        value: nextBufferedValue,
-        lastKeyAt: keyAt,
-      };
-      schedulePendingSearchInputFlush();
+    if (event.key === 'Escape' || event.key === 'Backspace' || event.key === 'Delete') {
+      resetSearchInputScannerBuffer();
       return;
     }
 
     // Num*/Num+/Num- (dan padanan tanpa numpad fisik '*'/'+'/'-' saat kotak
     // cari masih kosong) harus lolos ke handler global di bawah, bukan
-    // tertelan jadi teks pencarian di sini. Tanpa pengecualian ini,
-    // stopPropagation di akhir fungsi membungkam shortcut edit qty/ganti
-    // satuan setiap kali fokus masih ada di kotak cari (kondisi paling umum
-    // sesudah menambah produk).
+    // tertelan jadi teks pencarian di sini.
     const isEditShortcutKey = event.code === 'NumpadMultiply'
       || event.code === 'NumpadAdd'
       || event.code === 'NumpadSubtract'
       || (
         (event.key === '*' || event.key === '+' || event.key === '-')
-        && !pending
         && !searchTermRef.current
       );
 
     if (isEditShortcutKey) {
-      if (pending) flushPendingSearchInput(false);
+      resetSearchInputScannerBuffer();
       return;
     }
 
     if (event.key.length !== 1) {
-      if (pending) flushPendingSearchInput(false);
+      resetSearchInputScannerBuffer();
       return;
     }
 
-    event.preventDefault();
-    event.stopPropagation();
-
-    const input = event.currentTarget;
-    const isActiveSequence = isKeyboardBarcodeBufferActive(
-      pending?.barcodeBuffer ?? null,
+    // Observasi ritme tombol untuk mengenali keyboard-wedge scanner, tetapi
+    // jangan pernah menahan input native. Ketikan manual sekarang langsung
+    // terlihat dan caret tetap dikelola browser seperti input biasa.
+    searchInputScannerBufferRef.current = appendKeyboardBarcodeCharacter(
+      searchInputScannerBufferRef.current,
+      event.key,
       keyAt,
       SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS,
     );
-
-    if (!pending || !isActiveSequence) {
-      resetPendingSearchKeySequence();
-      pendingSearchKeySequenceRef.current = {
-        barcodeBuffer: appendKeyboardBarcodeCharacter(
-          null,
-          event.key,
-          keyAt,
-          SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS,
-        ),
-        baseValue: searchTermRef.current,
-        selectionStart: input.selectionStart ?? searchTermRef.current.length,
-        selectionEnd: input.selectionEnd ?? searchTermRef.current.length,
-      };
-    } else {
-      pending.barcodeBuffer = appendKeyboardBarcodeCharacter(
-        pending.barcodeBuffer,
-        event.key,
-        keyAt,
-        SEARCH_INPUT_SCANNER_MAX_INTERVAL_MS,
-      );
-    }
-
-    schedulePendingSearchInputFlush();
   }, [
     addProductFromSearch,
-    clearSearch,
-    flushPendingSearchInput,
-    handleScan,
-    resetPendingSearchKeySequence,
-    schedulePendingSearchInputFlush,
+    resetSearchInputScannerBuffer,
   ]);
-
-  useEffect(() => resetPendingSearchKeySequence, [resetPendingSearchKeySequence]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -1130,7 +1046,6 @@ export default function Transaction() {
                     value={searchTerm}
                     onKeyDownCapture={handleSearchKeyDownCapture}
                     onChange={(event) => {
-                      resetPendingSearchKeySequence();
                       searchTermRef.current = event.target.value;
                       setSearchTerm(event.target.value);
                     }}
@@ -1216,7 +1131,6 @@ export default function Transaction() {
                 value={searchTerm}
                 onKeyDownCapture={handleSearchKeyDownCapture}
                 onChange={(event) => {
-                  resetPendingSearchKeySequence();
                   searchTermRef.current = event.target.value;
                   setSearchTerm(event.target.value);
                 }}
@@ -1270,6 +1184,8 @@ export default function Transaction() {
           activeCartItemId={activeCartItemId}
           onActivateCartItem={setActiveCartItemId}
           registerQuantityInput={registerQuantityInput}
+          onBarcodeScan={handleQuantityBarcodeScan}
+          onQuantityEditingComplete={handleQuantityEditingComplete}
           clearCart={clearCart}
           total={total}
           showPayment={showPayment}
@@ -1283,6 +1199,7 @@ export default function Transaction() {
           membershipPreview={membershipPreview}
           activePromos={activePromos}
           activeMembers={activeMembers}
+          onMemberSearch={onMemberSearch}
           selectedMember={selectedMember}
           membershipSetting={membershipSetting}
           setShowPayment={setShowPayment}
@@ -1340,6 +1257,8 @@ export default function Transaction() {
         onEditProduct={(item) => handleEditCartProduct(item.product)}
         activeCartItemId={activeCartItemId}
         onActivateCartItem={setActiveCartItemId}
+        onBarcodeScan={handleQuantityBarcodeScan}
+        onQuantityEditingComplete={handleQuantityEditingComplete}
         clearCart={clearCart}
         total={total}
         showPayment={showPayment}
@@ -1353,6 +1272,7 @@ export default function Transaction() {
         membershipPreview={membershipPreview}
         activePromos={activePromos}
         activeMembers={activeMembers}
+        onMemberSearch={onMemberSearch}
         selectedMember={selectedMember}
         membershipSetting={membershipSetting}
         setShowPayment={setShowPayment}

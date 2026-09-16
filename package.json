@@ -1,7 +1,7 @@
 {
   "name": "frayukti",
   "private": true,
-  "version": "1.0.81",
+  "version": "1.0.84",
   "type": "module",
   "scripts": {
     "billing:dev": "bun --env-file=services/billing/.env --watch services/billing/server.ts",

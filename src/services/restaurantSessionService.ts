@@ -54,9 +54,8 @@ export const getOpenRestaurantSessionForCurrentUser = async (expectedUserId?: st
   if (expectedUserId && currentUser.id !== expectedUserId) return null;
 
   return (await db.restaurantSessions
-    .where('operator_user_id')
-    .equals(currentUser.id)
-    .and((session) => session.status === 'OPEN')
+    .where('[operator_user_id+status]')
+    .equals([currentUser.id, 'OPEN'])
     .first()) ?? null;
 };
 

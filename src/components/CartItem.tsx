@@ -5,16 +5,33 @@ import { getCartItemOriginalPrice, getCartItemPrice } from '@/utils/pricing';
 import { getProductSellableUnits } from '@/utils/productUnits';
 import { InputNumber, Select } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
+import {
+  appendKeyboardBarcodeCharacter,
+  finishKeyboardBarcodeScan,
+  isLikelyBarcodeWhileEditingQuantity,
+  type KeyboardBarcodeBuffer,
+} from '@/utils/keyboardBarcodeScanner';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+
+const QUANTITY_COMMIT_DELAY_MS = 150;
+const QUANTITY_SCANNER_MAX_INTERVAL_MS = 80;
+
+interface QuantityDraftState {
+  baseQuantity: number;
+  value: number | null;
+}
 
 interface CartItemProps {
   item: CartItemType;
-  updateQuantity: (id: string, quantity: number) => void;
+  updateQuantity: (id: string, quantity: number) => boolean;
   updateUnit: (id: string, unit: string) => boolean;
   removeFromCart: (id: string) => void;
   onEditProduct?: (item: CartItemType) => void;
   isActive?: boolean;
   onActivate?: () => void;
   quantityInputRef?: (element: HTMLInputElement | null) => void;
+  onBarcodeScan?: (barcode: string) => void;
+  onQuantityEditingComplete?: () => void;
   /**
    * CartSidebar (desktop) dan MobileCartDrawer masing-masing selalu ingin
    * satu varian saja. Dulu kedua varian dirender sekaligus dan cuma
@@ -35,21 +52,158 @@ export default function CartItem({
   isActive = false,
   onActivate,
   quantityInputRef,
+  onBarcodeScan,
+  onQuantityEditingComplete,
   variant = 'desktop',
 }: CartItemProps) {
   const { t } = useI18n();
   const currentPrice = getCartItemPrice(item);
   const isWholesale = currentPrice < getCartItemOriginalPrice({ ...item, quantity: 1 });
   const quantityStep = ['gram', 'menit'].includes(item.unit.toLowerCase()) ? 10 : 1;
+  const [quantityDraftState, setQuantityDraftState] = useState<QuantityDraftState>({
+    baseQuantity: item.quantity,
+    value: item.quantity,
+  });
+  const quantityDraft = quantityDraftState.baseQuantity === item.quantity
+    ? quantityDraftState.value
+    : item.quantity;
+  const quantityCommitTimeoutRef = useRef<number | null>(null);
+  const quantityScannerBufferRef = useRef<KeyboardBarcodeBuffer | null>(null);
+  const skipNextQuantityBlurCommitRef = useRef(false);
 
   // Satuan utama produk plus setiap satuan yang punya konversi
   const productUnits = getProductSellableUnits(item.product);
 
-  const handleQuantityChange = (val: number | null) => {
-    if (val !== null) {
-      updateQuantity(item.product.id, val);
+  const clearPendingQuantityCommit = useCallback(() => {
+    if (quantityCommitTimeoutRef.current === null) return;
+    window.clearTimeout(quantityCommitTimeoutRef.current);
+    quantityCommitTimeoutRef.current = null;
+  }, []);
+
+  const setQuantityDraft = useCallback((value: number | null) => {
+    setQuantityDraftState({ baseQuantity: item.quantity, value });
+  }, [item.quantity]);
+
+  const commitQuantity = useCallback((value: number | null) => {
+    clearPendingQuantityCommit();
+    if (value === null) {
+      setQuantityDraft(item.quantity);
+      return;
+    }
+
+    const updated = updateQuantity(item.product.id, value);
+    if (!updated) {
+      setQuantityDraft(item.quantity);
+    }
+  }, [clearPendingQuantityCommit, item.product.id, item.quantity, setQuantityDraft, updateQuantity]);
+
+  const handleQuantityChange = (value: number | null) => {
+    setQuantityDraft(value);
+    clearPendingQuantityCommit();
+
+    if (value !== null) {
+      quantityCommitTimeoutRef.current = window.setTimeout(() => {
+        quantityCommitTimeoutRef.current = null;
+        commitQuantity(value);
+      }, QUANTITY_COMMIT_DELAY_MS);
     }
   };
+
+  const handleQuantityBlur = () => {
+    quantityScannerBufferRef.current = null;
+    if (skipNextQuantityBlurCommitRef.current) {
+      skipNextQuantityBlurCommitRef.current = false;
+      clearPendingQuantityCommit();
+      setQuantityDraft(item.quantity);
+      return;
+    }
+
+    commitQuantity(quantityDraft);
+  };
+
+  const handleQuantityKeyDownCapture = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (
+      event.nativeEvent.isComposing
+      || event.ctrlKey
+      || event.metaKey
+      || event.altKey
+      || event.repeat
+    ) {
+      quantityScannerBufferRef.current = null;
+      return;
+    }
+
+    const isTerminator = event.code === 'Enter'
+      || event.code === 'NumpadEnter'
+      || event.key === 'Tab';
+
+    if (isTerminator) {
+      const scanCandidate = finishKeyboardBarcodeScan(
+        quantityScannerBufferRef.current,
+        event.timeStamp,
+        undefined,
+        QUANTITY_SCANNER_MAX_INTERVAL_MS,
+      );
+      quantityScannerBufferRef.current = null;
+
+      if (
+        scanCandidate
+        && onBarcodeScan
+        && isLikelyBarcodeWhileEditingQuantity(scanCandidate)
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        clearPendingQuantityCommit();
+        skipNextQuantityBlurCommitRef.current = true;
+        setQuantityDraft(item.quantity);
+        event.currentTarget.blur();
+        onBarcodeScan(scanCandidate);
+        return;
+      }
+
+      if (event.code === 'Enter' || event.code === 'NumpadEnter') {
+        event.preventDefault();
+        event.stopPropagation();
+        commitQuantity(quantityDraft);
+        skipNextQuantityBlurCommitRef.current = true;
+        event.currentTarget.blur();
+        onQuantityEditingComplete?.();
+      }
+      return;
+    }
+
+    const isModifierKey = event.key === 'Shift'
+      || event.key === 'Control'
+      || event.key === 'Alt'
+      || event.key === 'AltGraph'
+      || event.key === 'CapsLock';
+    if (isModifierKey) return;
+
+    if (event.key === 'Backspace' || event.key === 'Delete' || event.key.length !== 1) {
+      quantityScannerBufferRef.current = null;
+      return;
+    }
+
+    quantityScannerBufferRef.current = appendKeyboardBarcodeCharacter(
+      quantityScannerBufferRef.current,
+      event.key,
+      event.timeStamp,
+      QUANTITY_SCANNER_MAX_INTERVAL_MS,
+    );
+
+    // Setelah rangkaian cepat mulai terlihat seperti scanner, cegah shortcut
+    // global '+'/'-' ikut mengganti satuan. Default input tetap dibiarkan agar
+    // ketikan qty manual tidak terasa ditahan.
+    if (quantityScannerBufferRef.current.value.length >= 3) {
+      event.stopPropagation();
+    }
+  };
+
+  useEffect(() => {
+    clearPendingQuantityCommit();
+  }, [clearPendingQuantityCommit, item.quantity]);
+
+  useEffect(() => () => clearPendingQuantityCommit(), [clearPendingQuantityCommit]);
 
   const handleUnitChange = (newUnit: string) => {
     updateUnit(item.product.id, newUnit);
@@ -125,8 +279,11 @@ export default function CartItem({
               data-testid={`pos-cart-quantity-${item.product.id}`}
               inputMode='decimal'
               min={0}
-              value={item.quantity}
+              value={quantityDraft}
               onChange={handleQuantityChange}
+              onFocus={() => { quantityScannerBufferRef.current = null; }}
+              onBlur={handleQuantityBlur}
+              onKeyDownCapture={handleQuantityKeyDownCapture}
               className="h-full min-w-0 flex-1 [&_.ant-input-number-input-wrap]:!h-full [&_.ant-input-number-input]:!h-full [&_.ant-input-number-input]:!p-0 [&_.ant-input-number-input]:!text-center [&_.ant-input-number-input]:!text-xs [&_.ant-input-number-input]:!font-bold [&_.ant-input-number-input]:!leading-[30px]"
               size="small"
               controls={false}
@@ -238,8 +395,11 @@ export default function CartItem({
                 data-testid={`pos-cart-quantity-${item.product.id}`}
                 inputMode='decimal'
                 min={0}
-                value={item.quantity}
+                value={quantityDraft}
                 onChange={handleQuantityChange}
+                onFocus={() => { quantityScannerBufferRef.current = null; }}
+                onBlur={handleQuantityBlur}
+                onKeyDownCapture={handleQuantityKeyDownCapture}
                 className="h-full min-w-0 flex-1 [&_.ant-input-number-input-wrap]:!h-full [&_.ant-input-number-input]:!h-full [&_.ant-input-number-input]:!p-0 [&_.ant-input-number-input]:!text-center [&_.ant-input-number-input]:!font-bold [&_.ant-input-number-input]:!leading-[34px]"
                 size="small"
                 controls={false}

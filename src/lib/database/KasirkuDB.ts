@@ -118,6 +118,15 @@ import type {
 } from '@/types';
 import { registerDatabaseMigrations } from './migrations';
 import { registerDatabasePopulate } from './populate';
+import { registerCheckoutReadModels } from './checkoutReadModelsMiddleware';
+import type {
+  InventoryConsumptionTotal,
+  PosCatalogCount,
+  PosCatalogProduct,
+  ProductListCatalogProduct,
+  ProductSearchCatalogProduct,
+  SyncQueueSummary,
+} from './checkoutReadModels';
 
 export class KasirkuDB extends Dexie {
   products!: Table<Product>;
@@ -143,6 +152,12 @@ export class KasirkuDB extends Dexie {
   roles!: Table<Role>;
   rolePermissions!: Table<RolePermission>;
   syncQueue!: Table<SyncQueueItem>;
+  syncQueueSummary!: Table<SyncQueueSummary>;
+  inventoryConsumptionTotals!: Table<InventoryConsumptionTotal>;
+  posProductCatalog!: Table<PosCatalogProduct>;
+  posCatalogCounts!: Table<PosCatalogCount>;
+  productListCatalog!: Table<ProductListCatalogProduct>;
+  productSearchCatalog!: Table<ProductSearchCatalogProduct>;
   syncCursors!: Table<SyncCursor>;
   promos!: Table<Promo>;
   lotteries!: Table<Lottery>;
@@ -239,6 +254,7 @@ export class KasirkuDB extends Dexie {
   constructor() {
     super('KasirkuDB');
     registerDatabaseMigrations.call(this);
+    registerCheckoutReadModels(this);
     registerDatabasePopulate.call(this);
   }
 }

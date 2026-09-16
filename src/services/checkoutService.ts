@@ -7,7 +7,11 @@ import { createSalesUnitSnapshot } from '@/utils/salesUnits';
 import { getCurrentSessionUser, requireUserPermission, writeActivityLog } from '@/auth/authService';
 import { evaluatePromos, getActivePromos, type PromoEvaluationResult } from '@/services/promoService';
 import { evaluateLotteryForTransaction, getActiveLotteries } from '@/services/lotteryService';
-import { postPosExpenseJournal, postPosSaleJournal } from '@/services/generalLedgerService';
+import {
+  postPosExpenseJournal,
+  postPosPhysicalStockFoundJournal,
+  postPosSaleJournal,
+} from '@/services/generalLedgerService';
 import {
   buildPosPaymentSnapshot,
 } from '@/services/posPaymentMethodService';
@@ -17,7 +21,7 @@ import {
   type CheckoutPaymentInput,
 } from '@/services/posTransactionPaymentService';
 import { buildStockMutationOutboxItem, createStockMutation, enqueueStockMutations } from '@/services/stockMutationSyncService';
-import { enqueueFinanceTransactionsSync, withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
+import { withPendingFinanceTransactionSync } from '@/services/financeTransactionSyncService';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { evaluateStockAvailability } from '@/utils/inventory/evaluateStockAvailability';
@@ -29,9 +33,20 @@ import {
   isActiveRetailMember,
   recordMembershipPointTransaction,
 } from '@/services/membershipService';
-import { buildInventoryLotConsumptionOutboxItem, buildInventoryLotOutboxItem, buildTransactionBundleOutboxItem, enqueueMembershipSync, enqueueStockAffectedProductsForSync, enqueueTransactionBundleSync, processPendingSyncQueue } from '@/services/syncQueueService';
+import {
+  buildFinanceTransactionOutboxItem,
+  buildInventoryLotConsumptionOutboxItem,
+  buildInventoryLotOutboxItem,
+  buildMembershipOutboxItem,
+  buildProductSyncQueueItem,
+  buildTransactionBundleOutboxItem,
+  enqueueStockAffectedProductsForSync,
+  enqueueTransactionBundleSync,
+  schedulePendingSyncQueue,
+} from '@/services/syncQueueService';
 import { getStoredHostIdentity } from '@/services/hostIdentityService';
 import { getProductSellableUnits } from '@/utils/productUnits';
+import { createPosPerformanceTrace, type PosPerformanceTrace } from '@/utils/posPerformance';
 
 export type PosCheckoutSessionContext =
   | { kind: 'CASHIER' }
@@ -45,6 +60,9 @@ export interface CheckoutInput {
   redeemPoints?: number;
   sessionContext?: PosCheckoutSessionContext;
   restaurantOrderId?: string;
+  /** Receipt callers start the worker after handing the receipt to the printer. */
+  deferSyncProcessing?: boolean;
+  performanceTrace?: PosPerformanceTrace;
 }
 
 export interface CheckoutResult {
@@ -572,6 +590,8 @@ export const checkout = async ({
   redeemPoints,
   sessionContext = { kind: 'CASHIER' },
   restaurantOrderId,
+  deferSyncProcessing = false,
+  performanceTrace = createPosPerformanceTrace(),
 }: CheckoutInput): Promise<CheckoutResult> => {
   const currentUser = await getCurrentSessionUser();
   await requireUserPermission(currentUser, 'CASHIER_ACCESS');
@@ -602,6 +622,7 @@ export const checkout = async ({
   const createdAt = now.toISOString();
   const activePromos = await getActivePromos(now);
   const activeLotteries = await getActiveLotteries(now);
+  performanceTrace.checkpoint('preflight');
   let stockMutations: StockMutation[] = [];
   let touchedProductIds = new Set<string>();
   let financeTransactions: FinanceTransaction[] = [];
@@ -638,6 +659,7 @@ export const checkout = async ({
       db.syncQueue,
     ],
     async () => {
+      performanceTrace.checkpoint('transaction_wait');
       const member = memberId ? await db.memberships.get(memberId) : undefined;
       if (memberId && !isActiveRetailMember(member)) {
         throw new Error('Member tidak ditemukan atau tidak aktif.');
@@ -727,6 +749,7 @@ export const checkout = async ({
       };
 
       const transactionItemIds = cart.map(() => crypto.randomUUID());
+      performanceTrace.checkpoint('pricing_and_payments');
       const discrepancyStock = await preparePhysicalStockDiscrepancies(
         cart,
         transaction,
@@ -735,6 +758,7 @@ export const checkout = async ({
         createdAt,
       );
       checkoutDiscrepancies = discrepancyStock.discrepancies;
+      performanceTrace.checkpoint('stock_validation');
 
       const { items, warnings } = await createTransactionItems(
         cart,
@@ -745,9 +769,15 @@ export const checkout = async ({
         transactionItemIds,
         discrepancyStock.currentProducts,
       );
+      performanceTrace.checkpoint('fifo');
 
       await db.transactions.add(transaction);
       await db.transactionItems.bulkAdd(items);
+
+      const discrepancyIds = checkoutDiscrepancies.map((row) => row.id);
+      const discrepancyLots = discrepancyIds.length > 0
+        ? await db.inventoryLots.where('source_id').anyOf(discrepancyIds).toArray()
+        : [];
 
       if (membershipEvaluation.member && memberBalanceAfter !== undefined) {
         let runningBalance = memberStartingBalance;
@@ -798,7 +828,15 @@ export const checkout = async ({
       await recordProfit(transaction, items, createdAt);
       financeTransactions = await recordFinanceIncome(transaction, createdAt, paymentRecords, currentUser);
       await db.posTransactionPayments.bulkAdd(paymentRecords);
-      await postPosSaleJournal(transaction, items, currentUser, paymentRecords);
+      performanceTrace.checkpoint('sale_records');
+      await postPosPhysicalStockFoundJournal(
+        transaction,
+        discrepancyLots,
+        currentUser,
+        { syncInTransaction: true },
+      );
+      await postPosSaleJournal(transaction, items, currentUser, paymentRecords, { syncInTransaction: true });
+      performanceTrace.checkpoint('journal_and_outbox');
       const saleStock = await reduceProductStock(cart, transaction, items, currentUser, createdAt);
       stockMutations = [...discrepancyStock.stockMutations, ...saleStock.stockMutations];
       touchedProductIds = new Set([
@@ -812,14 +850,14 @@ export const checkout = async ({
       if (stockMutations.length > 0) {
         await db.stockMutations.bulkPut(stockMutations);
       }
-      const discrepancyIds = checkoutDiscrepancies.map((row) => row.id);
-      const discrepancyLots = discrepancyIds.length > 0
-        ? await db.inventoryLots.where('source_id').anyOf(discrepancyIds).toArray()
-        : [];
+      performanceTrace.checkpoint('stock_mutations');
       const consumptions = await db.inventoryLotConsumptions
         .where('source_id')
         .equals(transaction.id)
         .toArray();
+      // Each touched product has a fresh version from this sale. Build its outbox
+      // directly instead of scanning historical queue rows for deduplication.
+      const productsForSync = await db.products.bulkGet([...touchedProductIds]);
       await db.syncQueue.bulkAdd([
         buildTransactionBundleOutboxItem(transaction, items, 'create', createdAt),
         ...stockMutations.map((mutation) => buildStockMutationOutboxItem(mutation, createdAt)),
@@ -831,7 +869,12 @@ export const checkout = async ({
           quantity_remaining: lot.quantity_received,
         }, 'create', createdAt)),
         ...consumptions.map((consumption) => buildInventoryLotConsumptionOutboxItem(consumption, createdAt)),
+        ...productsForSync.filter((product): product is Product => Boolean(product))
+          .map((product) => buildProductSyncQueueItem(product, 'update', { preserveStock: true, createdAt })),
+        ...financeTransactions.map((entry) => buildFinanceTransactionOutboxItem(entry, 'create', createdAt)),
+        ...(updatedMemberForSync ? [buildMembershipOutboxItem(updatedMemberForSync, 'update', createdAt)] : []),
       ]);
+      performanceTrace.checkpoint('outbox');
 
       return {
         transaction,
@@ -843,16 +886,9 @@ export const checkout = async ({
     },
   );
 
-  if (touchedProductIds.size > 0) {
-    await enqueueStockAffectedProductsForSync(touchedProductIds);
-  }
-  if (financeTransactions.length > 0) {
-    await enqueueFinanceTransactionsSync(financeTransactions, 'create');
-  }
-  if (updatedMemberForSync) {
-    await enqueueMembershipSync(updatedMemberForSync, 'update');
-  }
-  void processPendingSyncQueue();
+  performanceTrace.checkpoint('commit');
+  performanceTrace.report('checkout_committed');
+  if (!deferSyncProcessing) schedulePendingSyncQueue();
 
   return result;
 };

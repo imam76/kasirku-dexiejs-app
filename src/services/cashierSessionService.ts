@@ -71,9 +71,8 @@ export const getOpenCashierSessionForCurrentUser = async (expectedUserId?: strin
   if (expectedUserId && currentUser.id !== expectedUserId) return null;
 
   return (await db.cashierSessions
-    .where('cashier_user_id')
-    .equals(currentUser.id)
-    .and((session) => session.status === 'OPEN')
+    .where('[cashier_user_id+status]')
+    .equals([currentUser.id, 'OPEN'])
     .first()) ?? null;
 };
 

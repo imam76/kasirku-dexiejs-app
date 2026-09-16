@@ -738,6 +738,7 @@ export const postInventoryOpeningBalance = async ({
         await db.inventoryLots.bulkPut(existingLots.map((lot) => ({
           ...lot,
           quantity_remaining: 0,
+          fifo_excluded: true,
           updated_at: now,
         })));
       }

@@ -1,19 +1,79 @@
 name: release
 
-# Build Tauri app (Windows + Linux) setiap ada push ke main,
-# lalu upload installer ke sebuah draft GitHub Release.
+# Release hanya dibuat untuk versi yang memang ditag. Commit biasa ke main tidak
+# boleh mengganti isi /releases/latest tanpa kenaikan versi aplikasi.
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch: {} # bisa juga dijalankan manual dari tab Actions
+    tags:
+      - "app-v*"
+  workflow_dispatch:
 
-# tauri-action butuh izin nulis untuk membuat release
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  build-tauri:
+  prepare-release:
+    runs-on: ubuntu-22.04
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create or reuse draft release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          version="$(jq -r '.version' package.json)"
+          tag="app-v${version}"
+
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME tidak cocok dengan versi aplikasi $version. Gunakan tag $tag."
+            exit 1
+          fi
+
+          release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            | jq -c --arg tag "$tag" 'map(select(.tag_name == $tag))[0] // empty')"
+
+          if [ -n "$release_json" ]; then
+            if [ "$(jq -r '.draft' <<< "$release_json")" != "true" ]; then
+              echo "::error::Release $tag sudah dipublikasikan. Naikkan versi sebelum membuat release baru."
+              exit 1
+            fi
+
+            release_id="$(jq -r '.id' <<< "$release_json")"
+            release_json="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+              -f target_commitish="$GITHUB_SHA")"
+          else
+            release_json="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+              -f tag_name="$tag" \
+              -f target_commitish="$GITHUB_SHA" \
+              -f name="frayukti v${version}" \
+              -f body="Build resmi Frayukti v${version}. APK Android universal tersedia sebagai frayukti-android.apk." \
+              -F draft=true \
+              -F prerelease=false \
+              -F generate_release_notes=true)"
+          fi
+
+          {
+            echo "release_id=$(jq -r '.id' <<< "$release_json")"
+            echo "tag=$tag"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+
+  build-desktop:
+    needs: prepare-release
     strategy:
       fail-fast: false
       matrix:
@@ -29,7 +89,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- Dependency sistem untuk Tauri di Linux ---
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -43,7 +102,6 @@ jobs:
             libssl-dev \
             file
 
-      # --- Toolchain ---
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -66,8 +124,6 @@ jobs:
           VITE_BILLING_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_BILLING_PUBLISHABLE_KEY }}
         run: bun run billing:release-env:check
 
-      # --- Buat .env dari GitHub Secrets (JANGAN commit .env asli) ---
-      # Vite hanya meng-embed variabel berawalan VITE_ ke dalam frontend.
       - name: Create root .env from secrets
         shell: bash
         run: |
@@ -131,21 +187,165 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_ENV"
 
-      # --- Build + upload ke draft release ---
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+      - name: Build and upload desktop app
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Var VITE_ juga diekspos ke env supaya Vite tetap dapat nilainya
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_SETUP_HASH_KEY: ${{ secrets.VITE_SETUP_HASH_KEY }}
           VITE_BILLING_API_URL: https://${{ vars.SUPABASE_BILLING_PROJECT_ID }}.supabase.co/functions/v1/billing
           VITE_BILLING_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_BILLING_PUBLISHABLE_KEY }}
         with:
-          tagName: app-v__VERSION__
-          releaseName: "frayukti v__VERSION__"
-          releaseBody: "Build otomatis dari push ke main. Lihat aset di bawah."
+          releaseId: ${{ needs.prepare-release.outputs.release_id }}
+          tagName: ${{ needs.prepare-release.outputs.tag }}
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  build-android:
+    needs: prepare-release
+    runs-on: ubuntu-22.04
+    env:
+      NDK_VERSION: "27.2.12479018"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;${NDK_VERSION}"
+
+          sdk_root="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          echo "NDK_HOME=${sdk_root}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Setup Rust with Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate Supabase billing endpoint
+        shell: bash
+        env:
+          SUPABASE_BILLING_PROJECT_ID: ${{ vars.SUPABASE_BILLING_PROJECT_ID }}
+          VITE_BILLING_API_URL: https://${{ vars.SUPABASE_BILLING_PROJECT_ID }}.supabase.co/functions/v1/billing
+          VITE_BILLING_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_BILLING_PUBLISHABLE_KEY }}
+        run: bun run billing:release-env:check
+
+      - name: Configure Android release signing
+        shell: bash
+        env:
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ANDROID_KEY_BASE64:-}" ] || [ -z "${ANDROID_KEY_ALIAS:-}" ] || [ -z "${ANDROID_KEY_PASSWORD:-}" ]; then
+            echo "::error::ANDROID_KEY_BASE64, ANDROID_KEY_ALIAS, dan ANDROID_KEY_PASSWORD wajib diisi di GitHub Actions secrets."
+            exit 1
+          fi
+
+          key_file="$RUNNER_TEMP/frayukti-release.jks"
+          printf '%s' "$ANDROID_KEY_BASE64" | base64 --decode > "$key_file"
+
+          keytool -list \
+            -keystore "$key_file" \
+            -storepass "$ANDROID_KEY_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null
+
+          {
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'password=%s\n' "$ANDROID_KEY_PASSWORD"
+            printf 'storeFile=%s\n' "$key_file"
+          } > src-tauri/gen/android/keystore.properties
+
+      - name: Build universal Android APK
+        shell: bash
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SETUP_HASH_KEY: ${{ secrets.VITE_SETUP_HASH_KEY }}
+          VITE_BILLING_API_URL: https://${{ vars.SUPABASE_BILLING_PROJECT_ID }}.supabase.co/functions/v1/billing
+          VITE_BILLING_SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_BILLING_PUBLISHABLE_KEY }}
+        run: bun run tauri android build --apk
+
+      - name: Verify, name, and upload Android APK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          apk="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+          if [ ! -f "$apk" ]; then
+            echo "::error::APK universal tidak ditemukan di $apk."
+            find src-tauri/gen/android/app/build/outputs -type f -name '*.apk' -print || true
+            exit 1
+          fi
+
+          sdk_root="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          if [ -z "$apksigner" ]; then
+            echo "::error::apksigner tidak ditemukan di Android SDK."
+            exit 1
+          fi
+
+          "$apksigner" verify --verbose --print-certs "$apk"
+
+          cp "$apk" "$RUNNER_TEMP/frayukti-android.apk"
+          (
+            cd "$RUNNER_TEMP"
+            sha256sum frayukti-android.apk > frayukti-android.apk.sha256
+          )
+
+          gh release upload "$RELEASE_TAG" \
+            "$RUNNER_TEMP/frayukti-android.apk" \
+            "$RUNNER_TEMP/frayukti-android.apk.sha256" \
+            --clobber
+
+  publish-release:
+    needs:
+      - prepare-release
+      - build-desktop
+      - build-android
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Publish release as latest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest

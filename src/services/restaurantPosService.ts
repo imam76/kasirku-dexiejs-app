@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { checkout, recordPosExpense, type CheckoutResult } from '@/services/checkoutService';
 import type { CheckoutPaymentInput } from '@/services/posTransactionPaymentService';
+import type { PosPerformanceTrace } from '@/utils/posPerformance';
 import type {
   CartItem,
   Product,
@@ -510,10 +511,14 @@ export const settleRestaurantOrder = async ({
   orderId,
   payments,
   voucherCode,
+  deferSyncProcessing,
+  performanceTrace,
 }: {
   orderId: string;
   payments: CheckoutPaymentInput[];
   voucherCode?: string;
+  deferSyncProcessing?: boolean;
+  performanceTrace?: PosPerformanceTrace;
 }): Promise<CheckoutResult> => {
   const order = await db.restaurantOrders.get(orderId);
   if (!order) throw new Error('Pesanan aktif tidak ditemukan.');
@@ -539,6 +544,8 @@ export const settleRestaurantOrder = async ({
           voucherCode,
           sessionContext: getRestaurantCheckoutSessionContext(order.restaurant_session_id),
           restaurantOrderId: order.id,
+          deferSyncProcessing,
+          performanceTrace,
         });
   };
 

@@ -1,10 +1,15 @@
 import { useMemo } from 'react';
 import { App } from 'antd';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
+import {
+  listPurchaseDocumentPage,
+  type PurchaseDocumentListOptions,
+} from '@/services/documentHistoryReadService';
+import type { DateIdCursor } from '@/services/shared/dateIdCursor';
 import {
   convertPurchaseDocument,
   correctPurchaseDocument,
@@ -14,18 +19,55 @@ import {
   voidPurchaseDocument,
   type PurchaseDocumentUpsertInput,
 } from '@/services/purchaseDocumentService';
-import type { PurchaseDocument, PurchaseDocumentType } from '@/types';
+import type { PurchaseDocumentType } from '@/types';
+
+const PURCHASE_DOCUMENT_PAGE_SIZE = 40;
+
+export const usePurchaseDocumentList = (
+  filters: Omit<PurchaseDocumentListOptions, 'cursor' | 'limit'>,
+) => {
+  const query = useInfiniteQuery({
+    queryKey: [
+      'purchaseDocuments',
+      'list',
+      filters.type,
+      filters.startDate,
+      filters.endDate,
+      filters.status ?? 'ALL',
+      filters.search?.trim() ?? '',
+    ],
+    queryFn: ({ pageParam }) => listPurchaseDocumentPage({
+      ...filters,
+      cursor: pageParam,
+      limit: PURCHASE_DOCUMENT_PAGE_SIZE,
+    }),
+    initialPageParam: undefined as DateIdCursor | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
+  const documents = useMemo(() => {
+    const uniqueDocuments = new Map(
+      (query.data?.pages ?? []).flatMap((page) => page.rows)
+        .map((document) => [document.id, document] as const),
+    );
+    return [...uniqueDocuments.values()];
+  }, [query.data?.pages]);
+
+  return {
+    documents,
+    isLoading: query.isLoading,
+    isLoadingMore: query.isFetchingNextPage,
+    hasMore: Boolean(query.hasNextPage),
+    loadMore: async () => {
+      await query.fetchNextPage();
+    },
+  };
+};
 
 export const usePurchaseDocuments = () => {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
   const { t } = useI18n();
 
-  const documents = useLiveQuery(
-    () => db.purchaseDocuments.orderBy('created_at').reverse().toArray(),
-    [],
-    [],
-  );
   const products = useLiveQuery(
     () => db.products.orderBy('name').toArray(),
     [],
@@ -129,17 +171,13 @@ export const usePurchaseDocuments = () => {
   });
 
   const getItems = (documentId: string) => db.purchaseDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay);
-  const getDocument = (documentId: string): PurchaseDocument | undefined => documents.find((document) => document.id === documentId);
-
   return {
-    documents,
     products,
     contacts: activeContacts,
     taxes: activeTaxes,
     departments: activeDepartments,
     projects: activeProjects,
     warehouses: activeWarehouses,
-    getDocument,
     getItems,
     createDocument: createMutation.mutateAsync,
     updateDocument: updateMutation.mutateAsync,

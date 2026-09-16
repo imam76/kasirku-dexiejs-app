@@ -26,6 +26,8 @@ import type { RestaurantSessionReconciliation } from '@/services/restaurantSessi
 import type { Product, RestaurantOrderLineFulfillmentType, RestaurantOrderType, RestaurantServiceMode } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { printReceiptAfterTransaction } from '@/utils/printer/receiptService';
+import { createPosPerformanceTrace } from '@/utils/posPerformance';
+import { schedulePendingSyncQueue } from '@/services/syncQueueService';
 import { hasVisiblePosShortcutBlocker } from '@/utils/posShortcutGuards';
 import { RestaurantFloorPanel } from './production/RestaurantFloorPanel';
 import { RestaurantKitchenBoard } from './production/RestaurantKitchenBoard';
@@ -357,37 +359,41 @@ export default function RestaurantPos() {
     paymentReference?: string;
   }>) => {
     if (!activeOrder || paymentLoading) return false;
+    const performanceTrace = createPosPerformanceTrace();
     setPaymentLoading(true);
     try {
-      const result = await settleRestaurantOrder({ orderId: activeOrder.id, payments, voucherCode });
-      setPaymentOpen(false);
-      setOrderDrawerOpen(false);
-      setVoucherCode('');
-      message.success(t('restaurantPos.paymentSuccess', { order: activeOrder.order_number }));
-      [
-        'transactions-history',
-        'posSalesReport',
-        'transactionDetailReport',
-        'financeTransactions',
-        'incomeReport',
-        'cashFlowReport',
-        'journalEntries',
-        'trialBalance',
-        'incomeStatement',
-        'balanceSheet',
-      ]
-        .forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+      const result = await settleRestaurantOrder({
+        orderId: activeOrder.id, payments, voucherCode, deferSyncProcessing: true, performanceTrace,
+      });
+      performanceTrace.checkpoint('restaurant_order_finalize');
       void printReceiptAfterTransaction({
         ...result.transaction,
         items: result.items,
         payments: result.payments,
-      }, { openCashDrawer: true }).then((printResult) => {
+      }, {
+        openCashDrawer: true,
+        performanceTrace,
+        onPrintDispatched: () => {
+          [
+            'transactions-history', 'posSalesReport', 'transactionDetailReport',
+            'financeTransactions', 'incomeReport', 'cashFlowReport', 'journalEntries',
+            'trialBalance', 'incomeStatement', 'balanceSheet',
+          ].forEach((key) => { void queryClient.invalidateQueries({ queryKey: [key] }); });
+        },
+      }).then((printResult) => {
         if (!printResult.success) message.warning(printResult.error || t('checkout.receiptPrintFailed'));
       }).catch((error) => {
         message.warning(error instanceof Error ? error.message : t('checkout.receiptPrintFailed'));
       });
+      setPaymentOpen(false);
+      setOrderDrawerOpen(false);
+      setVoucherCode('');
+      message.success(t('restaurantPos.paymentSuccess', { order: activeOrder.order_number }));
       return true;
     } catch (error) {
+      performanceTrace.checkpoint('restaurant_payment_failed');
+      performanceTrace.report('restaurant_payment_failed');
+      schedulePendingSyncQueue();
       modal.error({
         title: t('restaurantPos.paymentFailed'),
         content: error instanceof Error ? error.message : String(error),

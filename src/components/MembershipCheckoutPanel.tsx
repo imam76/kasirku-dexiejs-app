@@ -21,6 +21,7 @@ interface MembershipCheckoutPanelProps {
   membershipPreview: MembershipCheckoutEvaluation;
   voucherPromos: Promo[];
   onMemberChange: (memberId?: string) => void;
+  onMemberSearch: (search: string) => void;
   onVoucherCodeChange: (voucherCode: string) => void;
   onRedeemPointsChange: (points: string) => void;
   onCreateMember: (input: QuickCreateMemberInput) => Promise<Membership>;
@@ -38,6 +39,7 @@ export default function MembershipCheckoutPanel({
   membershipPreview,
   voucherPromos,
   onMemberChange,
+  onMemberSearch,
   onVoucherCodeChange,
   onRedeemPointsChange,
   onCreateMember,
@@ -150,7 +152,6 @@ export default function MembershipCheckoutPanel({
               className="w-full"
               value={memberId}
               placeholder="Pilih member"
-              optionFilterProp="label"
               onChange={(value) => {
                 onMemberChange(value);
                 if (!value) onRedeemPointsChange('');
@@ -158,9 +159,13 @@ export default function MembershipCheckoutPanel({
               options={members.map((member) => ({
                 value: member.id,
                 label: `${member.member_number} - ${member.name ?? member.phone}`,
-                searchText: `${member.member_number} ${member.name ?? ''} ${member.phone}`,
               }))}
-              filterOption={(input, option) => String(option?.searchText ?? option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+              // `members` is already the matching page for the typed term, so the
+              // list must not be narrowed a second time in the browser.
+              filterOption={false}
+              onSearch={onMemberSearch}
+              onBlur={() => onMemberSearch('')}
+              notFoundContent="Member tidak ditemukan"
             />
 
             {selectedMember && (

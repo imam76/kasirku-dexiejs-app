@@ -193,7 +193,9 @@ test('USB keyboard-wedge scans increment qty without adding another cart line', 
 
   const cartItems = page.locator(`[data-pos-cart-item-id="${PRODUCT_WITH_UNITS_ID}"]:visible`);
   const quantityInput = cartItems.getByTestId(`pos-cart-quantity-${PRODUCT_WITH_UNITS_ID}`);
-  await expect(search).toHaveAttribute('data-scanner-input-events', '0');
+  // Scanner tetap dikenali saat Enter, tetapi karakter tidak lagi ditahan dari
+  // input native. Ini juga membuat ketikan manual cepat tetap responsif.
+  await expect(search).not.toHaveAttribute('data-scanner-input-events', '0');
   await expect(search).toHaveValue('');
   await expect(cartItems).toHaveCount(1);
   await expect(quantityInput).toHaveValue('1');
@@ -201,10 +203,46 @@ test('USB keyboard-wedge scans increment qty without adding another cart line', 
   await page.keyboard.type('POS-BOX', { delay: 5 });
   await page.keyboard.press('Enter');
 
-  await expect(search).toHaveAttribute('data-scanner-input-events', '0');
+  await expect(search).not.toHaveAttribute('data-scanner-input-events', '0');
   await expect(search).toHaveValue('');
   await expect(cartItems).toHaveCount(1);
   await expect(quantityInput).toHaveValue('2');
+});
+
+test('rapid manual product search stays visible while typing', async ({ page }) => {
+  await preparePosKeyboardFixture(page);
+
+  const search = page.getByPlaceholder('Cari produk (nama atau SKU)...');
+  await search.focus();
+  await page.keyboard.type('Gula Shortcut', { delay: 5 });
+
+  await expect(search).toHaveValue('Gula Shortcut');
+  await expect(page.getByTestId(`product-add-${SECOND_PRODUCT_ID}`)).toBeVisible();
+
+  await search.press('Enter');
+  await expect(page.locator(`[data-pos-cart-item-id="${SECOND_PRODUCT_ID}"]:visible`)).toHaveCount(1);
+});
+
+test('barcode scan from the quantity field preserves qty and adds the scanned product', async ({ page }) => {
+  await preparePosKeyboardFixture(page);
+
+  const search = page.getByPlaceholder('Cari produk (nama atau SKU)...');
+  await search.fill('POS-BOX');
+  await search.press('Enter');
+
+  const boxItem = page.locator(`[data-pos-cart-item-id="${PRODUCT_WITH_UNITS_ID}"]:visible`);
+  const boxQuantity = boxItem.getByTestId(`pos-cart-quantity-${PRODUCT_WITH_UNITS_ID}`);
+  await boxQuantity.fill('3');
+  await boxQuantity.press('Enter');
+  await expect(boxQuantity).toHaveValue('3');
+
+  await boxQuantity.focus();
+  await page.keyboard.type('POS-SUGAR', { delay: 5 });
+  await page.keyboard.press('Enter');
+
+  await expect(boxQuantity).toHaveValue('3');
+  await expect(page.locator(`[data-pos-cart-item-id="${SECOND_PRODUCT_ID}"]:visible`)).toHaveCount(1);
+  await expect(search).toBeFocused();
 });
 
 test('F6 holds the active transaction and Shift+F6 opens the draft list', async ({ page }) => {

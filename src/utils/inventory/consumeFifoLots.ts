@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import type { InventoryLotConsumptionSourceType, PurchaseCostStatus } from '@/types';
-import { computeLotRemainingBalances } from '@/utils/inventory/lotBalance';
+import { readFifoLots } from '@/utils/inventory/readFifoLots';
 
 const roundCurrency = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
@@ -53,14 +53,8 @@ export const consumeFifoLots = async (
     return { totalCost: 0, weightedAvgCostPerUnit: 0, consumedLots: [] };
   }
 
-  // Fetch all lots for this product and derive true remaining stock from the consumption
-  // ledger (cross-device consistent) rather than trusting the stored quantity_remaining field.
-  const allLots = await db.inventoryLots.where('product_id').equals(productId).toArray();
-  const remainingByLotId = await computeLotRemainingBalances(allLots);
-  const lots = allLots.filter((lot) => (remainingByLotId.get(lot.id) ?? 0) > 0);
-
-  // Sort by received_at ascending so oldest lot is consumed first
-  lots.sort((a, b) => a.received_at.localeCompare(b.received_at));
+  const lots = await readFifoLots(productId, quantityNeeded);
+  const writesConsumption = Boolean(options.sourceType && options.sourceId && options.sourceLineId);
 
   let remaining = quantityNeeded;
   let totalCost = 0;
@@ -75,7 +69,7 @@ export const consumeFifoLots = async (
       throw new Error(`Stok ${lot.product_name} belum memiliki harga beli dan tidak boleh dijual.`);
     }
 
-    const lotRemaining = remainingByLotId.get(lot.id) ?? 0;
+    const lotRemaining = lot.fifo_remaining ?? 0;
     const consume = Math.min(lotRemaining, remaining);
     const lotCost = roundCurrency(consume * lot.cost_per_unit);
 
@@ -92,6 +86,7 @@ export const consumeFifoLots = async (
 
     await db.inventoryLots.update(lot.id, {
       quantity_remaining: lotRemaining - consume,
+      ...(!writesConsumption ? { fifo_untracked_consumed: (lot.fifo_untracked_consumed ?? 0) + consume } : {}),
       updated_at: now,
     });
 

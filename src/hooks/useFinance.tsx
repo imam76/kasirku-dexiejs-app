@@ -1,11 +1,20 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { db } from '@/lib/db';
 import { App } from 'antd';
 import { addFinanceTransaction, recalculateFinance } from '@/services/financeService';
 import type { FinanceTransactionType, PaymentMethod } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
+import {
+  listFinanceHistoryPage,
+  readFinancePeriodOverview,
+  type FinanceHistoryFilters,
+} from '@/services/financeHistoryReadService';
+import type { DateIdCursor } from '@/services/shared/dateIdCursor';
 
-export const useFinance = () => {
+const FINANCE_HISTORY_PAGE_SIZE = 20;
+
+export const useFinance = (filters: FinanceHistoryFilters) => {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
   const { t } = useI18n();
@@ -18,11 +27,40 @@ export const useFinance = () => {
     },
   });
 
-  const { data: transactions = [], isLoading: isLoadingTransactions } = useQuery({
-    queryKey: ['financeTransactions'],
-    queryFn: async () => {
-      return await db.financeTransactions.orderBy('created_at').reverse().toArray();
-    },
+  const historyQuery = useInfiniteQuery({
+    queryKey: [
+      'financeTransactions',
+      'history',
+      filters.startDate,
+      filters.endDate,
+      filters.accountId ?? 'ALL',
+      filters.accountType ?? 'ALL',
+    ],
+    queryFn: ({ pageParam }) => listFinanceHistoryPage({
+      ...filters,
+      cursor: pageParam,
+      limit: FINANCE_HISTORY_PAGE_SIZE,
+    }),
+    initialPageParam: undefined as DateIdCursor | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
+  const transactions = useMemo(() => {
+    const uniqueTransactions = new Map(
+      (historyQuery.data?.pages ?? []).flatMap((page) => page.rows)
+        .map((transaction) => [transaction.id, transaction] as const),
+    );
+    return [...uniqueTransactions.values()];
+  }, [historyQuery.data?.pages]);
+  const overviewQuery = useQuery({
+    queryKey: [
+      'financeTransactions',
+      'overview',
+      filters.startDate,
+      filters.endDate,
+      filters.accountId ?? 'ALL',
+      filters.accountType ?? 'ALL',
+    ],
+    queryFn: () => readFinancePeriodOverview(filters),
   });
 
   const addTransactionMutation = useMutation({
@@ -94,7 +132,11 @@ export const useFinance = () => {
   return {
     balance,
     transactions,
-    isLoading: isLoadingBalance || isLoadingTransactions,
+    overview: overviewQuery.data,
+    isLoading: isLoadingBalance || historyQuery.isLoading || overviewQuery.isLoading,
+    isLoadingMore: historyQuery.isFetchingNextPage,
+    hasMore: Boolean(historyQuery.hasNextPage),
+    loadMore: historyQuery.fetchNextPage,
     addTransaction: addTransactionMutation.mutateAsync,
     isAdding: addTransactionMutation.isPending,
     recalculate: recalculateFinanceMutation.mutateAsync,

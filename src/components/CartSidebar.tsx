@@ -12,13 +12,15 @@ import { formatCurrency } from '@/utils/formatters';
 
 interface CartSidebarProps {
   cart: CartItemType[];
-  updateQuantity: (id: string, quantity: number) => void;
+  updateQuantity: (id: string, quantity: number) => boolean;
   updateUnit: (id: string, unit: string) => boolean;
   removeFromCart: (id: string) => void;
   onEditProduct?: (item: CartItemType) => void;
   activeCartItemId?: string;
   onActivateCartItem: (id: string) => void;
   registerQuantityInput: (id: string, element: HTMLInputElement | null) => void;
+  onBarcodeScan: (barcode: string) => void;
+  onQuantityEditingComplete: () => void;
   clearCart: () => void;
   total: number;
   showPayment: boolean;
@@ -32,6 +34,7 @@ interface CartSidebarProps {
   membershipPreview: MembershipCheckoutEvaluation;
   activePromos: Promo[];
   activeMembers: Membership[];
+  onMemberSearch: (search: string) => void;
   selectedMember: Membership | null;
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
@@ -57,6 +60,8 @@ export default function CartSidebar({
   activeCartItemId,
   onActivateCartItem,
   registerQuantityInput,
+  onBarcodeScan,
+  onQuantityEditingComplete,
   clearCart,
   total,
   showPayment,
@@ -69,6 +74,7 @@ export default function CartSidebar({
   membershipPreview,
   activePromos,
   activeMembers,
+  onMemberSearch,
   setShowPayment,
   updatePaymentDraft,
   removePaymentDraft,
@@ -115,6 +121,8 @@ export default function CartSidebar({
               isActive={item.product.id === activeCartItemId}
               onActivate={() => onActivateCartItem(item.product.id)}
               quantityInputRef={(element) => registerQuantityInput(item.product.id, element)}
+              onBarcodeScan={onBarcodeScan}
+              onQuantityEditingComplete={onQuantityEditingComplete}
             />
           ))}
           {cart.length === 0 && (
@@ -159,6 +167,7 @@ export default function CartSidebar({
         memberId={memberId}
         activePromos={activePromos}
         activeMembers={activeMembers}
+        onMemberSearch={onMemberSearch}
         promoPreview={promoPreview}
         membershipPreview={membershipPreview}
         onVoucherCodeChange={setVoucherCode}

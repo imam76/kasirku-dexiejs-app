@@ -1,17 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '@/lib/db';
 import { useSyncActivityStore } from '@/store/syncActivityStore';
-import type { SyncQueueItem, SyncQueueStatus } from '@/types';
-
-type SyncQueueCounts = Record<SyncQueueStatus, number>;
-
-const emptyCounts: SyncQueueCounts = {
-  pending: 0,
-  processing: 0,
-  synced: 0,
-  failed: 0,
-};
+import { EMPTY_SYNC_COUNTS, EMPTY_SYNC_SNAPSHOT, readSyncStatusSnapshot } from '@/services/syncStatusReadService';
 
 const getInitialOnlineState = () => (
   typeof navigator === 'undefined' ? true : navigator.onLine
@@ -34,33 +24,10 @@ export const useSyncStatus = () => {
     };
   }, []);
 
-  const queueSnapshot = useLiveQuery(async () => {
-    const queueItems = await db.syncQueue.toArray();
-    const counts = queueItems.reduce<SyncQueueCounts>((acc, item) => {
-      acc[item.status] += 1;
-      return acc;
-    }, { ...emptyCounts });
-    const lastSyncedItem = queueItems
-      .filter((item) => item.status === 'synced')
-      .sort((firstItem, secondItem) => secondItem.updated_at.localeCompare(firstItem.updated_at))[0];
-    const failedItems = queueItems
-      .filter((item) => item.status === 'failed')
-      .sort((firstItem, secondItem) => secondItem.updated_at.localeCompare(firstItem.updated_at))
-      .slice(0, 3);
-
-    return {
-      counts,
-      lastSyncedAt: lastSyncedItem?.updated_at,
-      failedItems,
-    };
-  }, [], {
-    counts: emptyCounts,
-    lastSyncedAt: undefined,
-    failedItems: [] as SyncQueueItem[],
-  });
+  const queueSnapshot = useLiveQuery(readSyncStatusSnapshot, [], EMPTY_SYNC_SNAPSHOT);
 
   return useMemo(() => {
-    const counts = queueSnapshot?.counts ?? emptyCounts;
+    const counts = queueSnapshot?.counts ?? EMPTY_SYNC_COUNTS;
     const isUploading = counts.processing > 0 || phase === 'uploading';
     const isRefreshing = phase === 'refreshing';
     const hasFailed = counts.failed > 0 || phase === 'error';

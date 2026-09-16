@@ -1,10 +1,15 @@
 import { useMemo } from 'react';
 import { App } from 'antd';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useI18n } from '@/hooks/useI18n';
 import { db } from '@/lib/db';
 import { orderLineItemsForDisplay } from '@/utils/documentLineItems/lineItemView';
+import {
+  listSalesDocumentPage,
+  type SalesDocumentListOptions,
+} from '@/services/documentHistoryReadService';
+import type { DateIdCursor } from '@/services/shared/dateIdCursor';
 import {
   convertSalesDocument,
   correctSalesDocument,
@@ -16,17 +21,54 @@ import {
   type SalesDocumentUpsertInput,
   type SalesInvoicePaymentInput,
 } from '@/services/salesDocumentService';
-import type { SalesDocument, SalesDocumentType } from '@/types';
+import type { SalesDocumentType } from '@/types';
+
+const SALES_DOCUMENT_PAGE_SIZE = 40;
+
+export const useSalesDocumentList = (
+  filters: Omit<SalesDocumentListOptions, 'cursor' | 'limit'>,
+) => {
+  const query = useInfiniteQuery({
+    queryKey: [
+      'salesDocuments',
+      'list',
+      filters.type,
+      filters.startDate,
+      filters.endDate,
+      filters.status ?? 'ALL',
+      filters.search?.trim() ?? '',
+    ],
+    queryFn: ({ pageParam }) => listSalesDocumentPage({
+      ...filters,
+      cursor: pageParam,
+      limit: SALES_DOCUMENT_PAGE_SIZE,
+    }),
+    initialPageParam: undefined as DateIdCursor | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
+  const documents = useMemo(() => {
+    const uniqueDocuments = new Map(
+      (query.data?.pages ?? []).flatMap((page) => page.rows)
+        .map((document) => [document.id, document] as const),
+    );
+    return [...uniqueDocuments.values()];
+  }, [query.data?.pages]);
+
+  return {
+    documents,
+    isLoading: query.isLoading,
+    isLoadingMore: query.isFetchingNextPage,
+    hasMore: Boolean(query.hasNextPage),
+    loadMore: async () => {
+      await query.fetchNextPage();
+    },
+  };
+};
 
 export const useSalesDocuments = () => {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
   const { t } = useI18n();
-  const documents = useLiveQuery(
-    () => db.salesDocuments.orderBy('created_at').reverse().toArray(),
-    [],
-    [],
-  );
   const products = useLiveQuery(
     () => db.products.orderBy('name').toArray(),
     [],
@@ -136,17 +178,13 @@ export const useSalesDocuments = () => {
   });
 
   const getItems = (documentId: string) => db.salesDocumentItems.where('document_id').equals(documentId).toArray().then(orderLineItemsForDisplay);
-  const getDocument = (documentId: string): SalesDocument | undefined => documents.find((document) => document.id === documentId);
-
   return {
-    documents,
     products,
     contacts: activeContacts,
     taxes: activeTaxes,
     departments: activeDepartments,
     projects: activeProjects,
     warehouses: activeWarehouses,
-    getDocument,
     getItems,
     createDocument: createMutation.mutateAsync,
     updateDocument: updateMutation.mutateAsync,

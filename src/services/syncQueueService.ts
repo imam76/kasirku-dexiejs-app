@@ -1,4 +1,6 @@
 import { db } from '@/lib/db';
+import { readPendingSyncQueueBatch } from './pendingSyncQueueReadService';
+import { pruneSyncedSyncQueueItems } from './syncQueueRetentionService';
 import {
   mergeRemoteAuthUsersIntoDexie,
   mergeRemoteRolePermissionsIntoDexie,
@@ -303,6 +305,8 @@ const PAYMENT_METHOD_ENTITY = 'paymentMethods';
 const INVENTORY_OPENING_BALANCE_SOURCE_EVENT = 'INVENTORY_OPENING_BALANCE_POSTED';
 
 let isProcessingSyncQueue = false;
+const SYNC_QUEUE_PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+let lastSyncedQueuePruneAt = 0;
 
 const getErrorMessage = (error: unknown) => (
   error instanceof Error
@@ -6856,48 +6860,47 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
   }
 };
 
+let scheduledSyncQueueTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Give the caller's receipt handoff a turn before starting background uploads. */
+export const schedulePendingSyncQueue = () => {
+  if (scheduledSyncQueueTimer !== undefined || !isTauriRuntime()) return;
+  scheduledSyncQueueTimer = setTimeout(() => {
+    scheduledSyncQueueTimer = undefined;
+    void processPendingSyncQueue().catch((error) => {
+      console.error('Failed to process scheduled PostgreSQL sync queue', error);
+    });
+  }, 0);
+};
+
 export const processPendingSyncQueue = async (limit = SYNC_QUEUE_BATCH_SIZE) => {
   if (isProcessingSyncQueue || !isTauriRuntime()) return;
 
   isProcessingSyncQueue = true;
   try {
+    // Recovery reads the processing partition: once per drain, not once per batch.
     await recoverStaleProcessingSyncQueueItems();
 
-    const isPostgresAvailable = await isPostgresAvailableForSync();
-    if (!isPostgresAvailable) return;
+    if (await isPostgresAvailableForSync()) {
+      // Drain batch by batch through the queue index. A failed item is marked failed,
+      // so it leaves the pending partition and cannot be read again by the next batch.
+      for (;;) {
+        const pendingQueueItems = await readPendingSyncQueueBatch(limit);
+        if (pendingQueueItems.length === 0) break;
 
-    const pendingQueueItems = await db.syncQueue
-      .where('status')
-      .equals('pending')
-      .sortBy('created_at');
-    const getQueuePriority = (queueItem: SyncQueueItem) => {
-      if (queueItem.entity === PRODUCT_ENTITY) return 0;
-      if (
-        queueItem.entity === JOURNAL_ENTRY_ENTITY
-        || queueItem.entity === OPENING_BALANCE_ENTITY
-      ) {
-        return 1;
+        for (const queueItem of pendingQueueItems) {
+          await processSyncQueueItem(queueItem);
+        }
       }
-      if (queueItem.entity === INVENTORY_LOT_ENTITY) return 1;
-      if (queueItem.entity === INVENTORY_OPENING_BALANCE_POSTING_ENTITY) return 2;
-      if (queueItem.entity === GENERAL_LEDGER_SETTING_ENTITY) return 3;
-      if (queueItem.entity === INVENTORY_LOT_CONSUMPTION_ENTITY) return 4;
-      return 1;
-    };
-    pendingQueueItems.sort((left, right) => (
-      getQueuePriority(left) - getQueuePriority(right)
-    ));
+    }
 
-    for (const queueItem of pendingQueueItems.slice(0, limit)) {
-      await processSyncQueueItem(queueItem);
+    // Local retention, off the checkout path and independent of the connection.
+    if (Date.now() - lastSyncedQueuePruneAt >= SYNC_QUEUE_PRUNE_INTERVAL_MS) {
+      lastSyncedQueuePruneAt = Date.now();
+      await pruneSyncedSyncQueueItems();
     }
   } finally {
     isProcessingSyncQueue = false;
-  }
-
-  const pendingQueueCount = await db.syncQueue.where('status').equals('pending').count();
-  if (pendingQueueCount > 0) {
-    void processPendingSyncQueue(limit);
   }
 };
 
@@ -7124,12 +7127,11 @@ export const enqueuePendingContactsForSync = async () => {
   }
 };
 
-export const enqueueMembershipSync = async (
+export const buildMembershipOutboxItem = (
   membership: Membership,
   operation: SyncQueueOperation,
-) => {
-  const now = new Date().toISOString();
-  const queueItem: SyncQueueItem = {
+  now = new Date().toISOString(),
+): SyncQueueItem => ({
     id: crypto.randomUUID(),
     entity: MEMBERSHIP_ENTITY,
     entity_id: membership.id,
@@ -7139,7 +7141,13 @@ export const enqueueMembershipSync = async (
     attempts: 0,
     created_at: now,
     updated_at: now,
-  };
+  });
+
+export const enqueueMembershipSync = async (
+  membership: Membership,
+  operation: SyncQueueOperation,
+) => {
+  const queueItem = buildMembershipOutboxItem(membership, operation);
 
   await db.syncQueue.add(queueItem);
   void processPendingSyncQueue();
@@ -8399,12 +8407,11 @@ export const enqueuePendingPayrollDataForSync = async () => {
   }
 };
 
-export const enqueueFinanceTransactionSync = async (
+export const buildFinanceTransactionOutboxItem = (
   transaction: FinanceTransaction,
   operation: Extract<SyncQueueOperation, 'create' | 'update' | 'delete'>,
-) => {
-  const now = new Date().toISOString();
-  const queueItem: SyncQueueItem = {
+  now = new Date().toISOString(),
+): SyncQueueItem => ({
     id: crypto.randomUUID(),
     entity: FINANCE_TRANSACTION_ENTITY,
     entity_id: transaction.id,
@@ -8414,7 +8421,13 @@ export const enqueueFinanceTransactionSync = async (
     attempts: 0,
     created_at: now,
     updated_at: now,
-  };
+  });
+
+export const enqueueFinanceTransactionSync = async (
+  transaction: FinanceTransaction,
+  operation: Extract<SyncQueueOperation, 'create' | 'update' | 'delete'>,
+) => {
+  const queueItem = buildFinanceTransactionOutboxItem(transaction, operation);
 
   await db.syncQueue.add(queueItem);
   void processPendingSyncQueue();
@@ -8697,13 +8710,12 @@ export const enqueuePendingFiscalYearClosingRunsForSync = async () => {
   }
 };
 
-export const enqueueJournalEntryBundleSync = async (
+export const buildJournalEntryBundleOutboxItem = (
   entry: JournalEntry,
   lines: JournalEntryLine[],
   operation: Extract<SyncQueueOperation, 'create' | 'update'>,
-) => {
-  const now = new Date().toISOString();
-  const queueItem: SyncQueueItem = {
+  now = new Date().toISOString(),
+): SyncQueueItem => ({
     id: crypto.randomUUID(),
     entity: JOURNAL_ENTRY_ENTITY,
     entity_id: entry.id,
@@ -8713,7 +8725,14 @@ export const enqueueJournalEntryBundleSync = async (
     attempts: 0,
     created_at: now,
     updated_at: now,
-  };
+  });
+
+export const enqueueJournalEntryBundleSync = async (
+  entry: JournalEntry,
+  lines: JournalEntryLine[],
+  operation: Extract<SyncQueueOperation, 'create' | 'update'>,
+) => {
+  const queueItem = buildJournalEntryBundleOutboxItem(entry, lines, operation);
 
   await db.syncQueue.add(queueItem);
   void processPendingSyncQueue();

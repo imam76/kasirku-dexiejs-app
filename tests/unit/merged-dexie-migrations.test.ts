@@ -31,6 +31,37 @@ describe('merged Dexie migration order', () => {
     expect(migration110).toContain('normalizeProductUnitMappings');
   });
 
+  test('adds bounded ledger and report indexes after the POS read models', () => {
+    const migration136 = readMigration(136);
+
+    expect(migration136).toContain('db.version(136)');
+    expect(migration136).toContain('[account_id+entry_date+id]');
+    expect(migration136).toContain('[type+created_at+id]');
+    expect(migration136).toContain('BACKFILL_BATCH_SIZE');
+    expect(migration136).toContain('entriesTable.bulkGet(entryIds)');
+  });
+
+  test('adds keyset indexes for transaction and cash-bank history', () => {
+    const migration137 = readMigration(137);
+
+    expect(migration137).toContain('db.version(137)');
+    expect(migration137).toContain('[type+document_date+id]');
+    expect(migration137).toContain('[account_id+created_at+id]');
+    expect(migration137).toContain('[cash_account_id+statement_date+id]');
+    expect(migration137).toContain('reversal_of_transfer_group_id');
+  });
+
+  test('adds cursor-ready product list projections after transaction indexes', () => {
+    const migration138 = readMigration(138);
+
+    expect(migration138).toContain('db.version(138)');
+    expect(migration138).toContain("[name+id]");
+    expect(migration138).toContain('[category+name+id]');
+    expect(migration138).toContain('[created_at+id]');
+    expect(migration138).toContain('*search_keys');
+    expect(migration138).toContain('PRODUCT_BACKFILL_BATCH_SIZE');
+  });
+
   test('migrates legacy product and pending-sync equations losslessly and idempotently', () => {
     const legacyProduct = {
       id: 'legacy-product',

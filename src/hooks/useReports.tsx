@@ -125,6 +125,64 @@ const getReportTime = (value?: string) => {
   return Number.isFinite(timestamp) ? timestamp : 0;
 };
 
+const getIsoReportRange = (startDate?: string, endDate?: string) => ({
+  start: startDate ? dayjs.tz(startDate).startOf('day').toISOString() : undefined,
+  end: endDate ? dayjs.tz(endDate).endOf('day').toISOString() : undefined,
+});
+
+const getStockPurchasesInRange = async (startDate?: string, endDate?: string) => {
+  const { start, end } = getIsoReportRange(startDate, endDate);
+  let collection = db.stockPurchases.orderBy('created_at').reverse();
+
+  if (start && end) {
+    collection = db.stockPurchases.where('created_at').between(start, end, true, true).reverse();
+  } else if (start) {
+    collection = db.stockPurchases.where('created_at').aboveOrEqual(start).reverse();
+  } else if (end) {
+    collection = db.stockPurchases.where('created_at').belowOrEqual(end).reverse();
+  }
+
+  return collection.toArray();
+};
+
+const getPosTransactionsInRange = async (startDate?: string, endDate?: string) => {
+  const { start, end } = getIsoReportRange(startDate, endDate);
+  let collection = db.transactions.orderBy('created_at').reverse();
+
+  if (start && end) {
+    collection = db.transactions.where('created_at').between(start, end, true, true).reverse();
+  } else if (start) {
+    collection = db.transactions.where('created_at').aboveOrEqual(start).reverse();
+  } else if (end) {
+    collection = db.transactions.where('created_at').belowOrEqual(end).reverse();
+  }
+
+  return collection.toArray();
+};
+
+const getFinanceTransactionsByTypeInRange = async (
+  type: 'INCOME' | 'EXPENSE',
+  startDate?: string,
+  endDate?: string,
+) => {
+  const { start, end } = getIsoReportRange(startDate, endDate);
+
+  if (!start && !end) {
+    return db.financeTransactions.where('type').equals(type).reverse().toArray();
+  }
+
+  return db.financeTransactions
+    .where('[type+created_at+id]')
+    .between(
+      [type, start ?? '', ''],
+      [type, end ?? '\uffff', '\uffff'],
+      true,
+      true,
+    )
+    .reverse()
+    .toArray();
+};
+
 const getPurchaseDocumentReportDate = (document: PurchaseDocument) => (
   document.issued_at ||
   (document.document_date ? dayjs.tz(document.document_date).startOf('day').toISOString() : undefined) ||
@@ -568,8 +626,7 @@ export const usePurchaseReport = (startDate?: string, endDate?: string) => {
     queryKey: ['purchaseReport', startDate, endDate],
     queryFn: async (): Promise<PurchaseReportData> => {
       await requireUserPermission(await getCurrentSessionUser(), 'REPORT_PURCHASE_VIEW');
-      const stockPurchases = (await db.stockPurchases.toArray())
-        .filter((purchase) => isReportDateInRange(purchase.created_at, startDate, endDate))
+      const stockPurchases = (await getStockPurchasesInRange(startDate, endDate))
         .map<PurchaseReportRow>((purchase) => ({
           ...purchase,
           source_type: 'STOCK_PURCHASE',
@@ -619,41 +676,11 @@ export const useExpenseReport = (startDate?: string, endDate?: string, categorie
     queryKey: ['expenseReport', startDate, endDate, categories],
     queryFn: async (): Promise<ExpenseReportData> => {
       await requireUserPermission(await getCurrentSessionUser(), 'REPORT_EXPENSE_VIEW');
-      let collection = db.financeTransactions.where('type').equals('EXPENSE').reverse();
-
-      if (startDate && endDate) {
-        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
-        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
-        collection = db.financeTransactions
-          .where('created_at')
-          .between(startISO, endISO, true, true)
-          .filter(isExpenseReportFinanceTransaction)
-          .reverse();
-      } else if (startDate) {
-        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
-        collection = db.financeTransactions
-          .where('created_at')
-          .aboveOrEqual(startISO)
-          .filter(isExpenseReportFinanceTransaction)
-          .reverse();
-      } else if (endDate) {
-        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
-        collection = db.financeTransactions
-          .where('created_at')
-          .belowOrEqual(endISO)
-          .filter(isExpenseReportFinanceTransaction)
-          .reverse();
-      }
-
-      let transactions = (await collection.toArray())
+      let transactions = (await getFinanceTransactionsByTypeInRange('EXPENSE', startDate, endDate))
         .filter(isExpenseReportFinanceTransaction);
 
-      const startISO = startDate ? dayjs.tz(startDate).startOf('day').toISOString() : undefined;
-      const endISO = endDate ? dayjs.tz(endDate).endOf('day').toISOString() : undefined;
-      const posExpenseTransactions: FinanceTransaction[] = (await db.transactions.toArray())
+      const posExpenseTransactions: FinanceTransaction[] = (await getPosTransactionsInRange(startDate, endDate))
         .filter((transaction) => isTransactionActive(transaction) && isTransactionExpense(transaction))
-        .filter((transaction) => !startISO || transaction.created_at >= startISO)
-        .filter((transaction) => !endISO || transaction.created_at <= endISO)
         .map((transaction) => ({
           id: `pos-expense-${transaction.id}`,
           type: 'EXPENSE',
@@ -692,33 +719,7 @@ export const useIncomeReport = (startDate?: string, endDate?: string, categories
     queryKey: ['incomeReport', startDate, endDate, categories],
     queryFn: async (): Promise<IncomeReportData> => {
       await requireUserPermission(await getCurrentSessionUser(), 'REPORT_INCOME_VIEW');
-      let collection = db.financeTransactions.where('type').equals('INCOME').reverse();
-
-      if (startDate && endDate) {
-        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
-        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
-        collection = db.financeTransactions
-          .where('created_at')
-          .between(startISO, endISO, true, true)
-          .filter(isIncomeReportFinanceTransaction)
-          .reverse();
-      } else if (startDate) {
-        const startISO = dayjs.tz(startDate).startOf('day').toISOString();
-        collection = db.financeTransactions
-          .where('created_at')
-          .aboveOrEqual(startISO)
-          .filter(isIncomeReportFinanceTransaction)
-          .reverse();
-      } else if (endDate) {
-        const endISO = dayjs.tz(endDate).endOf('day').toISOString();
-        collection = db.financeTransactions
-          .where('created_at')
-          .belowOrEqual(endISO)
-          .filter(isIncomeReportFinanceTransaction)
-          .reverse();
-      }
-
-      let transactions = (await collection.toArray())
+      let transactions = (await getFinanceTransactionsByTypeInRange('INCOME', startDate, endDate))
         .filter(isIncomeReportFinanceTransaction);
 
       if (categories && categories.length > 0) {

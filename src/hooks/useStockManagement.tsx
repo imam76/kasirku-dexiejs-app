@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createStockSchema, type StockFormData } from '@/lib/validations/stock';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { App } from 'antd';
 import { db } from '@/lib/db';
@@ -24,6 +24,12 @@ import { useI18n } from '@/hooks/useI18n';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
 import { DEFAULT_CONVERSIONS } from '@/constants/units';
 import { materializeWholesalePriceUnits } from '@/utils/pricing';
+import {
+  EMPTY_PRODUCT_LIST_FILTERS,
+  readProductListPage,
+  type ProductListCursor,
+  type ProductListFilters,
+} from '@/services/productListReadService';
 
 export type { StockFormData };
 
@@ -38,6 +44,9 @@ export const useStockManagement = () => {
   const { modal, message } = App.useApp();
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [productListFilters, setProductListFilters] = useState<ProductListFilters>(
+    EMPTY_PRODUCT_LIST_FILTERS,
+  );
   const { data: unitConversions = DEFAULT_CONVERSIONS } = useQuery({
     queryKey: ['unitConversions'],
     queryFn: () => db.unitConversions.toArray(),
@@ -80,12 +89,45 @@ export const useStockManagement = () => {
     formState: { errors },
   } = form;
 
-  const liveProducts = useLiveQuery(
-    () => db.products.orderBy('created_at').reverse().toArray(),
+  const productListQuery = useInfiniteQuery({
+    queryKey: ['product-master-list', productListFilters],
+    queryFn: ({ pageParam }) => readProductListPage({
+      filters: productListFilters,
+      cursor: pageParam,
+      limit: 50,
+    }),
+    initialPageParam: undefined as ProductListCursor | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
+  const products = useMemo(() => {
+    const uniqueProducts = new Map(
+      (productListQuery.data?.pages ?? [])
+        .flatMap((page) => page.rows)
+        .map((product) => [product.id, product] as const),
+    );
+    return [...uniqueProducts.values()];
+  }, [productListQuery.data?.pages]);
+  const hasAnyProduct = useLiveQuery(
+    () => db.products.limit(1).primaryKeys().then((keys) => keys.length > 0),
     [],
+    false,
   );
-  const products = liveProducts ?? [];
-  const isLoading = liveProducts === undefined;
+  const productListRevision = useLiveQuery(async () => {
+    await db.productListCatalog.limit(1).primaryKeys();
+    return crypto.randomUUID();
+  }, [], '');
+  const previousProductListRevision = useRef(productListRevision);
+
+  useEffect(() => {
+    if (!productListRevision || previousProductListRevision.current === productListRevision) return;
+    const hadPreviousRevision = Boolean(previousProductListRevision.current);
+    previousProductListRevision.current = productListRevision;
+    if (hadPreviousRevision) {
+      void queryClient.invalidateQueries({ queryKey: ['product-master-list'] });
+    }
+  }, [productListRevision, queryClient]);
+
+  const isLoading = productListQuery.isLoading;
 
   // Upsert (add/update) mutation
   const upsertMutation = useMutation({
@@ -93,6 +135,7 @@ export const useStockManagement = () => {
       editingId ? updateProductRecord(editingId, data) : createProductRecord(data)
     ),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['product-master-list'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['purchaseReport'] });
       queryClient.invalidateQueries({ queryKey: ['journalEntries'] });
@@ -129,6 +172,7 @@ export const useStockManagement = () => {
       }
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['product-master-list'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
     },
   });
@@ -190,6 +234,7 @@ export const useStockManagement = () => {
       };
     },
     onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['product-master-list'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
       message.success(t('stock.importSuccess', { count: result.importedCount }));
     },
@@ -257,6 +302,12 @@ export const useStockManagement = () => {
   return {
     products,
     isLoading,
+    hasAnyProduct,
+    productListFilters,
+    setProductListFilters,
+    hasMoreProducts: Boolean(productListQuery.hasNextPage),
+    isLoadingMoreProducts: productListQuery.isFetchingNextPage,
+    loadMoreProducts: productListQuery.fetchNextPage,
     editingId,
     control,
     handleSubmit: submitForm,

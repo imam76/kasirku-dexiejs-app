@@ -18,12 +18,14 @@ interface MobileCartDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   cart: CartItemType[];
-  updateQuantity: (id: string, quantity: number) => void;
+  updateQuantity: (id: string, quantity: number) => boolean;
   updateUnit: (id: string, unit: string) => boolean;
   removeFromCart: (id: string) => void;
   onEditProduct?: (item: CartItemType) => void;
   activeCartItemId?: string;
   onActivateCartItem: (id: string) => void;
+  onBarcodeScan: (barcode: string) => void;
+  onQuantityEditingComplete: () => void;
   clearCart: () => void;
   total: number;
   showPayment: boolean;
@@ -37,6 +39,7 @@ interface MobileCartDrawerProps {
   membershipPreview: MembershipCheckoutEvaluation;
   activePromos: Promo[];
   activeMembers: Membership[];
+  onMemberSearch: (search: string) => void;
   selectedMember: Membership | null;
   membershipSetting: MembershipSetting;
   setShowPayment: (show: boolean) => void;
@@ -62,6 +65,8 @@ export default function MobileCartDrawer({
   onEditProduct,
   activeCartItemId,
   onActivateCartItem,
+  onBarcodeScan,
+  onQuantityEditingComplete,
   clearCart,
   total,
   showPayment,
@@ -75,6 +80,7 @@ export default function MobileCartDrawer({
   membershipPreview,
   activePromos,
   activeMembers,
+  onMemberSearch,
   selectedMember,
   membershipSetting,
   setShowPayment,
@@ -142,6 +148,8 @@ export default function MobileCartDrawer({
                 onEditProduct={onEditProduct}
                 isActive={item.product.id === activeCartItemId}
                 onActivate={() => onActivateCartItem(item.product.id)}
+                onBarcodeScan={onBarcodeScan}
+                onQuantityEditingComplete={onQuantityEditingComplete}
               />
             ))}
           </div>
@@ -183,6 +191,7 @@ export default function MobileCartDrawer({
                 membershipPreview={membershipPreview}
                 activePromos={activePromos}
                 activeMembers={activeMembers}
+                onMemberSearch={onMemberSearch}
                 selectedMember={selectedMember}
                 membershipSetting={membershipSetting}
                 setShowPayment={setShowPayment}

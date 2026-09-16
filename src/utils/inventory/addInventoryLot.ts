@@ -18,6 +18,14 @@ export interface AddInventoryLotInput {
   receivedAt: string;
 }
 
+export const buildInventoryLotId = (
+  input: Pick<AddInventoryLotInput, 'sourceType' | 'sourceId' | 'sourceLineId'>,
+) => (
+  input.sourceId && input.sourceLineId
+    ? `inventory-lot:${input.sourceType}:${input.sourceId}:${input.sourceLineId}`
+    : crypto.randomUUID()
+);
+
 /**
  * Creates a new inventory lot when stock is added (purchase, receipt, void restore, restock).
  * Must be called inside a Dexie transaction that includes db.inventoryLots.
@@ -25,7 +33,9 @@ export interface AddInventoryLotInput {
 export const addInventoryLot = async (input: AddInventoryLotInput): Promise<InventoryLot> => {
   const now = new Date().toISOString();
   const lot: InventoryLot = {
-    id: crypto.randomUUID(),
+    // A business source line may create only one inbound lot. Keeping this ID
+    // stable prevents retries or two devices from duplicating its stock value.
+    id: buildInventoryLotId(input),
     product_id: input.productId,
     product_name: input.productName,
     sku: input.sku,

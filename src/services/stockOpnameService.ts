@@ -5,6 +5,7 @@ import { createStockMutation, enqueueStockMutations } from '@/services/stockMuta
 import type { AuthUser, Product, StockMutation, StockOpname, StockOpnameItem } from '@/types';
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { consumeFifoLots } from '@/utils/inventory/consumeFifoLots';
+import { postStockOpnameJournal } from '@/services/generalLedgerService';
 import {
   calculateStockOpnameSummary,
   calculateStockOpnameVariance,
@@ -402,6 +403,13 @@ export const postStockOpname = async ({
     db.stockOpnameItems,
     db.inventoryLots,
     db.inventoryLotConsumptions,
+    db.chartOfAccounts,
+    db.enabledModules,
+    db.generalLedgerSetting,
+    db.accountingPeriods,
+    db.journalEntries,
+    db.journalEntryLines,
+    db.syncQueue,
   ], async () => {
     const opname = await getRequiredOpname(opnameId);
     assertStockOpnameReviewed(opname);
@@ -517,6 +525,7 @@ export const postStockOpname = async ({
 
     await db.stockOpnameItems.bulkPut(postedItems);
     await db.stockOpnames.put(postedOpname);
+    await postStockOpnameJournal(postedOpname, postedItems, currentUser, { syncInTransaction: true });
   });
 
   if (!postedOpname) {
