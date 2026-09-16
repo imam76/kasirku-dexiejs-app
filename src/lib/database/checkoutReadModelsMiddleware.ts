@@ -1,8 +1,10 @@
 import Dexie, { type DBCore, type DBCoreMutateRequest, type DBCoreTransaction } from 'dexie';
 import type { InventoryLot, InventoryLotConsumption, Product, SyncQueueItem } from '@/types';
 import {
-  emptySyncQueueSummary, getSyncQueuePriority, toPosCatalogProduct, withFifoBalance,
-  type InventoryConsumptionTotal, type PosCatalogCount, type PosCatalogProduct, type SyncQueueSummary,
+  emptySyncQueueSummary, getSyncQueuePriority, toPosCatalogProduct,
+  toProductListCatalogProduct, toProductSearchCatalogProduct, withFifoBalance,
+  type InventoryConsumptionTotal, type PosCatalogCount, type PosCatalogProduct,
+  type ProductListCatalogProduct, type ProductSearchCatalogProduct, type SyncQueueSummary,
 } from './checkoutReadModels';
 
 type SourceRow = InventoryLot | InventoryLotConsumption | Product | SyncQueueItem;
@@ -10,7 +12,7 @@ const dependencies: Record<string, string[]> = {
   syncQueue: ['syncQueueSummary'],
   inventoryLots: ['inventoryConsumptionTotals'],
   inventoryLotConsumptions: ['inventoryConsumptionTotals', 'inventoryLots'],
-  products: ['posProductCatalog', 'posCatalogCounts'],
+  products: ['posProductCatalog', 'posCatalogCounts', 'productListCatalog', 'productSearchCatalog'],
 };
 
 /**
@@ -91,20 +93,41 @@ export function registerCheckoutReadModels(db: Dexie) {
         } else if (name === 'inventoryLots') {
           return refreshLots(trans, keys);
         } else if (name === 'products') {
-          const changed: PosCatalogProduct[] = [];
-          const deleted: string[] = [];
+          const changedPosRows: PosCatalogProduct[] = [];
+          const deletedPosRows: string[] = [];
+          const changedListRows: ProductListCatalogProduct[] = [];
+          const deletedListRows: string[] = [];
+          const changedSearchRows: ProductSearchCatalogProduct[] = [];
+          const deletedSearchRows: string[] = [];
           const delta = new Map<string, number>();
           keys.forEach((id, index) => {
-            const old = before[index] ? toPosCatalogProduct(before[index] as Product) : undefined;
-            const next = after[index] ? toPosCatalogProduct(after[index] as Product) : undefined;
-            if (JSON.stringify(old) === JSON.stringify(next)) return;
-            if (next) changed.push(next); else deleted.push(id);
-            if (old) delta.set(old.category, (delta.get(old.category) ?? 0) - 1);
-            if (next) delta.set(next.category, (delta.get(next.category) ?? 0) + 1);
+            const oldProduct = before[index] as Product | undefined;
+            const nextProduct = after[index] as Product | undefined;
+            const oldPosRow = oldProduct ? toPosCatalogProduct(oldProduct) : undefined;
+            const nextPosRow = nextProduct ? toPosCatalogProduct(nextProduct) : undefined;
+            const oldListRow = oldProduct ? toProductListCatalogProduct(oldProduct) : undefined;
+            const nextListRow = nextProduct ? toProductListCatalogProduct(nextProduct) : undefined;
+            const oldSearchRow = oldProduct ? toProductSearchCatalogProduct(oldProduct) : undefined;
+            const nextSearchRow = nextProduct ? toProductSearchCatalogProduct(nextProduct) : undefined;
+
+            if (JSON.stringify(oldListRow) !== JSON.stringify(nextListRow)) {
+              if (nextListRow) changedListRows.push(nextListRow); else deletedListRows.push(id);
+            }
+            if (JSON.stringify(oldSearchRow) !== JSON.stringify(nextSearchRow)) {
+              if (nextSearchRow) changedSearchRows.push(nextSearchRow); else deletedSearchRows.push(id);
+            }
+            if (JSON.stringify(oldPosRow) === JSON.stringify(nextPosRow)) return;
+            if (nextPosRow) changedPosRows.push(nextPosRow); else deletedPosRows.push(id);
+            if (oldPosRow) delta.set(oldPosRow.category, (delta.get(oldPosRow.category) ?? 0) - 1);
+            if (nextPosRow) delta.set(nextPosRow.category, (delta.get(nextPosRow.category) ?? 0) + 1);
           });
           const categories = [...delta.keys()].filter((category) => delta.get(category) !== 0);
-          return put('posProductCatalog', trans, changed)
-            .then(() => remove('posProductCatalog', trans, deleted))
+          return put('productListCatalog', trans, changedListRows)
+            .then(() => remove('productListCatalog', trans, deletedListRows))
+            .then(() => put('productSearchCatalog', trans, changedSearchRows))
+            .then(() => remove('productSearchCatalog', trans, deletedSearchRows))
+            .then(() => put('posProductCatalog', trans, changedPosRows))
+            .then(() => remove('posProductCatalog', trans, deletedPosRows))
             .then(() => down.table('posCatalogCounts').getMany({ trans, keys: categories }))
             .then((counts: (PosCatalogCount | undefined)[]) => put('posCatalogCounts', trans, categories.map((category, index) => ({
               category, count: (counts[index]?.count ?? 0) + delta.get(category)!,

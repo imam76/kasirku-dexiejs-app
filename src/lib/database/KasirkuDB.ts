@@ -119,7 +119,14 @@ import type {
 import { registerDatabaseMigrations } from './migrations';
 import { registerDatabasePopulate } from './populate';
 import { registerCheckoutReadModels } from './checkoutReadModelsMiddleware';
-import type { InventoryConsumptionTotal, PosCatalogCount, PosCatalogProduct, SyncQueueSummary } from './checkoutReadModels';
+import type {
+  InventoryConsumptionTotal,
+  PosCatalogCount,
+  PosCatalogProduct,
+  ProductListCatalogProduct,
+  ProductSearchCatalogProduct,
+  SyncQueueSummary,
+} from './checkoutReadModels';
 
 export class KasirkuDB extends Dexie {
   products!: Table<Product>;
@@ -149,6 +156,8 @@ export class KasirkuDB extends Dexie {
   inventoryConsumptionTotals!: Table<InventoryConsumptionTotal>;
   posProductCatalog!: Table<PosCatalogProduct>;
   posCatalogCounts!: Table<PosCatalogCount>;
+  productListCatalog!: Table<ProductListCatalogProduct>;
+  productSearchCatalog!: Table<ProductSearchCatalogProduct>;
   syncCursors!: Table<SyncCursor>;
   promos!: Table<Promo>;
   lotteries!: Table<Lottery>;

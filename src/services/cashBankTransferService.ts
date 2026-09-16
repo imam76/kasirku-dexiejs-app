@@ -80,21 +80,20 @@ const getOpenFieldCashSessionForEmployee = async (employee: Employee, cashAccoun
 );
 
 const getCashAccountBalance = async (cashAccountId: string) => {
-  const transactions = await db.financeTransactions
+  let balance = 0;
+  await db.financeTransactions
     .where('cash_account_id')
     .equals(cashAccountId)
     .filter((transaction) => !transaction.deleted_at)
-    .toArray();
+    .each((transaction) => {
+      if (transaction.type === 'INCOME' || transaction.type === 'OPENING_BALANCE') {
+        balance += Number(transaction.amount || 0);
+      } else if (transaction.type === 'EXPENSE') {
+        balance -= Number(transaction.amount || 0);
+      }
+    });
 
-  return roundCurrency(transactions.reduce((sum, transaction) => {
-    if (transaction.type === 'INCOME' || transaction.type === 'OPENING_BALANCE') {
-      return sum + Number(transaction.amount || 0);
-    }
-    if (transaction.type === 'EXPENSE') {
-      return sum - Number(transaction.amount || 0);
-    }
-    return sum;
-  }, 0));
+  return roundCurrency(balance);
 };
 
 const assertFieldCashBalanceForTransferOut = async (
@@ -293,7 +292,8 @@ export const voidCashBankTransfer = async (
     db.activityLogs,
   ], async () => {
     const transferTransactions = await db.financeTransactions
-      .filter((transaction) => transaction.transfer_group_id === transferGroupId)
+      .where('transfer_group_id')
+      .equals(transferGroupId)
       .toArray();
     const originalTransactions = transferTransactions.filter((transaction) => (
       transaction.category === FINANCE_CATEGORIES.CASH_BANK_TRANSFER &&
@@ -307,7 +307,8 @@ export const voidCashBankTransfer = async (
     }
 
     const existingReversal = await db.financeTransactions
-      .filter((transaction) => transaction.reversal_of_transfer_group_id === transferGroupId)
+      .where('reversal_of_transfer_group_id')
+      .equals(transferGroupId)
       .first();
 
     if (existingReversal) {

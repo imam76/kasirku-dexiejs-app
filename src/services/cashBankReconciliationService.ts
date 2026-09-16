@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import {
   FINANCE_CATEGORIES,
@@ -6,7 +7,7 @@ import {
 } from '@/constants/finance';
 import { db } from '@/lib/db';
 import { cashBankReconciliationSchema } from '@/lib/validations/cashBankReconciliation';
-import { getBusinessDayBoundsIso, toBusinessDateKey, toBusinessDatePrefix } from '@/utils/businessDate';
+import { getBusinessDayBoundsIso, toBusinessDatePrefix } from '@/utils/businessDate';
 import { enqueueCashBankReconciliationSync } from '@/services/syncQueueService';
 import {
   enqueueFinanceTransactionsSync,
@@ -25,6 +26,11 @@ import type {
   ChartOfAccount,
   FinanceTransaction,
 } from '@/types';
+import {
+  normalizeCursorPageSize,
+  type DateIdCursor,
+  type DateIdCursorPage,
+} from '@/services/shared/dateIdCursor';
 
 const RECONCILIATION_TOLERANCE = 0.01;
 
@@ -59,22 +65,6 @@ const getTransactionSignedAmount = (transaction: FinanceTransaction) => {
   const amount = Number(transaction.amount || 0);
 
   return businessType === 'EXPENSE' ? -amount : amount;
-};
-
-const getStatementCutoffTimestamp = (statementDate: string) => {
-  const cutoff = Date.parse(getBusinessDayBoundsIso(statementDate).endIso);
-  if (!Number.isFinite(cutoff)) {
-    throw new Error('Tanggal statement tidak valid.');
-  }
-
-  return cutoff;
-};
-
-const isOnOrBeforeStatementDate = (transaction: FinanceTransaction, statementDate: string) => {
-  const transactionTime = Date.parse(transaction.created_at);
-  if (Number.isNaN(transactionTime)) return toBusinessDateKey(transaction.created_at) <= toBusinessDateKey(statementDate);
-
-  return transactionTime <= getStatementCutoffTimestamp(statementDate);
 };
 
 const assertCashBankAccount = (account: ChartOfAccount | undefined) => {
@@ -202,13 +192,16 @@ const withUpdatedCashBankReconciliationSync = (
 });
 
 const listActiveCashAccountTransactions = async (cashAccountId: string, statementDate: string) => {
+  const statementEnd = getBusinessDayBoundsIso(statementDate).endIso;
   return db.financeTransactions
-    .where('cash_account_id')
-    .equals(cashAccountId)
-    .filter((transaction) => (
-      !transaction.deleted_at &&
-      isOnOrBeforeStatementDate(transaction, statementDate)
-    ))
+    .where('[cash_account_id+created_at+id]')
+    .between(
+      [cashAccountId, Dexie.minKey, Dexie.minKey],
+      [cashAccountId, statementEnd, Dexie.maxKey],
+      true,
+      true,
+    )
+    .filter((transaction) => !transaction.deleted_at)
     .toArray();
 };
 
@@ -253,12 +246,46 @@ export const listCashBankReconciliationCandidates = async ({
   };
 };
 
-export const listCashBankReconciliations = async (cashAccountId?: string) => {
-  const reconciliations = await db.cashBankReconciliations.orderBy('created_at').reverse().toArray();
+export interface CashBankReconciliationListOptions {
+  cashAccountId?: string;
+  startDate: string;
+  endDate: string;
+  cursor?: DateIdCursor;
+  limit?: number;
+}
 
-  return cashAccountId
-    ? reconciliations.filter((reconciliation) => reconciliation.cash_account_id === cashAccountId)
-    : reconciliations;
+export const listCashBankReconciliations = async ({
+  cashAccountId,
+  startDate,
+  endDate,
+  cursor,
+  limit: requestedLimit,
+}: CashBankReconciliationListOptions): Promise<DateIdCursorPage<CashBankReconciliation>> => {
+  const limit = normalizeCursorPageSize(requestedLimit, 20);
+  const lowerBound = cashAccountId
+    ? [cashAccountId, startDate, Dexie.minKey]
+    : [startDate, Dexie.minKey];
+  const upperBound = cashAccountId
+    ? [cashAccountId, cursor?.date ?? endDate, cursor?.id ?? Dexie.maxKey]
+    : [cursor?.date ?? endDate, cursor?.id ?? Dexie.maxKey];
+  const index = cashAccountId
+    ? '[cash_account_id+statement_date+id]'
+    : '[statement_date+id]';
+  const reconciliations = await db.cashBankReconciliations
+    .where(index)
+    .between(lowerBound, upperBound, true, !cursor)
+    .reverse()
+    .limit(limit + 1)
+    .toArray();
+  const rows = reconciliations.slice(0, limit);
+  const lastVisible = rows[rows.length - 1];
+
+  return {
+    rows,
+    nextCursor: reconciliations.length > limit && lastVisible
+      ? { date: lastVisible.statement_date, id: lastVisible.id }
+      : undefined,
+  };
 };
 
 export const createCashBankReconciliation = async (input: CreateCashBankReconciliationInput) => {

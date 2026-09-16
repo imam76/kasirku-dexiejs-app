@@ -32,6 +32,10 @@ export default function CashBankReconciliationManagement() {
   const { t } = useI18n();
   const [voidTarget, setVoidTarget] = useState<CashBankReconciliation | null>(null);
   const [voidReason, setVoidReason] = useState('');
+  const [historyDateRange, setHistoryDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>(() => [
+    dayjs.tz().startOf('year'),
+    dayjs.tz().endOf('day'),
+  ]);
   const autoSelectedAdjustmentAccountId = useRef<string | null>(null);
   const {
     control,
@@ -69,11 +73,19 @@ export default function CashBankReconciliationManagement() {
     isLoadingCandidates,
     reconciliations,
     isLoadingReconciliations,
+    isLoadingMoreReconciliations,
+    hasMoreReconciliations,
+    loadMoreReconciliations,
     createReconciliation,
     isCreatingReconciliation,
     voidReconciliation,
     isVoidingReconciliation,
-  } = useCashBankReconciliation({ cashAccountId, statementDate });
+  } = useCashBankReconciliation({
+    cashAccountId,
+    statementDate,
+    historyStartDate: historyDateRange[0].format('YYYY-MM-DD'),
+    historyEndDate: `${historyDateRange[1].format('YYYY-MM-DD')}\uffff`,
+  });
 
   const accountOptions = useMemo(() => cashBankAccounts.map((account) => ({
     value: account.id,
@@ -554,6 +566,16 @@ export default function CashBankReconciliationManagement() {
             <span>History Rekonsiliasi</span>
           </div>
         }
+        extra={(
+          <DatePicker.RangePicker
+            value={historyDateRange}
+            allowClear={false}
+            format="DD MMM YYYY"
+            onChange={(value) => {
+              if (value?.[0] && value[1]) setHistoryDateRange([value[0], value[1]]);
+            }}
+          />
+        )}
       >
         <Table
           data-testid="cash-bank-reconciliation-history-table"
@@ -561,13 +583,23 @@ export default function CashBankReconciliationManagement() {
           dataSource={reconciliations}
           columns={historyColumns}
           loading={isLoadingReconciliations}
-          pagination={{ pageSize: 10 }}
+          pagination={false}
           scroll={{ x: 980 }}
           onRow={(record) => ({
             className: 'cash-bank-reconciliation-history-row',
             'data-testid': `cash-bank-reconciliation-history-row-${record.id}`,
           })}
         />
+        {hasMoreReconciliations && (
+          <div className="mt-4 flex justify-center">
+            <Button
+              loading={isLoadingMoreReconciliations}
+              onClick={() => void loadMoreReconciliations()}
+            >
+              Muat rekonsiliasi lebih lama
+            </Button>
+          </div>
+        )}
       </Card>
 
       <Modal

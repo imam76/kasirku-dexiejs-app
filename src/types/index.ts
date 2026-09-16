@@ -3794,6 +3794,8 @@ export interface JournalEntry {
 export interface JournalEntryLine {
   id: string;
   journal_entry_id: string;
+  /** Denormalized from JournalEntry for indexed ledger/report reads. */
+  entry_date?: string;
   account_id: string;
   account_code: string;
   account_name: string;

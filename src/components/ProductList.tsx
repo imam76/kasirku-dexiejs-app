@@ -4,7 +4,7 @@ import { formatCurrency } from '@/utils/formatters';
 import { getProductDisplayPricing } from '@/utils/pricing';
 import { getStockStatusPillClass } from '@/utils/stockStatus';
 import { useI18n } from '@/hooks/useI18n';
-import { Pagination } from 'antd';
+import { Button } from 'antd';
 
 interface ProductListProps {
   products: Product[];
@@ -12,10 +12,10 @@ interface ProductListProps {
   addToCart: (product: Product) => boolean;
   updateQuantity: (id: string, quantity: number) => boolean;
   pagination?: {
-    currentPage: number;
-    pageSize: number;
-    total: number;
-    onChange: (page: number) => void;
+    loadedCount: number;
+    hasMore: boolean;
+    isLoadingMore: boolean;
+    onLoadMore: () => void | Promise<void>;
   };
   isMobile?: boolean;
   hasMobileCart?: boolean;
@@ -77,7 +77,7 @@ export default function ProductList({
   hasMobileCart = false,
 }: ProductListProps) {
   const { t } = useI18n();
-  const shouldPaginate = pagination && pagination.total > pagination.pageSize;
+  const shouldPaginate = pagination && (pagination.hasMore || pagination.loadedCount > 0);
 
   const handleAddProduct = (product: Product, source: HTMLElement) => {
     if (addToCart(product)) animateProductToCart(source);
@@ -195,15 +195,18 @@ export default function ProductList({
           data-testid="pos-product-pagination-footer"
           className="mt-auto flex shrink-0 justify-center rounded-xl border border-blue-100 bg-white/95 px-2 py-2 shadow-[0_-8px_18px_-14px_rgba(15,23,42,0.35)] backdrop-blur"
         >
-          <Pagination
-            current={pagination.currentPage}
-            pageSize={pagination.pageSize}
-            total={pagination.total}
-            onChange={pagination.onChange}
-            responsive
-            showLessItems
-            showSizeChanger={false}
-          />
+          <span className="mr-2 text-xs text-slate-500">
+            {t('transaction.loadedProducts', { count: pagination.loadedCount })}
+          </span>
+          {pagination.hasMore ? (
+            <Button
+              size="small"
+              loading={pagination.isLoadingMore}
+              onClick={() => void pagination.onLoadMore()}
+            >
+              {t('transaction.loadMoreProducts')}
+            </Button>
+          ) : null}
         </div>
       )}
     </div>

@@ -1,55 +1,105 @@
-import type { Collection } from 'dexie';
+import Dexie from 'dexie';
 import { db } from '@/lib/db';
-import { POS_CATALOG_TOKEN_MAX_LENGTH, type PosCatalogProduct } from '@/lib/database/checkoutReadModels';
+import {
+  buildProductSearchKey,
+  buildProductSearchKeyPrefix,
+  type PosCatalogProduct,
+} from '@/lib/database/checkoutReadModels';
 import { matchesProductSearch, normalizeProductSearchTerm } from '@/utils/productSearch';
 
-// IndexedDB orders strings by code unit, which is how the `name` index already
-// ordered these rows. Ties fall back to the primary key, as a Dexie index does.
-const byNameThenId = (left: PosCatalogProduct, right: PosCatalogProduct) => {
-  if (left.name !== right.name) return left.name < right.name ? -1 : 1;
-  if (left.id === right.id) return 0;
-  return left.id < right.id ? -1 : 1;
-};
+const POS_CATALOG_PAGE_SIZE = 12;
+type PosCatalogCursorRow = Pick<PosCatalogProduct, 'id' | 'name' | 'sku' | 'category'>;
 
-/**
- * Search candidates come from the multiEntry `search_tokens` index instead of a
- * full catalog scan. The probe is the term's first word: a term found inside the
- * text always begins inside one word, so some suffix of that word starts with it.
- *
- * Every candidate is still checked with `matchesProductSearch`, so the result set
- * is identical to filtering the whole catalog. A term longer than an indexed token
- * cannot be probed, so it falls back to the scan.
- */
-const searchCatalog = (term: string, category?: string): Collection<PosCatalogProduct, string> => {
-  const probe = term.split(/\s+/)[0] ?? '';
-  const base: Collection<PosCatalogProduct, string> = probe && probe.length <= POS_CATALOG_TOKEN_MAX_LENGTH
-    ? db.posProductCatalog.where('search_tokens').startsWith(probe).distinct()
-    : db.posProductCatalog.toCollection();
+export type PosCatalogCursor =
+  | { kind: 'name'; name: string; id: string }
+  | { kind: 'search'; key: string };
 
-  return base
-    .and((product) => matchesProductSearch(product, term))
-    .and((product) => !category || product.category === category);
-};
+export interface PosCatalogPageOptions {
+  cursor?: PosCatalogCursor;
+  limit?: number;
+  search?: string;
+  category?: string;
+}
 
-export async function readPosCatalogPage(page: number, pageSize: number, search = '', category?: string) {
-  return db.transaction('r', db.posProductCatalog, db.posCatalogCounts, async () => {
-    const term = normalizeProductSearchTerm(search);
-    const counts = await db.posCatalogCounts.toArray();
-    const total = counts.reduce((sum, row) => sum + (!category || row.category === category ? row.count : 0), 0);
+export interface PosCatalogCursorPage {
+  ids: string[];
+  nextCursor?: PosCatalogCursor;
+}
+
+const normalizeLimit = (limit?: number) => (
+  Math.max(1, Math.min(100, Math.floor(limit ?? POS_CATALOG_PAGE_SIZE)))
+);
+
+const readCursorPage = async ({
+  cursor,
+  limit: requestedLimit,
+  search = '',
+  category,
+}: PosCatalogPageOptions): Promise<PosCatalogCursorPage> => {
+  const limit = normalizeLimit(requestedLimit);
+  const term = normalizeProductSearchTerm(search);
+
+  return db.transaction('r', db.posProductCatalog, db.productSearchCatalog, async () => {
+    let rows: PosCatalogCursorRow[];
+
     if (term) {
-      const matches = await searchCatalog(term, category).toArray();
-      matches.sort(byNameThenId);
-      const currentPage = Math.max(1, Math.min(page, Math.max(1, Math.ceil(matches.length / pageSize))));
-      const offset = (currentPage - 1) * pageSize;
-      return { ids: matches.slice(offset, offset + pageSize).map((row) => row.id), total: matches.length, currentPage };
+      const prefix = buildProductSearchKeyPrefix(term);
+      const searchCursor = cursor?.kind === 'search' ? cursor.key : undefined;
+      rows = await db.productSearchCatalog
+        .where('search_keys')
+        .between(searchCursor ?? prefix, `${prefix}\uffff`, !searchCursor, true)
+        .and((product) => (
+          product.pos_visibility === 1
+          && (!category || product.category === category)
+          && matchesProductSearch(product, term)
+        ))
+        .limit(limit + 1)
+        .toArray();
+    } else if (category) {
+      const nameCursor = cursor?.kind === 'name' ? cursor : undefined;
+      rows = await db.posProductCatalog
+        .where('[category+name+id]')
+        .between(
+          nameCursor ? [category, nameCursor.name, nameCursor.id] : [category, Dexie.minKey, Dexie.minKey],
+          [category, Dexie.maxKey, Dexie.maxKey],
+          !nameCursor,
+          true,
+        )
+        .limit(limit + 1)
+        .toArray();
+    } else {
+      const nameCursor = cursor?.kind === 'name' ? cursor : undefined;
+      rows = await db.posProductCatalog
+        .where('[name+id]')
+        .between(
+          nameCursor ? [nameCursor.name, nameCursor.id] : [Dexie.minKey, Dexie.minKey],
+          [Dexie.maxKey, Dexie.maxKey],
+          !nameCursor,
+          true,
+        )
+        .limit(limit + 1)
+        .toArray();
     }
-    const collection = category
-      ? db.posProductCatalog.where('[category+name]').between([category, ''], [category, []])
-      : db.posProductCatalog.orderBy('name');
-    const currentPage = Math.max(1, Math.min(page, Math.max(1, Math.ceil(total / pageSize))));
-    const ids = await collection.offset((currentPage - 1) * pageSize).limit(pageSize).primaryKeys();
-    return { ids: ids as string[], total, currentPage };
+
+    const visibleRows = rows.slice(0, limit);
+    const lastVisible = visibleRows[visibleRows.length - 1];
+    const nextCursor = rows.length > limit && lastVisible
+      ? (term
+        ? { kind: 'search' as const, key: buildProductSearchKey(lastVisible, term) }
+        : { kind: 'name' as const, name: lastVisible.name, id: lastVisible.id })
+      : undefined;
+
+    return {
+      ids: visibleRows.map((row) => row.id),
+      nextCursor,
+    };
   });
+};
+
+export const readPosCatalogPage = (options: PosCatalogPageOptions) => readCursorPage(options);
+
+export async function readAvailablePosProductCategories() {
+  return (await db.posCatalogCounts.orderBy('category').primaryKeys()) as string[];
 }
 
 export async function findPosProductBySku(code: string) {
@@ -64,13 +114,6 @@ export async function findPosProductBySku(code: string) {
 export async function findFirstPosProduct(search: string) {
   const term = normalizeProductSearchTerm(search);
   if (!term) return undefined;
-  return db.transaction('r', db.posProductCatalog, db.products, async () => {
-    // Track the lowest name while streaming candidates: no full array is built
-    // just to take one row, and the pick matches the old name-ordered `first()`.
-    let first: PosCatalogProduct | undefined;
-    await searchCatalog(term).each((product) => {
-      if (!first || byNameThenId(product, first) < 0) first = product;
-    });
-    return first ? db.products.get(first.id) : undefined;
-  });
+  const page = await readCursorPage({ search: term, limit: 1 });
+  return page.ids[0] ? db.products.get(page.ids[0]) : undefined;
 }

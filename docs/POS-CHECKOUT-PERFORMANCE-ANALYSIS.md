@@ -230,3 +230,40 @@ Harga yang dibayar adalah ruang indeks. Produk sintetis pada benchmark menghasil
 
 Validasi: 406 unit test dan 22 tes e2e POS lulus, termasuk pemeriksaan kesetaraan yang membandingkan hasil `readPosCatalogPage()` terhadap pemindaian penuh pada katalog 3.000 produk untuk 13 istilah kali 2 filter kategori — kata utuh, awalan kata, tengah kata, melewati spasi, dua kata, huruf besar, angka di tengah kata, SKU utuh dan sebagian, satu huruf, tanpa hasil, istilah 40 karakter, dan istilah tidak ter-trim — beserta halaman dalam dan quick-add. Tes yang sama membuktikan jumlah row katalog yang dibaca **sama dengan jumlah hasil** pada katalog 500 maupun 3.000. Tes upgrade membuktikan database yang sudah di v134 mendapatkan token setelah dibuka di v135, dan probe tengah kata, lintas kata, serta SKU menemukan row yang benar. TypeScript, ESLint pada file yang diubah, dan build produksi lulus dengan warning yang sama seperti tahap sebelumnya.
 
+P2 Produk: cursor list dan total-count (v138)
+------------------------------------------------
+
+Audit lanjutan menemukan dua jalur interaktif yang masih tumbuh bersama jumlah
+produk:
+
+- Master Produk berlangganan `db.products.orderBy('created_at').reverse().toArray()`;
+  seluruh filter, sort, pagination, dan bulk selection dilakukan setelah semua
+  row masuk memori.
+- Katalog POS normal memakai `offset`, sedangkan pencarian mematerialisasi semua
+  kandidat, mengurutkan semuanya, lalu mengambil satu halaman. `posCatalogCounts`
+  untuk kategori sudah aman dan dipertahankan.
+
+Keputusan total-count: layar interaktif tidak membutuhkan angka eksak untuk
+setiap kombinasi substring dan filter. Keduanya sekarang menampilkan jumlah yang
+sudah dimuat dan `hasMore`. Full scan tetap sah hanya pada aksi eksplisit yang
+memang harus lengkap: ekspor master dan validasi file import.
+
+Migrasi Dexie v138 menambah tiga proyeksi dengan tanggung jawab terpisah:
+
+- `posProductCatalog`: browse nama/kategori serta lookup SKU, dengan cursor
+  `[name+id]` dan `[category+name+id]`.
+- `productListCatalog`: field filter master dan cursor
+  `[created_at+id]`/`[category+created_at+id]`.
+- `productSearchCatalog`: metadata nama/SKU stabil dan indeks n-gram resumable
+  untuk substring search kedua layar.
+
+Pemisahan search store penting untuk checkout. Perubahan stok hanya memperbarui
+`productListCatalog`; ia tidak menulis ulang multi-entry search index dan tidak
+memicu ulang query katalog POS. Semua proyeksi tetap dirawat middleware di native
+transaction yang sama dengan `products`. Cursor membaca `limit + 1`, sehingga
+keberadaan halaman berikutnya diketahui tanpa exact count atau deep offset.
+
+Validasi P2 mencakup unit guard arsitektur, migrasi v138, kesetaraan 13 bentuk
+pencarian pada 3.000 produk, cursor kategori/POS, dan browser test Master Produk
+untuk cursor, filter gabungan, batas row yang dideserialisasi, serta isolasi
+perubahan stok dari indeks pencarian.

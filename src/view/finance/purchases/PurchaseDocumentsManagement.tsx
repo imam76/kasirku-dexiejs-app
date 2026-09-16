@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Button, DatePicker, Input, Select, Table, Tag } from 'antd';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, ArrowRight, ClipboardList, CreditCard, FileCheck2, FileQuestion, FileText, PackageCheck, Plus, ReceiptText, RotateCcw, SlidersHorizontal, type LucideIcon } from 'lucide-react';
@@ -10,7 +10,7 @@ import {
 import type { TranslationKey } from '@/i18n/messages';
 import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { usePurchaseDocuments } from '@/hooks/usePurchaseDocuments';
+import { usePurchaseDocumentList } from '@/hooks/usePurchaseDocuments';
 import type { PurchaseCostStatus, PurchaseDocument, PurchaseDocumentStatus, PurchaseDocumentType } from '@/types';
 import {
   formatBaseCurrencyAmount,
@@ -262,11 +262,26 @@ export default function PurchaseDocumentsManagement() {
 
 export function PurchaseDocumentTypeManagement({ documentType }: { documentType: PurchaseDocumentType }) {
   const { t } = useI18n();
-  const { documents } = usePurchaseDocuments();
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<PurchaseDocumentStatus | 'ALL'>('ALL');
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>(() => [
+    dayjs.tz().startOf('month'),
+    dayjs.tz().endOf('day'),
+  ]);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const {
+    documents,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    loadMore,
+  } = usePurchaseDocumentList({
+    type: documentType,
+    startDate: dateRange[0].format('YYYY-MM-DD'),
+    endDate: dateRange[1].format('YYYY-MM-DD'),
+    status: statusFilter === 'ALL' ? undefined : statusFilter,
+    search: searchText,
+  });
   const isMobile = useIsMobile();
   const location = useLocation();
   const navigate = useNavigate();
@@ -279,31 +294,7 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
   const menuItem = purchaseDocumentMenuItems.find((item) => item.type === documentType);
   const documentPathSegment = getPurchaseDocumentTypePathSegment(documentType);
 
-  const documentsOfType = useMemo(
-    () => documents.filter((document) => document.type === documentType),
-    [documents, documentType],
-  );
-
-  const filteredDocuments = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
-    return documents.filter((document) => {
-      const matchesType = document.type === documentType;
-      const matchesStatus = statusFilter === 'ALL' || document.status === statusFilter;
-      const matchesSearch = !query || [
-        document.document_number,
-        document.supplier_name,
-        document.project_name,
-        document.department_name,
-      ].some((value) => value?.toLowerCase().includes(query));
-      const documentDate = dayjs(document.document_date);
-      const matchesDate = !dateRange || (
-        !documentDate.isBefore(dateRange[0], 'day')
-        && !documentDate.isAfter(dateRange[1], 'day')
-      );
-
-      return matchesType && matchesStatus && matchesSearch && matchesDate;
-    });
-  }, [dateRange, documents, documentType, searchText, statusFilter]);
+  const filteredDocuments = documents;
 
   const showPaymentColumn = filteredDocuments.some(hasPaymentStatus) || config.behavior.hasPaymentStatus;
   const showTotalColumn = filteredDocuments.some(hasPricing) || config.behavior.hasPricing;
@@ -391,10 +382,10 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
   const resetFilters = () => {
     setSearchText('');
     setStatusFilter('ALL');
-    setDateRange(null);
+    setDateRange([dayjs.tz().startOf('month'), dayjs.tz().endOf('day')]);
   };
 
-  const activeFilterCount = (statusFilter !== 'ALL' ? 1 : 0) + (dateRange ? 1 : 0);
+  const activeFilterCount = (statusFilter !== 'ALL' ? 1 : 0) + 1;
   const activeSearchAndFilterCount = activeFilterCount + (searchText.trim() ? 1 : 0);
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
   const contextMenuActions = contextMenu
@@ -452,14 +443,13 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
                 />
                 <DatePicker.RangePicker
                   value={dateRange}
-                  allowClear
+                  allowClear={false}
                   format="DD MMM YYYY"
                   onChange={(value) => {
                     if (value?.[0] && value[1]) {
                       setDateRange([value[0], value[1]]);
                       return;
                     }
-                    setDateRange(null);
                   }}
                 />
                 <Button
@@ -476,8 +466,9 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
                 rowKey="id"
                 columns={columns}
                 dataSource={filteredDocuments}
+                loading={isLoading}
                 scroll={{ x: 1100 }}
-                pagination={{ pageSize: 20, showSizeChanger: true }}
+                pagination={false}
                 onRow={(record) => ({
                   onContextMenu: (event) => {
                     event.preventDefault();
@@ -488,6 +479,13 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
                   },
                 })}
               />
+              {hasMore && (
+                <div className="mt-4 flex justify-center">
+                  <Button loading={isLoadingMore} onClick={() => void loadMore()}>
+                    {t('purchaseDocuments.mobile.loadMoreDocuments', { count: 40 })}
+                  </Button>
+                </div>
+              )}
               <RecordContextMenu
                 position={contextMenu?.position ?? null}
                 actions={contextMenuActions}
@@ -526,21 +524,24 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
                 size="large"
                 className="w-full"
                 value={dateRange}
-                allowClear
+                allowClear={false}
                 format="DD MMM YYYY"
                 onChange={(value) => {
                   if (value?.[0] && value[1]) {
                     setDateRange([value[0], value[1]]);
                     return;
                   }
-                  setDateRange(null);
-                }}
+                  }}
               />
             </>
           ),
         }}
         mobileList={{
           items: filteredDocuments,
+          loading: isLoading,
+          hasMore,
+          loadingMore: isLoadingMore,
+          onLoadMore: loadMore,
           getKey: (document) => document.id,
           resetKey: JSON.stringify([
             searchText,
@@ -550,7 +551,6 @@ export function PurchaseDocumentTypeManagement({ documentType }: { documentType:
           ]),
           resultSummary: t('purchaseDocuments.mobile.resultSummary', {
             shown: filteredDocuments.length,
-            total: documentsOfType.length,
           }),
           emptyText: searchText.trim() || activeFilterCount > 0
             ? t('purchaseDocuments.mobile.noFilteredDocuments')

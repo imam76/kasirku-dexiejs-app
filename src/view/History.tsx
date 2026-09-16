@@ -1,5 +1,5 @@
 import { useCallback, useRef, useEffect, useState, useLayoutEffect } from 'react';
-import { App, Button, Input, Pagination } from 'antd';
+import { App, Button, DatePicker, Input } from 'antd';
 import { Receipt, ChevronDown, ChevronUp, Printer, AlertCircle, CheckCircle2, Ban, ScanLine, Search } from 'lucide-react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { useHistory } from '@/hooks/useHistory';
@@ -13,6 +13,7 @@ import { PosTransactionPayment, Transaction, TransactionItem, TransactionReceipt
 import { getTransactionPaymentSnapshot } from '@/utils/posPaymentMethod';
 import PaymentMethodBadge from '@/components/PaymentMethodBadge';
 import { getTransactionPaymentsOrLegacyFallback } from '@/utils/posSplitPayment';
+import dayjs from '@/lib/dayjs';
 import ScannerModal from '@/components/ScannerModal';
 import {
   appendKeyboardBarcodeCharacter,
@@ -41,23 +42,29 @@ export default function History() {
   const { t } = useI18n();
   const { can, requirePermission } = useAuth();
   const canViewProfit = can('PROFIT_VIEW');
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>(() => [
+    dayjs.tz().startOf('month'),
+    dayjs.tz().endOf('day'),
+  ]);
   const {
     transactions,
-    totalCount,
-    page,
-    pageSize,
     searchTerm,
     expandedId,
     isLoading,
     isError,
     error,
-    setPage,
+    loadMore,
+    hasMore,
+    isLoadingMore,
     setSearchTerm,
     toggleExpand,
     refetch,
     voidTransaction,
     isVoiding,
-  } = useHistory();
+  } = useHistory({
+    startDate: dateRange[0].startOf('day').toISOString(),
+    endDate: dateRange[1].endOf('day').toISOString(),
+  });
   const parentRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
@@ -145,13 +152,6 @@ export default function History() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleScan, scannerOpen]);
-
-  const handlePageChange = (nextPage: number) => {
-    setPage(nextPage);
-    window.requestAnimationFrame(() => {
-      parentRef.current?.scrollIntoView({ block: 'start' });
-    });
-  };
 
   const handleReprint = async (transaction: TransactionWithItems) => {
     if (isTransactionExpense(transaction)) {
@@ -262,7 +262,7 @@ export default function History() {
       </div>
 
       <div className="mb-4 rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(260px,1fr)_280px_auto]">
           <Input
             size="large"
             allowClear
@@ -271,6 +271,14 @@ export default function History() {
             prefix={<Search size={18} className="text-gray-400" />}
             placeholder={t('history.searchPlaceholder')}
             data-testid="history-search-input"
+          />
+          <DatePicker.RangePicker
+            value={dateRange}
+            allowClear={false}
+            format="DD MMM YYYY"
+            onChange={(value) => {
+              if (value?.[0] && value[1]) setDateRange([value[0], value[1]]);
+            }}
           />
           <Button
             htmlType="button"
@@ -614,15 +622,15 @@ export default function History() {
               })}
             </div>
 
-            <div className="mt-4 flex justify-center rounded-lg border border-gray-200 bg-white px-3 py-4 shadow-sm">
-              <Pagination
-                current={page}
-                pageSize={pageSize}
-                total={totalCount}
-                showSizeChanger={false}
-                showTotal={(total) => t('history.resultCount', { count: total })}
-                onChange={handlePageChange}
-              />
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-3 rounded-lg border border-gray-200 bg-white px-3 py-4 shadow-sm">
+              <span className="text-sm text-gray-500">
+                {t('history.resultCount', { count: transactions.length })}
+              </span>
+              {hasMore && (
+                <Button loading={isLoadingMore} onClick={() => void loadMore()}>
+                  {t('history.loadOlder')}
+                </Button>
+              )}
             </div>
           </>
         ) : (
