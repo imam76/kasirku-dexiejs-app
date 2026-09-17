@@ -20,7 +20,11 @@ import { useSyncQueueDetails } from '@/hooks/useSyncQueueDetails';
 import { useSyncStatus } from '@/hooks/useSyncStatus';
 import dayjs from '@/lib/dayjs';
 import type { PostgresHealth } from '@/services/postgresAdapter';
-import { runDatabaseSyncNow, retryFailedDatabaseSyncItems } from '@/services/syncOrchestratorService';
+import {
+  recoverStockPurchaseDataFromPostgres,
+  runDatabaseSyncNow,
+  retryFailedDatabaseSyncItems,
+} from '@/services/syncOrchestratorService';
 import {
   checkPostgresConnection,
   setPostgresConnectionHealth,
@@ -125,6 +129,7 @@ export default function SyncDatabaseManagement() {
   const health = usePostgresConnectionStore((state) => state.health);
   const isCheckingHealth = usePostgresConnectionStore((state) => state.isChecking);
   const [isSyncingNow, setIsSyncingNow] = useState(false);
+  const [isRecoveringStockPurchase, setIsRecoveringStockPurchase] = useState(false);
   const [isRetryingFailed, setIsRetryingFailed] = useState(false);
   const [isConfiguringHost, setIsConfiguringHost] = useState(false);
   const [statusFilter, setStatusFilter] = useState<ActiveQueueStatusFilter>('all');
@@ -167,6 +172,27 @@ export default function SyncDatabaseManagement() {
       message.error(error instanceof Error ? error.message : t('sync.retryFailed'));
     } finally {
       setIsRetryingFailed(false);
+    }
+  };
+
+  const handleRecoverStockPurchase = async () => {
+    setIsRecoveringStockPurchase(true);
+    try {
+      const result = await recoverStockPurchaseDataFromPostgres();
+      if (result.skipped) {
+        message.warning('PostgreSQL belum tersedia.');
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['stockCard'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      message.success(
+        `Recovery selesai: ${result.refreshResults.stockMutations.inserted} mutasi stok dan ${result.refreshResults.purchaseDocuments.inserted} dokumen purchase dipulihkan.`,
+      );
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Recovery stok gagal.');
+    } finally {
+      setIsRecoveringStockPurchase(false);
     }
   };
 
@@ -280,7 +306,7 @@ export default function SyncDatabaseManagement() {
   ], [t]);
 
   const activeQueueTotal = queueDetails.counts.pending + queueDetails.counts.processing + queueDetails.counts.failed;
-  const isBusy = syncStatus.isBusy || isSyncingNow || isRetryingFailed;
+  const isBusy = syncStatus.isBusy || isSyncingNow || isRetryingFailed || isRecoveringStockPurchase;
   const unavailableHealth = health && !health.available ? health : undefined;
   const unavailableDescription = unavailableHealth?.message ?? (
     unavailableHealth?.status === 'unconfigured'
@@ -373,6 +399,14 @@ export default function SyncDatabaseManagement() {
             onClick={handleRetryFailed}
           >
             {t('sync.retryFailedItems')}
+          </Button>
+          <Button
+            icon={<DatabaseZap size={16} />}
+            loading={isRecoveringStockPurchase}
+            disabled={isBusy || !health?.available}
+            onClick={handleRecoverStockPurchase}
+          >
+            Pulihkan kartu stok
           </Button>
           <Button
             type="primary"

@@ -95,6 +95,9 @@ import {
 } from '@/services/syncQueueService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshWarehousesFromPostgres } from '@/services/warehouseReadService';
+import { db } from '@/lib/db';
+import { refreshProductsFromPostgres } from '@/services/productReadService';
+import { refreshStockMutationsFromPostgres } from '@/services/stockMutationReadService';
 import { useSyncActivityStore } from '@/store/syncActivityStore';
 
 const getErrorMessage = (error: unknown) => (
@@ -220,6 +223,39 @@ export const refreshAllDataFromPostgres = async () => {
     postgresHealth,
     skipped: false,
     refreshResults,
+  };
+};
+
+export const recoverStockPurchaseDataFromPostgres = async () => {
+  const postgresHealth = await postgresAdapter.healthCheck();
+  if (!postgresHealth.available) {
+    return { postgresHealth, skipped: true as const };
+  }
+
+  await db.syncCursors.bulkDelete([
+    'products',
+    'purchaseDocuments',
+    'stockMutations',
+    'inventoryLots',
+    'inventoryLotConsumptions',
+  ]);
+
+  const stockMutations = await refreshStockMutationsFromPostgres();
+  const products = await refreshProductsFromPostgres();
+  const purchaseDocuments = await refreshPurchaseDocumentsFromPostgres();
+  const inventoryLots = await refreshInventoryLotsFromPostgres();
+  const inventoryLotConsumptions = await refreshInventoryLotConsumptionsFromPostgres();
+
+  return {
+    postgresHealth,
+    skipped: false as const,
+    refreshResults: {
+      stockMutations,
+      products,
+      purchaseDocuments,
+      inventoryLots,
+      inventoryLotConsumptions,
+    },
   };
 };
 
