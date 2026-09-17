@@ -1,48 +1,93 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from '@/lib/dayjs';
-import {
-  getCashFlowReport,
-  type CashFlowReportData,
-  type CashFlowReportFilters,
-} from '@/services/cashFlowReportService';
+import { getDashboardCashOutTotal } from '@/services/cashFlowReportService';
 import {
   getIncomeStatementReport,
-  type GeneralLedgerReportFilters,
   type IncomeStatementReport,
 } from '@/services/generalLedgerService';
 import { getPosSalesReportData } from '@/services/posSalesReportService';
 import type { PosSalesReportData } from '@/services/posSalesReportAggregator';
+import { getDashboardRangeKey, type DashboardDateRange } from '@/utils/dashboardDateRanges';
 
-interface DashboardReportRange {
-  startDate?: string;
-  endDate?: string;
+interface DashboardReportRange extends DashboardDateRange {
   enabled: boolean;
+}
+
+interface DashboardReportRequest<Id extends string> extends DashboardReportRange {
+  id: Id;
+}
+
+interface DashboardReportBatchOptions<Id extends string> {
+  requests: DashboardReportRequest<Id>[];
   refreshKey: number;
 }
 
-const toIsoDayRange = (startDate?: string, endDate?: string) => ({
-  startDate: startDate ? dayjs.tz(startDate).startOf('day').toISOString() : undefined,
-  endDate: endDate ? dayjs.tz(endDate).endOf('day').toISOString() : undefined,
+const toIsoDayRange = ({ startDate, endDate }: DashboardDateRange) => ({
+  startDate: dayjs.tz(startDate).startOf('day').toISOString(),
+  endDate: dayjs.tz(endDate).endOf('day').toISOString(),
 });
 
-const toLedgerFilters = (startDate?: string, endDate?: string): GeneralLedgerReportFilters => (
-  toIsoDayRange(startDate, endDate)
+const getRequestSignature = <Id extends string>(requests: DashboardReportRequest<Id>[]) => (
+  requests
+    .map(({ id, startDate, endDate, enabled }) => `${id}:${startDate}:${endDate}:${enabled ? 1 : 0}`)
+    .sort()
+    .join('|')
 );
 
-const toCashFlowFilters = (startDate?: string, endDate?: string): CashFlowReportFilters => (
-  toIsoDayRange(startDate, endDate)
-);
+const groupEnabledRequestsByRange = <Id extends string>(requests: DashboardReportRequest<Id>[]) => {
+  const groups = new Map<string, { range: DashboardDateRange; ids: Id[] }>();
 
-export const useDashboardProfitLossReport = ({
+  requests.forEach(({ id, startDate, endDate, enabled }) => {
+    if (!enabled) return;
+    const range = { startDate, endDate };
+    const key = getDashboardRangeKey(range);
+    const group = groups.get(key) ?? { range, ids: [] };
+    group.ids.push(id);
+    groups.set(key, group);
+  });
+
+  return [...groups.values()];
+};
+
+export const useDashboardProfitLossReports = <Id extends string>({
+  requests,
+  refreshKey,
+}: DashboardReportBatchOptions<Id>) => {
+  const requestSignature = getRequestSignature(requests);
+  const activeRequestCount = requests.filter((request) => request.enabled).length;
+  const data = useLiveQuery(
+    async (): Promise<Partial<Record<Id, IncomeStatementReport>>> => {
+      const groups = groupEnabledRequestsByRange(requests);
+      const reports = await Promise.all(groups.map(({ range }) => (
+        getIncomeStatementReport(toIsoDayRange(range))
+      )));
+
+      return groups.reduce<Partial<Record<Id, IncomeStatementReport>>>((result, group, index) => {
+        group.ids.forEach((id) => {
+          result[id] = reports[index];
+        });
+        return result;
+      }, {});
+    },
+    [requestSignature, refreshKey],
+  );
+
+  return {
+    data,
+    isLoading: activeRequestCount > 0 && data === undefined,
+  };
+};
+
+export const useDashboardCashOutTotal = ({
   startDate,
   endDate,
   enabled,
   refreshKey,
-}: DashboardReportRange) => {
+}: DashboardReportRange & { refreshKey: number }) => {
   const data = useLiveQuery(
-    async (): Promise<IncomeStatementReport | undefined> => {
+    async (): Promise<number | undefined> => {
       if (!enabled) return undefined;
-      return getIncomeStatementReport(toLedgerFilters(startDate, endDate));
+      return getDashboardCashOutTotal(toIsoDayRange({ startDate, endDate }));
     },
     [enabled, startDate, endDate, refreshKey],
   );
@@ -53,47 +98,41 @@ export const useDashboardProfitLossReport = ({
   };
 };
 
-export const useDashboardCashFlowReport = ({
-  startDate,
-  endDate,
-  enabled,
+export const useDashboardPosSalesReports = <Id extends string>({
+  requests,
   refreshKey,
-}: DashboardReportRange) => {
+  topProductsRequestId,
+  topProductsLimit = 5,
+}: DashboardReportBatchOptions<Id> & {
+  topProductsRequestId: Id;
+  topProductsLimit?: number;
+}) => {
+  const requestSignature = getRequestSignature(requests);
+  const activeRequestCount = requests.filter((request) => request.enabled).length;
   const data = useLiveQuery(
-    async (): Promise<CashFlowReportData | undefined> => {
-      if (!enabled) return undefined;
-      return getCashFlowReport(toCashFlowFilters(startDate, endDate));
+    async (): Promise<Partial<Record<Id, PosSalesReportData>>> => {
+      const groups = groupEnabledRequestsByRange(requests);
+      const reports = await Promise.all(groups.map(({ range, ids }) => (
+        getPosSalesReportData({
+          ...range,
+          includeLineItems: ids.includes(topProductsRequestId),
+          includePaymentDetails: false,
+          topProductsLimit,
+        })
+      )));
+
+      return groups.reduce<Partial<Record<Id, PosSalesReportData>>>((result, group, index) => {
+        group.ids.forEach((id) => {
+          result[id] = reports[index];
+        });
+        return result;
+      }, {});
     },
-    [enabled, startDate, endDate, refreshKey],
+    [requestSignature, refreshKey, topProductsLimit, topProductsRequestId],
   );
 
   return {
     data,
-    isLoading: enabled && data === undefined,
-  };
-};
-
-export const useDashboardPosSalesReport = ({
-  startDate,
-  endDate,
-  enabled,
-  refreshKey,
-  topProductsLimit,
-}: DashboardReportRange & { topProductsLimit?: number }) => {
-  const data = useLiveQuery(
-    async (): Promise<PosSalesReportData | undefined> => {
-      if (!enabled) return undefined;
-      return getPosSalesReportData({
-        startDate,
-        endDate,
-        topProductsLimit,
-      });
-    },
-    [enabled, startDate, endDate, refreshKey, topProductsLimit],
-  );
-
-  return {
-    data,
-    isLoading: enabled && data === undefined,
+    isLoading: activeRequestCount > 0 && data === undefined,
   };
 };

@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import dayjs from '@/lib/dayjs';
 import {
   buildDailySalesBuckets,
   buildPosSalesReportData,
@@ -9,6 +12,10 @@ import {
   DASHBOARD_WIDGET_IDS,
   normalizeDashboardPreference,
 } from '@/utils/dashboardPreferences';
+import {
+  getDashboardPeriodRange,
+  getDefaultDashboardDateRange,
+} from '@/utils/dashboardDateRanges';
 
 const buildTransaction = (partial: Partial<Transaction>): Transaction => ({
   id: 'transaction-1',
@@ -137,5 +144,59 @@ describe('dashboard preference normalization', () => {
     expect(revenueLayout?.w).toBe(DASHBOARD_COLUMNS.lg);
     expect(revenueLayout?.h).toBe(2);
     expect(revenueLayout?.h).toBeGreaterThanOrEqual(revenueLayout?.minH ?? 1);
+  });
+});
+
+describe('dashboard bounded reads', () => {
+  test('defaults to the current month and provides bounded day/week/month presets', () => {
+    const now = dayjs.tz('2026-09-17T12:00:00+07:00');
+
+    expect(getDefaultDashboardDateRange(now)).toEqual({
+      startDate: '2026-09-01',
+      endDate: '2026-09-17',
+    });
+    expect(getDashboardPeriodRange('today', undefined, now)).toEqual({
+      startDate: '2026-09-17',
+      endDate: '2026-09-17',
+    });
+    expect(getDashboardPeriodRange('this-week', undefined, now)).toEqual({
+      startDate: '2026-09-14',
+      endDate: '2026-09-17',
+    });
+    expect(getDashboardPeriodRange('last-week', undefined, now)).toEqual({
+      startDate: '2026-09-07',
+      endDate: '2026-09-13',
+    });
+    expect(getDashboardPeriodRange('last-month', undefined, now)).toEqual({
+      startDate: '2026-08-01',
+      endDate: '2026-08-31',
+    });
+  });
+
+  test('deduplicates same-range widget reports and avoids full product-table reads', () => {
+    const dashboardHookSource = readFileSync(
+      resolve(process.cwd(), 'src/hooks/useDashboardReports.ts'),
+      'utf8',
+    );
+    const posServiceSource = readFileSync(
+      resolve(process.cwd(), 'src/services/posSalesReportService.ts'),
+      'utf8',
+    );
+    const cashFlowSource = readFileSync(
+      resolve(process.cwd(), 'src/services/cashFlowReportService.ts'),
+      'utf8',
+    );
+    const dashboardSource = readFileSync(
+      resolve(process.cwd(), 'src/routes/index.tsx'),
+      'utf8',
+    );
+
+    expect(dashboardHookSource).toContain('groupEnabledRequestsByRange');
+    expect(dashboardHookSource).toContain('includePaymentDetails: false');
+    expect(posServiceSource).toContain('db.products.bulkGet(productIds)');
+    expect(posServiceSource).not.toContain('db.products.toArray()');
+    expect(cashFlowSource).toContain("where('[type+created_at+id]')");
+    expect(dashboardSource).toContain('IntersectionObserver');
+    expect(dashboardSource).toContain("lazy(() => import('@/components/dashboard/SalesTrendChart'))");
   });
 });

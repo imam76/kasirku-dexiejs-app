@@ -1,3 +1,4 @@
+import Dexie from 'dexie';
 import { getCurrentSessionUser, requireUserPermission } from '@/auth/authService';
 import { getFinanceTransactionBusinessType } from '@/constants/finance';
 import { db } from '@/lib/db';
@@ -128,6 +129,37 @@ const getTransactionsInRange = async (filters: CashFlowReportFilters) => {
   return (await collection.toArray())
     .filter((transaction) => matchesCurrency(transaction, filters.currencyCode))
     .sort((left, right) => left.created_at.localeCompare(right.created_at));
+};
+
+/**
+ * Lightweight dashboard read. It seeks only EXPENSE rows through the compound
+ * type/date index and avoids building cash-flow groups with transaction arrays.
+ */
+export const getDashboardCashOutTotal = async (
+  filters: Pick<CashFlowReportFilters, 'startDate' | 'endDate'>,
+): Promise<number> => {
+  const currentUser = await getCurrentSessionUser({
+    touchSession: false,
+    cleanupInvalidSession: false,
+  });
+  await requireUserPermission(currentUser, 'REPORT_CASH_FLOW_VIEW');
+
+  const start = filters.startDate ?? '';
+  const end = filters.endDate ?? '\uffff';
+  const transactions = await db.financeTransactions
+    .where('[type+created_at+id]')
+    .between(
+      ['EXPENSE', start, Dexie.minKey],
+      ['EXPENSE', end, Dexie.maxKey],
+      true,
+      true,
+    )
+    .toArray();
+
+  return transactions.reduce((total, transaction) => {
+    const signedAmount = getCashFlowSignedAmount(transaction);
+    return signedAmount < 0 ? total + Math.abs(signedAmount) : total;
+  }, 0);
 };
 
 export const getCashFlowReport = async (

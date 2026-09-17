@@ -16,20 +16,14 @@ import {
 } from '@ant-design/icons';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { Responsive, type Layout, type LayoutItem, type ResponsiveLayouts } from 'react-grid-layout';
-import * as echarts from 'echarts/core';
-import { LineChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent } from 'echarts/components';
-import { SVGRenderer } from 'echarts/renderers';
-import ReactEChartsCore from 'echarts-for-react/lib/core';
-import type { EChartsOption } from 'echarts-for-react';
-import { App, Button, Checkbox, DatePicker, Empty, Select, Skeleton, Tooltip, theme as antdTheme } from 'antd';
+import { App, Button, Checkbox, DatePicker, Empty, Popover, Select, Skeleton, Tooltip, theme as antdTheme } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useDashboardPreference } from '@/hooks/useDashboardPreference';
 import {
-  useDashboardCashFlowReport,
-  useDashboardPosSalesReport,
-  useDashboardProfitLossReport,
+  useDashboardCashOutTotal,
+  useDashboardPosSalesReports,
+  useDashboardProfitLossReports,
 } from '@/hooks/useDashboardReports';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useMobileHomeData } from '@/hooks/useMobileHomeData';
@@ -61,35 +55,29 @@ import {
   isDashboardWidgetId,
   normalizeDashboardPreference,
 } from '@/utils/dashboardPreferences';
-
-echarts.use([GridComponent, LineChart, SVGRenderer, TooltipComponent]);
+import {
+  DASHBOARD_PERIOD_PRESETS,
+  getDashboardPeriodLabelKey,
+  getDashboardPeriodRange,
+  getDefaultDashboardDateRange,
+  type DashboardDateRange,
+  type DashboardPeriodPreset,
+} from '@/utils/dashboardDateRanges';
 
 export const Route = createFileRoute('/')({
   component: Index,
 });
+
+const SalesTrendChart = lazy(() => import('@/components/dashboard/SalesTrendChart'));
 
 type HomeMenuItem = MobileHomeServiceItem & {
   desc: string;
   tour?: string;
 };
 
-type DashboardPeriodPreset = 'this-month' | 'last-month' | 'this-year' | 'last-year' | 'custom-month';
-
-type DashboardDateRange = {
-  startDate: string;
-  endDate: string;
-};
-
 const PROFIT_LOSS_WIDGET_IDS = new Set<DashboardWidgetId>(['net-income', 'revenue', 'expense']);
+const PROFIT_LOSS_WIDGET_ID_LIST = ['net-income', 'revenue', 'expense'] as const;
 const MOBILE_DASHBOARD_QUERY = '(max-width: 767.98px)';
-
-const DASHBOARD_PERIOD_PRESETS: DashboardPeriodPreset[] = [
-  'this-month',
-  'last-month',
-  'this-year',
-  'last-year',
-  'custom-month',
-];
 
 const getMeasuredWidth = (node: HTMLElement) => {
   const measuredWidth = node.getBoundingClientRect().width || node.offsetWidth;
@@ -190,86 +178,9 @@ const toDashboardLayouts = (
   }, {} as DashboardLayouts);
 };
 
-const getDashboardPeriodRange = (
-  preset: DashboardPeriodPreset,
-  customMonth: Dayjs = dayjs.tz(),
-): DashboardDateRange => {
-  const now = dayjs.tz();
-
-  switch (preset) {
-    case 'last-month': {
-      const lastMonth = now.subtract(1, 'month');
-      return {
-        startDate: lastMonth.startOf('month').format('YYYY-MM-DD'),
-        endDate: lastMonth.endOf('month').format('YYYY-MM-DD'),
-      };
-    }
-    case 'this-year':
-      return {
-        startDate: now.startOf('year').format('YYYY-MM-DD'),
-        endDate: now.endOf('day').format('YYYY-MM-DD'),
-      };
-    case 'last-year': {
-      const lastYear = now.subtract(1, 'year');
-      return {
-        startDate: lastYear.startOf('year').format('YYYY-MM-DD'),
-        endDate: lastYear.endOf('year').format('YYYY-MM-DD'),
-      };
-    }
-    case 'custom-month':
-      return {
-        startDate: customMonth.startOf('month').format('YYYY-MM-DD'),
-        endDate: customMonth.endOf('month').format('YYYY-MM-DD'),
-      };
-    case 'this-month':
-      return {
-        startDate: now.startOf('month').format('YYYY-MM-DD'),
-        endDate: now.endOf('day').format('YYYY-MM-DD'),
-      };
-  }
-};
-
-const getDefaultMonthRange = () => ({
-  startDate: dayjs.tz().startOf('month').format('YYYY-MM-DD'),
-  endDate: dayjs.tz().endOf('day').format('YYYY-MM-DD'),
-});
-
 const formatRangeLabel = (startDate: string, endDate: string) => (
   `${dayjs.tz(startDate).format('D MMM YYYY')} s/d ${dayjs.tz(endDate).format('D MMM YYYY')}`
 );
-
-const formatCompactCurrency = (value: number) => {
-  const absoluteValue = Math.abs(value);
-
-  if (absoluteValue >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} M`;
-  }
-
-  if (absoluteValue >= 1_000_000) {
-    return `${(value / 1_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} jt`;
-  }
-
-  if (absoluteValue >= 1_000) {
-    return `${(value / 1_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} rb`;
-  }
-
-  return formatCurrency(value);
-};
-
-const getDashboardPeriodLabelKey = (preset: DashboardPeriodPreset) => {
-  switch (preset) {
-    case 'this-month':
-      return 'dashboard.period.thisMonth';
-    case 'last-month':
-      return 'dashboard.period.lastMonth';
-    case 'this-year':
-      return 'dashboard.period.thisYear';
-    case 'last-year':
-      return 'dashboard.period.lastYear';
-    case 'custom-month':
-      return 'dashboard.period.customMonth';
-  }
-};
 
 const getWidgetLabelKey = (widgetId: DashboardWidgetId) => {
   switch (widgetId) {
@@ -347,6 +258,7 @@ function MetricWidget({
   loading,
   isEditing,
   tone,
+  action,
 }: {
   title: string;
   subtitle: string;
@@ -354,6 +266,7 @@ function MetricWidget({
   loading: boolean;
   isEditing: boolean;
   tone: 'primary' | 'success' | 'error' | 'warning';
+  action?: ReactNode;
 }) {
   const { token } = antdTheme.useToken();
   const toneToken = {
@@ -385,6 +298,7 @@ function MetricWidget({
       subtitle={subtitle}
       icon={<DollarOutlined style={{ color: toneToken.iconColor }} />}
       isEditing={isEditing}
+      action={action}
       iconStyle={{
         background: token.colorBgContainer,
         borderColor: toneToken.border,
@@ -406,178 +320,40 @@ function MetricWidget({
   );
 }
 
-function SalesTrendChart({
-  buckets,
-  loading,
+function DeferredDashboardWidget({
+  widgetId,
+  active,
+  onVisible,
+  children,
 }: {
-  buckets: { date: string; label: string; totalRevenue: number; transactionCount: number }[];
-  loading: boolean;
+  widgetId: DashboardWidgetId;
+  active: boolean;
+  onVisible: (widgetId: DashboardWidgetId) => void;
+  children: ReactNode;
 }) {
-  const { token } = antdTheme.useToken();
-  const hasSales = buckets.some((bucket) => bucket.totalRevenue > 0);
-  const chartOption = useMemo<EChartsOption>(() => ({
-    animationDuration: 350,
-    backgroundColor: 'transparent',
-    color: [token.colorPrimary],
-    grid: {
-      bottom: 26,
-      containLabel: true,
-      left: 8,
-      right: 12,
-      top: 18,
-    },
-    tooltip: {
-      trigger: 'axis',
-      confine: true,
-      backgroundColor: token.colorBgElevated,
-      borderColor: token.colorBorderSecondary,
-      borderWidth: 1,
-      padding: [8, 10],
-      textStyle: {
-        color: token.colorText,
-        fontFamily: token.fontFamily,
-        fontSize: 12,
-      },
-      axisPointer: {
-        type: 'line',
-        lineStyle: {
-          color: token.colorPrimary,
-          opacity: 0.32,
-          width: 1,
-        },
-      },
-      formatter: (params: Array<{
-        axisValueLabel?: string;
-        data?: { transactionCount?: number; value?: number };
-        marker?: string;
-        name?: string;
-      }> | {
-        axisValueLabel?: string;
-        data?: { transactionCount?: number; value?: number };
-        marker?: string;
-        name?: string;
-      }) => {
-        const item = Array.isArray(params) ? params[0] : params;
-        const revenue = Number(item.data?.value ?? 0);
-        const transactionCount = Number(item.data?.transactionCount ?? 0);
-        const label = item.axisValueLabel ?? item.name ?? '';
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
-        return [
-          `<div style="font-weight:600;margin-bottom:4px;">${label}</div>`,
-          `<div>${item.marker ?? ''}Rp ${formatCurrency(revenue)}</div>`,
-          `<div style="color:${token.colorTextSecondary};font-size:12px;margin-top:2px;">${transactionCount} transaksi</div>`,
-        ].join('');
-      },
-    },
-    xAxis: {
-      type: 'category',
-      boundaryGap: false,
-      data: buckets.map((bucket) => bucket.label),
-      axisTick: { show: false },
-      axisLine: {
-        lineStyle: {
-          color: token.colorBorderSecondary,
-        },
-      },
-      axisLabel: {
-        color: token.colorTextTertiary,
-        fontFamily: token.fontFamily,
-        fontSize: 10,
-        hideOverlap: true,
-        margin: 10,
-        showMaxLabel: true,
-        showMinLabel: true,
-      },
-    },
-    yAxis: {
-      type: 'value',
-      min: 0,
-      splitNumber: 3,
-      axisLabel: {
-        color: token.colorTextTertiary,
-        fontFamily: token.fontFamily,
-        fontSize: 10,
-        formatter: (value: number) => `Rp ${formatCompactCurrency(value)}`,
-      },
-      splitLine: {
-        lineStyle: {
-          color: token.colorBorderSecondary,
-          opacity: 0.9,
-        },
-      },
-    },
-    series: [
-      {
-        name: 'Penjualan',
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        lineStyle: {
-          color: token.colorPrimary,
-          width: 3,
-        },
-        itemStyle: {
-          borderColor: token.colorBgContainer,
-          borderWidth: 2,
-          color: token.colorPrimary,
-        },
-        areaStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [
-              { offset: 0, color: token.colorPrimary },
-              { offset: 1, color: token.colorBgContainer },
-            ],
-          },
-          opacity: 0.18,
-        },
-        emphasis: {
-          focus: 'series',
-        },
-        data: buckets.map((bucket) => ({
-          transactionCount: bucket.transactionCount,
-          value: bucket.totalRevenue,
-        })),
-      },
-    ],
-  }), [
-    buckets,
-    token.colorBgContainer,
-    token.colorBgElevated,
-    token.colorBorderSecondary,
-    token.colorPrimary,
-    token.colorText,
-    token.colorTextSecondary,
-    token.colorTextTertiary,
-    token.fontFamily,
-  ]);
+  useEffect(() => {
+    if (active) return undefined;
+    const node = containerRef.current;
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      onVisible(widgetId);
+      return undefined;
+    }
 
-  if (loading) {
-    return <Skeleton active paragraph={{ rows: 3 }} title={false} />;
-  }
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      onVisible(widgetId);
+      observer.disconnect();
+    }, { rootMargin: '320px 0px' });
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [active, onVisible, widgetId]);
 
   return (
-    <div className="flex h-full min-h-[180px] items-stretch">
-      {!hasSales ? (
-        <div className="flex flex-1 items-center justify-center">
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Belum ada penjualan" />
-        </div>
-      ) : (
-        <ReactEChartsCore
-          echarts={echarts}
-          option={chartOption}
-          className="min-h-[180px] flex-1"
-          style={{ height: '100%', minHeight: 180, width: '100%' }}
-          notMerge
-          lazyUpdate
-          opts={{ renderer: 'svg' }}
-        />
-      )}
+    <div ref={containerRef} className="h-full">
+      {children}
     </div>
   );
 }
@@ -619,6 +395,7 @@ function TopProductsList({
 
 function DashboardDateAction({
   startDate,
+  endDate,
   onChange,
 }: {
   startDate: string;
@@ -627,44 +404,58 @@ function DashboardDateAction({
 }) {
   const { t } = useI18n();
   const [selectedPreset, setSelectedPreset] = useState<DashboardPeriodPreset>('this-month');
-  const [customMonth, setCustomMonth] = useState(() => dayjs.tz(startDate).startOf('month'));
+  const [isCustomOpen, setIsCustomOpen] = useState(false);
 
   const handlePresetChange = (preset: DashboardPeriodPreset) => {
     setSelectedPreset(preset);
-    onChange(getDashboardPeriodRange(preset, customMonth));
+    if (preset === 'custom') {
+      setIsCustomOpen(true);
+      return;
+    }
+
+    setIsCustomOpen(false);
+    onChange(getDashboardPeriodRange(preset));
   };
 
-  const handleCustomMonthChange = (value: Dayjs | null) => {
-    const nextMonth = value?.startOf('month') ?? dayjs.tz().startOf('month');
-    setCustomMonth(nextMonth);
-    setSelectedPreset('custom-month');
-    onChange(getDashboardPeriodRange('custom-month', nextMonth));
+  const handleCustomRangeChange = (value: [Dayjs | null, Dayjs | null] | null) => {
+    if (!value?.[0] || !value[1]) return;
+
+    onChange(getDashboardPeriodRange('custom', {
+      startDate: value[0].format('YYYY-MM-DD'),
+      endDate: value[1].format('YYYY-MM-DD'),
+    }));
+    setIsCustomOpen(false);
   };
 
   return (
-    <div className="flex max-w-[292px] flex-wrap items-center justify-end gap-1.5">
-      <Select<DashboardPeriodPreset>
-        size="small"
-        value={selectedPreset}
-        onChange={handlePresetChange}
-        options={DASHBOARD_PERIOD_PRESETS.map((preset) => ({
-          value: preset,
-          label: t(getDashboardPeriodLabelKey(preset)),
-        }))}
-        className="w-[138px]"
-      />
-      {selectedPreset === 'custom-month' && (
-        <DatePicker
-          size="small"
-          picker="month"
-          value={customMonth}
-          onChange={handleCustomMonthChange}
-          format="MMMM YYYY"
+    <Popover
+      trigger="click"
+      open={selectedPreset === 'custom' && isCustomOpen}
+      onOpenChange={(open) => setIsCustomOpen(open)}
+      content={(
+        <DatePicker.RangePicker
+          value={[dayjs.tz(startDate), dayjs.tz(endDate)]}
+          onChange={handleCustomRangeChange}
+          getPopupContainer={(triggerNode) => triggerNode.parentElement ?? document.body}
           allowClear={false}
-          className="w-[146px]"
+          format="DD/MM/YYYY"
+          className="w-[240px]"
         />
       )}
-    </div>
+    >
+      <div>
+        <Select<DashboardPeriodPreset>
+          size="small"
+          value={selectedPreset}
+          onChange={handlePresetChange}
+          options={DASHBOARD_PERIOD_PRESETS.map((preset) => ({
+            value: preset,
+            label: t(getDashboardPeriodLabelKey(preset)),
+          }))}
+          className="w-[116px]"
+        />
+      </div>
+    </Popover>
   );
 }
 
@@ -676,10 +467,14 @@ function Index() {
   const { isRouteEnabled } = useEnabledModules({ currentUser, currentRole });
   const mobileHomeDate = dayjs.tz().format('YYYY-MM-DD');
   const canViewMobileSales = can('REPORT_POS_SALES_VIEW') && isRouteEnabled('/report/pos-sales-report');
-  const defaultRange = useMemo(() => getDefaultMonthRange(), []);
-  const [profitRange] = useState(defaultRange);
-  const [salesChartRange, setSalesChartRange] = useState(defaultRange);
-  const [topProductsRange, setTopProductsRange] = useState(defaultRange);
+  const defaultRange = useMemo(() => getDefaultDashboardDateRange(), []);
+  const [widgetRanges, setWidgetRanges] = useState<Record<DashboardWidgetId, DashboardDateRange>>(() => (
+    DASHBOARD_WIDGET_IDS.reduce((ranges, widgetId) => {
+      ranges[widgetId] = { ...defaultRange };
+      return ranges;
+    }, {} as Record<DashboardWidgetId, DashboardDateRange>)
+  ));
+  const [hydratedWidgetIds, setHydratedWidgetIds] = useState<Set<DashboardWidgetId>>(() => new Set());
   const [refreshKey, setRefreshKey] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [draftPreference, setDraftPreference] = useState<DashboardPreference>();
@@ -693,33 +488,40 @@ function Index() {
   ), [activePreference?.visible_widget_ids, allowedWidgetSet]);
   const visibleWidgetSet = useMemo(() => new Set(visibleWidgetIds), [visibleWidgetIds]);
   const hasProfitLossWidget = visibleWidgetIds.some((widgetId) => PROFIT_LOSS_WIDGET_IDS.has(widgetId));
-  const canViewProfitLoss = allowedWidgetIds.some((widgetId) => PROFIT_LOSS_WIDGET_IDS.has(widgetId));
   const isCashOutVisible = visibleWidgetSet.has('cash-out');
   const isSalesChartVisible = visibleWidgetSet.has('sales-chart');
   const isTopProductsVisible = visibleWidgetSet.has('top-products');
-  const profitLossReport = useDashboardProfitLossReport({
-    startDate: profitRange.startDate,
-    endDate: profitRange.endDate,
-    enabled: !isMobileViewport && hasProfitLossWidget && canViewProfitLoss,
+  const isWidgetHydrated = (widgetId: DashboardWidgetId) => (
+    isEditing || hydratedWidgetIds.has(widgetId)
+  );
+  const profitLossReports = useDashboardProfitLossReports({
+    requests: PROFIT_LOSS_WIDGET_ID_LIST.map((id) => ({
+      id,
+      ...widgetRanges[id],
+      enabled: !isMobileViewport && hasProfitLossWidget && visibleWidgetSet.has(id) && isWidgetHydrated(id),
+    })),
     refreshKey,
   });
-  const cashFlowReport = useDashboardCashFlowReport({
-    startDate: profitRange.startDate,
-    endDate: profitRange.endDate,
-    enabled: !isMobileViewport && isCashOutVisible && can('REPORT_CASH_FLOW_VIEW'),
+  const cashOutReport = useDashboardCashOutTotal({
+    ...widgetRanges['cash-out'],
+    enabled: !isMobileViewport && isCashOutVisible && isWidgetHydrated('cash-out') && can('REPORT_CASH_FLOW_VIEW'),
     refreshKey,
   });
-  const salesChartReport = useDashboardPosSalesReport({
-    startDate: salesChartRange.startDate,
-    endDate: salesChartRange.endDate,
-    enabled: !isMobileViewport && isSalesChartVisible && can('REPORT_POS_SALES_VIEW'),
+  const posSalesReports = useDashboardPosSalesReports({
+    requests: [
+      {
+        id: 'sales-chart' as const,
+        ...widgetRanges['sales-chart'],
+        enabled: !isMobileViewport && isSalesChartVisible && isWidgetHydrated('sales-chart') && can('REPORT_POS_SALES_VIEW'),
+      },
+      {
+        id: 'top-products' as const,
+        ...widgetRanges['top-products'],
+        enabled: !isMobileViewport && isTopProductsVisible && isWidgetHydrated('top-products') && can('REPORT_POS_SALES_VIEW'),
+      },
+    ],
     refreshKey,
-  });
-  const topProductsReport = useDashboardPosSalesReport({
-    startDate: topProductsRange.startDate,
-    endDate: topProductsRange.endDate,
-    enabled: !isMobileViewport && isTopProductsVisible && can('REPORT_POS_SALES_VIEW'),
-    refreshKey,
+    topProductsRequestId: 'top-products',
     topProductsLimit: 5,
   });
   const mobileHomeData = useMobileHomeData({
@@ -795,6 +597,25 @@ function Index() {
     }, currentUser.id));
   };
 
+  const handleWidgetVisible = useCallback((widgetId: DashboardWidgetId) => {
+    setHydratedWidgetIds((current) => {
+      if (current.has(widgetId)) return current;
+      const next = new Set(current);
+      next.add(widgetId);
+      return next;
+    });
+  }, []);
+
+  const handleWidgetRangeChange = useCallback((
+    widgetId: DashboardWidgetId,
+    range: DashboardDateRange,
+  ) => {
+    setWidgetRanges((current) => ({
+      ...current,
+      [widgetId]: range,
+    }));
+  }, []);
+
   const handleLayoutChange = useCallback((
     _layout: Layout,
     layouts: ResponsiveLayouts<DashboardBreakpoint>,
@@ -824,17 +645,27 @@ function Index() {
   }
 
   const renderWidget = (widgetId: DashboardWidgetId) => {
-    const periodSubtitle = formatRangeLabel(profitRange.startDate, profitRange.endDate);
+    const range = widgetRanges[widgetId];
+    const periodSubtitle = formatRangeLabel(range.startDate, range.endDate);
+    const isHydrated = isWidgetHydrated(widgetId);
+    const dateAction = (
+      <DashboardDateAction
+        startDate={range.startDate}
+        endDate={range.endDate}
+        onChange={(nextRange) => handleWidgetRangeChange(widgetId, nextRange)}
+      />
+    );
 
     if (widgetId === 'net-income') {
       return (
         <MetricWidget
           title={t('dashboard.widget.netIncome')}
           subtitle={periodSubtitle}
-          amount={profitLossReport.data?.net_income ?? 0}
-          loading={profitLossReport.isLoading}
+          amount={profitLossReports.data?.[widgetId]?.net_income ?? 0}
+          loading={!isHydrated || profitLossReports.isLoading}
           isEditing={isEditing}
           tone="primary"
+          action={dateAction}
         />
       );
     }
@@ -844,10 +675,11 @@ function Index() {
         <MetricWidget
           title={t('dashboard.widget.revenue')}
           subtitle={periodSubtitle}
-          amount={profitLossReport.data?.revenue ?? 0}
-          loading={profitLossReport.isLoading}
+          amount={profitLossReports.data?.[widgetId]?.revenue ?? 0}
+          loading={!isHydrated || profitLossReports.isLoading}
           isEditing={isEditing}
           tone="success"
+          action={dateAction}
         />
       );
     }
@@ -857,10 +689,11 @@ function Index() {
         <MetricWidget
           title={t('dashboard.widget.expense')}
           subtitle={periodSubtitle}
-          amount={profitLossReport.data?.expense ?? 0}
-          loading={profitLossReport.isLoading}
+          amount={profitLossReports.data?.[widgetId]?.expense ?? 0}
+          loading={!isHydrated || profitLossReports.isLoading}
           isEditing={isEditing}
           tone="error"
+          action={dateAction}
         />
       );
     }
@@ -870,10 +703,11 @@ function Index() {
         <MetricWidget
           title={t('dashboard.widget.cashOut')}
           subtitle={periodSubtitle}
-          amount={cashFlowReport.data?.totals.cashOut ?? 0}
-          loading={cashFlowReport.isLoading}
+          amount={cashOutReport.data ?? 0}
+          loading={!isHydrated || cashOutReport.isLoading}
           isEditing={isEditing}
           tone="warning"
+          action={dateAction}
         />
       );
     }
@@ -882,21 +716,21 @@ function Index() {
       return (
         <DashboardWidgetShell
           title={t('dashboard.widget.salesChart')}
-          subtitle={formatRangeLabel(salesChartRange.startDate, salesChartRange.endDate)}
+          subtitle={periodSubtitle}
           icon={<BarChartOutlined />}
           isEditing={isEditing}
-          action={(
-            <DashboardDateAction
-              startDate={salesChartRange.startDate}
-              endDate={salesChartRange.endDate}
-              onChange={setSalesChartRange}
-            />
-          )}
+          action={dateAction}
         >
-          <SalesTrendChart
-            buckets={salesChartReport.data?.dailySalesBuckets ?? []}
-            loading={salesChartReport.isLoading}
-          />
+          {!isHydrated ? (
+            <Skeleton active paragraph={{ rows: 3 }} title={false} />
+          ) : (
+            <Suspense fallback={<Skeleton active paragraph={{ rows: 3 }} title={false} />}>
+              <SalesTrendChart
+                buckets={posSalesReports.data?.[widgetId]?.dailySalesBuckets ?? []}
+                loading={posSalesReports.isLoading}
+              />
+            </Suspense>
+          )}
         </DashboardWidgetShell>
       );
     }
@@ -904,20 +738,14 @@ function Index() {
     return (
       <DashboardWidgetShell
         title={t('dashboard.widget.topProducts')}
-        subtitle={formatRangeLabel(topProductsRange.startDate, topProductsRange.endDate)}
+        subtitle={periodSubtitle}
         icon={<ProductOutlined />}
         isEditing={isEditing}
-        action={(
-          <DashboardDateAction
-            startDate={topProductsRange.startDate}
-            endDate={topProductsRange.endDate}
-            onChange={setTopProductsRange}
-          />
-        )}
+        action={dateAction}
       >
         <TopProductsList
-          products={topProductsReport.data?.topProducts ?? []}
-          loading={topProductsReport.isLoading}
+          products={posSalesReports.data?.[widgetId]?.topProducts ?? []}
+          loading={!isHydrated || posSalesReports.isLoading}
         />
       </DashboardWidgetShell>
     );
@@ -1063,7 +891,13 @@ function Index() {
               >
                 {visibleWidgetIds.map((widgetId) => (
                   <div key={widgetId}>
-                    {renderWidget(widgetId)}
+                    <DeferredDashboardWidget
+                      widgetId={widgetId}
+                      active={isWidgetHydrated(widgetId)}
+                      onVisible={handleWidgetVisible}
+                    >
+                      {renderWidget(widgetId)}
+                    </DeferredDashboardWidget>
                   </div>
                 ))}
               </Responsive>
