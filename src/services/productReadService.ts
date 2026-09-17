@@ -208,7 +208,9 @@ const addProductReadSyncResult = (
   aggregate.skipped += next.skipped;
 };
 
-export const refreshProductsFromPostgres = async (): Promise<ProductReadSyncResult> => {
+export const refreshProductsFromPostgres = async (
+  productIds: string[] = [],
+): Promise<ProductReadSyncResult> => {
   if (isRefreshingProductsFromPostgres || !canReadFromPostgres()) {
     return { ...EMPTY_PRODUCT_READ_SYNC_RESULT };
   }
@@ -216,6 +218,14 @@ export const refreshProductsFromPostgres = async (): Promise<ProductReadSyncResu
   isRefreshingProductsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_PRODUCT_READ_SYNC_RESULT };
+    if (productIds.length > 0) {
+      const remoteProducts = (await Promise.all(
+        [...new Set(productIds)].map((productId) => productPostgresAdapter.get(productId)),
+      )).filter((product): product is RemoteProductDto => Boolean(product));
+      addProductReadSyncResult(aggregate, await mergeRemoteProductsIntoDexie(remoteProducts));
+      return aggregate;
+    }
+
     await pullStoredUpdatedAtIdPages({
       entity: 'products',
       pageSize: PRODUCT_REFRESH_LIMIT,

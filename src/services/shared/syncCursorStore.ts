@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import {
   pullUpdatedAtIdPages,
+  rewindUpdatedAtIdCursor,
   type UpdatedAtIdCursor,
 } from '@/services/shared/remoteRefreshCursor';
 
@@ -26,6 +27,7 @@ export const setStoredUpdatedAtIdCursor = async (
 interface PullStoredUpdatedAtIdPagesOptions<T> {
   entity: string;
   pageSize: number;
+  replayWindowMs?: number;
   loadPage: (cursor?: UpdatedAtIdCursor) => Promise<T[]>;
   mergePage: (page: T[]) => Promise<void>;
   getUpdatedAt: (item: T) => string;
@@ -34,9 +36,13 @@ interface PullStoredUpdatedAtIdPagesOptions<T> {
 
 export const pullStoredUpdatedAtIdPages = async <T>({
   entity,
+  replayWindowMs = 0,
   ...options
 }: PullStoredUpdatedAtIdPagesOptions<T>) => pullUpdatedAtIdPages({
   ...options,
-  initialCursor: await getStoredUpdatedAtIdCursor(entity),
+  initialCursor: rewindUpdatedAtIdCursor(
+    await getStoredUpdatedAtIdCursor(entity),
+    replayWindowMs,
+  ),
   saveCursor: (cursor) => setStoredUpdatedAtIdCursor(entity, cursor),
 });

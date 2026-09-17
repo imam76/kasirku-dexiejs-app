@@ -35,6 +35,21 @@ export const getLastUpdatedAtIdCursor = <T>(
   return { updatedAt: getUpdatedAt(last), id: getId(last) };
 };
 
+export const rewindUpdatedAtIdCursor = (
+  cursor: UpdatedAtIdCursor | undefined,
+  replayWindowMs: number,
+): UpdatedAtIdCursor | undefined => {
+  if (!cursor || replayWindowMs <= 0) return cursor;
+
+  const timestamp = toTimestamp(cursor.updatedAt);
+  if (timestamp === null) return { updatedAt: cursor.updatedAt, id: '' };
+
+  return {
+    updatedAt: new Date(timestamp - replayWindowMs).toISOString(),
+    id: '',
+  };
+};
+
 /**
  * Pulls a deterministic `(updated_at, id)` keyset one page at a time. The checkpoint is saved
  * only after a page has merged successfully, so an interrupted backfill either resumes at the

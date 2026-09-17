@@ -142,6 +142,7 @@ try {
           return structuredClone(afterCursor(remote.products, 'updated_at', options.updatedAfter, options.cursorId)
             .slice(0, options.limit ?? 500));
         },
+        get: async (id) => structuredClone(remote.products.find((product) => product.id === id) ?? null),
       },
       stockMutationPostgresAdapter: {
         list: async (options = {}) => {
@@ -227,9 +228,10 @@ try {
       };
       const manualRefresh = refresh();
       await started;
-      await refresh();
+      const realtimeRefresh = refresh();
       releaseLedger();
       await manualRefresh;
+      await realtimeRefresh;
       await refresh();
       record('manual and realtime refresh overlap', 8, await stock());
 

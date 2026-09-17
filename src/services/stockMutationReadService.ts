@@ -12,14 +12,17 @@ import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 export interface StockMutationReadSyncResult {
   fetched: number;
   inserted: number;
+  productIds: string[];
 }
 
 const EMPTY_STOCK_MUTATION_READ_SYNC_RESULT: StockMutationReadSyncResult = {
   fetched: 0,
   inserted: 0,
+  productIds: [],
 };
 
 const STOCK_MUTATION_REFRESH_LIMIT = 500;
+const STOCK_MUTATION_REPLAY_WINDOW_MS = 5 * 60 * 1000;
 
 let isRefreshingStockMutationsFromPostgres = false;
 
@@ -78,6 +81,7 @@ export const mergeRemoteStockMutationsIntoDexie = async (
     );
     const newMutations = toPut.filter((mutation) => !existingIds.has(mutation.id));
     result.inserted = newMutations.length;
+    result.productIds = [...new Set(newMutations.map((mutation) => mutation.product_id))];
 
     const productCache = new Map<string, Product | undefined>();
     for (const mutation of newMutations) {
@@ -108,6 +112,9 @@ export const refreshStockMutationsFromPostgres = async (): Promise<StockMutation
     await pullStoredUpdatedAtIdPages({
       entity: 'stockMutations',
       pageSize: STOCK_MUTATION_REFRESH_LIMIT,
+      // server_created_at is assigned before a transaction commits. Replay a short
+      // window so a slower transaction cannot be hidden behind a newer checkpoint.
+      replayWindowMs: STOCK_MUTATION_REPLAY_WINDOW_MS,
       loadPage: (cursor) => stockMutationPostgresAdapter.list({
         serverCreatedAfter: cursor?.updatedAt,
         cursorId: cursor?.id,
@@ -117,6 +124,7 @@ export const refreshStockMutationsFromPostgres = async (): Promise<StockMutation
         const result = await mergeRemoteStockMutationsIntoDexie(remoteMutations);
         aggregate.fetched += result.fetched;
         aggregate.inserted += result.inserted;
+        aggregate.productIds = [...new Set([...aggregate.productIds, ...result.productIds])];
       },
       getUpdatedAt: (mutation) => mutation.server_created_at ?? mutation.created_at,
       getId: (mutation) => mutation.id,

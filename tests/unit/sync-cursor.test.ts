@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   pullUpdatedAtIdPages,
+  rewindUpdatedAtIdCursor,
   type UpdatedAtIdCursor,
 } from '@/services/shared/remoteRefreshCursor';
 
@@ -29,6 +30,16 @@ const pageLoader = (rows: RemoteRow[]) => async (cursor?: UpdatedAtIdCursor) => 
   .slice(0, PAGE_SIZE);
 
 describe('updated_at + id sync cursor', () => {
+  test('rewinds the checkpoint for late commits and reopens the timestamp tie', () => {
+    expect(rewindUpdatedAtIdCursor({
+      updatedAt: '2026-08-27T00:05:00.000Z',
+      id: 'row-0200',
+    }, 5 * 60 * 1000)).toEqual({
+      updatedAt: '2026-08-27T00:00:00.000Z',
+      id: '',
+    });
+  });
+
   test('pulls every tied row across a page boundary and replays idempotently', async () => {
     const remoteRows = rowsAtSameTimestamp(PAGE_SIZE + 1);
     const localRows = new Map<string, RemoteRow>();
