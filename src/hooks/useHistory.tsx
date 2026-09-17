@@ -1,25 +1,23 @@
-import { useCallback, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { db } from '@/lib/db';
-import { PosTransactionPayment, Transaction, TransactionItem } from '../types';
-import { groupPosPaymentsByTransaction } from '@/utils/posSplitPayment';
+import { useCallback, useMemo, useState } from 'react';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { voidTransaction as voidTransactionService } from '@/services/transactionVoidService';
+import { listTransactionHistoryPage } from '@/services/transactionHistoryReadService';
+import type { DateIdCursor } from '@/services/shared/dateIdCursor';
 import {
-  filterTransactionHistory,
   normalizeTransactionHistorySearch,
 } from '@/utils/transactionHistorySearch';
 
-interface TransactionWithItems extends Transaction {
-  items?: TransactionItem[];
-  payments?: PosTransactionPayment[];
-}
+const PAGE_SIZE = 20;
 
-const PAGE_SIZE = 10;
-
-export const useHistory = () => {
+export const useHistory = ({
+  startDate,
+  endDate,
+}: {
+  startDate: string;
+  endDate: string;
+}) => {
   const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [page, setPageState] = useState(1);
   const [searchTerm, setSearchTermState] = useState('');
   const normalizedSearchTerm = normalizeTransactionHistorySearch(searchTerm);
 
@@ -29,71 +27,37 @@ export const useHistory = () => {
     isError,
     error,
     refetch,
-  } = useQuery({
-    queryKey: ['transactions-history', page, normalizedSearchTerm],
-    queryFn: async () => {
-      let transactions: Transaction[];
-      let totalCount: number;
-
-      if (normalizedSearchTerm) {
-        const [allTransactions, allItems, products] = await Promise.all([
-          db.transactions.orderBy('created_at').reverse().toArray(),
-          db.transactionItems.toArray(),
-          db.products.toArray(),
-        ]);
-        const filteredTransactions = filterTransactionHistory(
-          allTransactions,
-          allItems,
-          products,
-          normalizedSearchTerm,
-        );
-        totalCount = filteredTransactions.length;
-        const lastPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-        const currentPage = Math.min(page, lastPage);
-        const from = (currentPage - 1) * PAGE_SIZE;
-        transactions = filteredTransactions.slice(from, from + PAGE_SIZE);
-      } else {
-        totalCount = await db.transactions.count();
-        const lastPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-        const currentPage = Math.min(page, lastPage);
-        const from = (currentPage - 1) * PAGE_SIZE;
-        transactions = await db.transactions
-          .orderBy('created_at')
-          .reverse()
-          .offset(from)
-          .limit(PAGE_SIZE)
-          .toArray();
-      }
-
-      const ids = transactions.map((transaction) => transaction.id);
-      const [items, payments] = ids.length > 0 ? await Promise.all([
-        db.transactionItems.where('transaction_id').anyOf(ids).toArray(),
-        db.posTransactionPayments.where('transaction_id').anyOf(ids).toArray(),
-      ]) : [[], []];
-      const itemsByTransaction = new Map<string, TransactionItem[]>();
-      items.forEach((item) => itemsByTransaction.set(item.transaction_id, [...(itemsByTransaction.get(item.transaction_id) ?? []), item]));
-      const paymentsByTransaction = groupPosPaymentsByTransaction(payments);
-      const data = transactions.map((transaction) => ({
-        ...transaction,
-        items: itemsByTransaction.get(transaction.id) ?? [],
-        payments: paymentsByTransaction.get(transaction.id) ?? [],
-      } as TransactionWithItems));
-
-      return {
-        data,
-        totalCount,
-      };
-    },
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ['transactions-history', startDate, endDate, normalizedSearchTerm],
+    queryFn: ({ pageParam }) => listTransactionHistoryPage({
+      startDate,
+      endDate,
+      search: normalizedSearchTerm,
+      cursor: pageParam,
+      limit: PAGE_SIZE,
+    }),
+    initialPageParam: undefined as DateIdCursor | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
 
-  const setPage = useCallback((nextPage: number) => {
+  const transactions = useMemo(() => {
+    const uniqueRows = new Map(
+      (data?.pages ?? []).flatMap((result) => result.rows)
+        .map((transaction) => [transaction.id, transaction] as const),
+    );
+    return [...uniqueRows.values()];
+  }, [data?.pages]);
+
+  const loadMore = useCallback(async () => {
     setExpandedId(null);
-    setPageState(Math.max(1, nextPage));
-  }, []);
+    await fetchNextPage();
+  }, [fetchNextPage]);
 
   const setSearchTerm = useCallback((value: string) => {
     setExpandedId(null);
-    setPageState(1);
     setSearchTermState(value);
   }, []);
 
@@ -122,16 +86,15 @@ export const useHistory = () => {
   });
 
   return {
-    transactions: data?.data ?? [],
-    totalCount: data?.totalCount ?? 0,
-    page,
-    pageSize: PAGE_SIZE,
+    transactions,
     searchTerm,
     expandedId,
     isLoading,
+    isLoadingMore: isFetchingNextPage,
+    hasMore: Boolean(hasNextPage),
     isError,
     error,
-    setPage,
+    loadMore,
     setSearchTerm,
     toggleExpand,
     refetch,

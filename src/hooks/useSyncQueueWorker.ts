@@ -7,15 +7,22 @@ import {
   COOPERATIVE_QUERY_KEYS,
   FINANCE_QUERY_KEYS,
   PAYROLL_QUERY_KEYS,
+  SALES_DOCUMENT_QUERY_KEYS,
+  PURCHASE_DOCUMENT_QUERY_KEYS,
   resolveRealtimeRefreshPlan,
   SETUP_QUERY_KEYS,
 } from '@/services/realtimeSyncTableMap';
 import { runDatabaseRefreshNow, runDatabaseSyncNow } from '@/services/syncOrchestratorService';
 import { checkPostgresConnection } from '@/store/postgresConnectionStore';
 import { shouldRunDatabaseSyncForHealth } from '@/utils/postgresConnection';
+import {
+  reconcileSalesPurchaseDocuments,
+  reconcileSalesPurchaseDocumentsIfDue,
+} from '@/services/documentSyncReconciliationService';
 
 const REALTIME_SYNC_DEBOUNCE_MS = 750;
 export const POSTGRES_CONNECTION_RETRY_INTERVAL_MS = 10_000;
+export const DATABASE_CATCH_UP_INTERVAL_MS = 60_000;
 
 const DATABASE_SYNC_QUERY_KEYS = Array.from(new Set([
   ...CASHIER_QUERY_KEYS,
@@ -23,6 +30,8 @@ const DATABASE_SYNC_QUERY_KEYS = Array.from(new Set([
   ...COOPERATIVE_QUERY_KEYS,
   ...FINANCE_QUERY_KEYS,
   ...PAYROLL_QUERY_KEYS,
+  ...SALES_DOCUMENT_QUERY_KEYS,
+  ...PURCHASE_DOCUMENT_QUERY_KEYS,
 ]));
 
 type PostgresRealtimeChangeEvent = {
@@ -49,28 +58,45 @@ export const useSyncQueueWorker = () => {
     let pendingRealtimeSync = false;
     let pendingRealtimeChanges: PostgresRealtimeChangeEvent[] = [];
     let unlistenPostgresRealtime: (() => void) | undefined;
+    let isRecovering = false;
+    let lastCatchUpAt = 0;
 
-    const syncWhenOnline = async () => {
+    const syncWhenOnline = async (forceDocumentCheck = false) => {
       try {
         await runDatabaseSyncNow();
-        invalidateQueryKeys(DATABASE_SYNC_QUERY_KEYS);
       } catch (error) {
         console.error('Failed to refresh PostgreSQL read data', error);
+      }
+      // A failure in another domain must not starve document recovery.
+      try {
+        if (isTauriRuntime() && !isDisposed) {
+          if (forceDocumentCheck) await reconcileSalesPurchaseDocuments();
+          else await reconcileSalesPurchaseDocumentsIfDue();
+        }
+      } catch (error) {
+        console.error('Failed to reconcile sales/purchase documents', error);
+      } finally {
+        // Also show pages already recovered before an interruption.
+        invalidateQueryKeys(DATABASE_SYNC_QUERY_KEYS);
       }
     };
 
     const checkConnectionAndRecover = async () => {
-      const health = await checkPostgresConnection();
-      if (isDisposed) return;
-
-      const shouldSync = shouldRunDatabaseSyncForHealth(
-        previousPostgresAvailability,
-        health.available,
-      );
-      previousPostgresAvailability = health.available;
-
-      if (shouldSync) {
-        await syncWhenOnline();
+      if (isRecovering || isDisposed) return;
+      isRecovering = true;
+      try {
+        const health = await checkPostgresConnection();
+        if (isDisposed) return;
+        const recovered = shouldRunDatabaseSyncForHealth(previousPostgresAvailability, health.available);
+        previousPostgresAvailability = health.available;
+        if (health.available && (recovered || Date.now() - lastCatchUpAt >= DATABASE_CATCH_UP_INTERVAL_MS)) {
+          lastCatchUpAt = Date.now();
+          await syncWhenOnline(recovered);
+        }
+      } catch (error) {
+        console.error('Failed to recover PostgreSQL connection', error);
+      } finally {
+        isRecovering = false;
       }
     };
 

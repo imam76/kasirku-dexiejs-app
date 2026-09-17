@@ -147,8 +147,54 @@ cat "$HOME/.tauri/frayukti-updater.key.password"
 
 Secret lama `TAURI_SIGNING_PRIVATE_KEY` masih didukung sebagai fallback, tapi
 format base64 lebih aman karena workflow akan decode ke file sementara dan
-mengirim path file tersebut ke Tauri. Workflow saat ini membuat draft release;
-publish draft tersebut agar updater aplikasi bisa membaca `latest.json`.
+mengirim path file tersebut ke Tauri. Workflow memublikasikan release secara
+otomatis setelah seluruh build desktop dan Android berhasil.
+
+## Distribusi APK Android
+
+APK Android resmi selalu tersedia melalui URL tetap berikut setelah release
+terbaru selesai dipublikasikan:
+
+```text
+https://github.com/imam76/kasirku-dexiejs-app/releases/latest/download/frayukti-android.apk
+```
+
+Workflow `.github/workflows/release.yml` membangun satu APK universal untuk
+ARM64, ARMv7, x86, dan x86_64, memverifikasi signature APK, lalu mengunggahnya
+dengan nama tetap `frayukti-android.apk`. File checksum juga tersedia sebagai
+`frayukti-android.apk.sha256`.
+
+Tambahkan tiga repository secret di GitHub melalui **Settings → Secrets and
+variables → Actions**:
+
+- `ANDROID_KEY_BASE64`: isi file `src-tauri/gen/android/frayukti-release.jks`
+  yang sudah diubah ke base64.
+- `ANDROID_KEY_ALIAS`: alias pada keystore Android.
+- `ANDROID_KEY_PASSWORD`: password keystore/key Android.
+
+Keystore yang sama wajib dipakai untuk setiap versi. Jika keystore diganti,
+Android akan menolak update di atas instalasi lama dan pengguna harus uninstall
+aplikasi beserta data lokalnya terlebih dahulu. Simpan backup keystore dan
+password di lokasi aman; jangan commit keduanya ke Git.
+
+APK publik dibangun tanpa `KASIRKU_DATABASE_URL`, sehingga alamat database LAN
+dan kredensial host tidak tertanam di file distribusi. Koneksi perangkat ke host
+diatur dari aplikasi melalui alur **Join Existing Host**.
+
+Untuk membuat release baru, naikkan versi, commit, buat tag, dan push dengan:
+
+```bash
+bun run release patch --version-only
+```
+
+Pilihan versi lain yang tersedia adalah `minor`, `major`, atau versi eksplisit
+seperti `1.1.0`. Script release membuat tag `app-v<versi>`; push tag tersebut
+memicu GitHub Actions. Release hanya dipublikasikan jika build Windows, Linux,
+dan Android semuanya berhasil. Menjalankan workflow manual dari tab Actions
+juga didukung untuk versi yang belum pernah dipublikasikan.
+
+Auto updater di dalam APK belum diaktifkan pada tahap ini. URL tetap di atas
+disiapkan sebagai sumber APK untuk implementasi updater tablet berikutnya.
 
 ## Testing
 
@@ -187,7 +233,13 @@ Build aplikasi desktop:
 bun run tauri build
 ```
 
-Build APK Android untuk semua arsitektur:
+Build satu APK Android universal untuk distribusi langsung:
+
+```bash
+bun run tauri android build --apk
+```
+
+Build APK terpisah per arsitektur untuk pengujian atau optimasi ukuran:
 
 ```bash
 bun run tauri android build --apk --split-per-abi

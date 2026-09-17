@@ -28,6 +28,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb';
 import { MobileCrudBottomSheet, MobileCrudPageHeader } from '@/components/mobile-crud';
+import { db } from '@/lib/db';
 
 const STOCK_SAVED_EVENT = 'frayukti-workflow-tour-stock-saved';
 
@@ -52,6 +53,11 @@ export default function StockManagement() {
   const {
     products,
     isLoading,
+    hasAnyProduct,
+    setProductListFilters,
+    hasMoreProducts,
+    isLoadingMoreProducts,
+    loadMoreProducts,
     editingId,
     control,
     handleSubmit,
@@ -119,16 +125,19 @@ export default function StockManagement() {
     format: ProductExportFormat,
     target: ExportTarget = 'auto',
   ) => {
-    if (products.length === 0) {
+    if (!hasAnyProduct) {
       message.info(t('stock.noExportData'));
       return;
     }
 
     try {
+      // Export is an explicit whole-dataset operation. Interactive list/search
+      // stays cursor-bounded, while exported files must remain complete.
+      const exportProducts = await db.products.orderBy('created_at').reverse().toArray();
       const exported = await writeExportFile(
         format,
         `products_export_${new Date().toISOString().split('T')[0]}`,
-        createProductCsvExportRows(products),
+        createProductCsvExportRows(exportProducts),
         t('stock.title'),
         target,
       );
@@ -232,7 +241,9 @@ export default function StockManagement() {
       // what is shown here can never drift into being what actually gets written.
       const previewPlan = buildProductMasterImportPlan({
         items,
-        existingProducts: products,
+        // Like export, import validation intentionally compares against the
+        // complete master set; this scan only runs after a file is selected.
+        existingProducts: await db.products.toArray(),
         now: new Date().toISOString(),
       });
       const rowErrors = [...parsed.rowErrors, ...previewPlan.rowErrors]
@@ -380,13 +391,11 @@ export default function StockManagement() {
 
   // Template dipakai justru saat daftar produk masih kosong, jadi yang dimatikan
   // hanya entri ekspor datanya — bukan seluruh menu.
-  const hasProducts = products.length > 0;
-
   const exportMenuItems: MenuProps['items'] = [
     {
       key: 'xlsx',
       label: t('stock.formatExcel'),
-      disabled: !hasProducts,
+      disabled: !hasAnyProduct,
       children: [
         { key: 'xlsx:share', label: t('stock.share') },
         { key: 'xlsx:save', label: t('stock.saveToFile') },
@@ -395,7 +404,7 @@ export default function StockManagement() {
     {
       key: 'csv',
       label: t('stock.formatCsv'),
-      disabled: !hasProducts,
+      disabled: !hasAnyProduct,
       children: [
         { key: 'csv:share', label: t('stock.share') },
         { key: 'csv:save', label: t('stock.saveToFile') },
@@ -535,7 +544,7 @@ export default function StockManagement() {
             <div className="grid grid-cols-2 gap-2">
               <Button
                 size="large"
-                disabled={products.length === 0}
+                disabled={!hasAnyProduct}
                 onClick={() => handleMobileExport('share')}
                 className="h-12"
               >
@@ -543,7 +552,7 @@ export default function StockManagement() {
               </Button>
               <Button
                 size="large"
-                disabled={products.length === 0}
+                disabled={!hasAnyProduct}
                 onClick={() => handleMobileExport('save')}
                 className="h-12"
               >
@@ -605,6 +614,10 @@ export default function StockManagement() {
         onVerify={handleVerifyProduct}
         onAdd={handleAddProduct}
         loading={isLoading}
+        onFiltersChange={setProductListFilters}
+        hasMore={hasMoreProducts}
+        loadingMore={isLoadingMoreProducts}
+        onLoadMore={async () => { await loadMoreProducts(); }}
         bulkActions={purchaseActions.length
           ? { label: t('purchaseDocuments.addSelectedProducts'), items: purchaseActions }
           : undefined}

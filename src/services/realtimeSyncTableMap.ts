@@ -158,7 +158,7 @@ export const PAYROLL_QUERY_KEYS = [
   'balanceSheet',
 ];
 
-const SALES_DOCUMENT_QUERY_KEYS = [
+export const SALES_DOCUMENT_QUERY_KEYS = [
   'salesDocuments',
   'accountsReceivable',
   'posSalesReport',
@@ -171,7 +171,7 @@ const TRANSACTION_QUERY_KEYS = [
   'transactionDetailReport',
 ];
 
-const PURCHASE_DOCUMENT_QUERY_KEYS = [
+export const PURCHASE_DOCUMENT_QUERY_KEYS = [
   'purchaseDocuments',
   'purchaseReport',
   'pendingPurchaseCosts',

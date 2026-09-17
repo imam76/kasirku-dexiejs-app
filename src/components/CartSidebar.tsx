@@ -12,13 +12,15 @@ import { formatCurrency } from '@/utils/formatters';
 
 interface CartSidebarProps {
   cart: CartItemType[];
-  updateQuantity: (id: string, quantity: number) => void;
+  updateQuantity: (id: string, quantity: number) => boolean;
   updateUnit: (id: string, unit: string) => boolean;
   removeFromCart: (id: string) => void;
   onEditProduct?: (item: CartItemType) => void;
   activeCartItemId?: string;
   onActivateCartItem: (id: string) => void;
   registerQuantityInput: (id: string, element: HTMLInputElement | null) => void;
+  onBarcodeScan: (barcode: string) => void;
+  onQuantityEditingComplete: () => void;
   clearCart: () => void;
   total: number;
   showPayment: boolean;
@@ -58,6 +60,8 @@ export default function CartSidebar({
   activeCartItemId,
   onActivateCartItem,
   registerQuantityInput,
+  onBarcodeScan,
+  onQuantityEditingComplete,
   clearCart,
   total,
   showPayment,
@@ -117,6 +121,8 @@ export default function CartSidebar({
               isActive={item.product.id === activeCartItemId}
               onActivate={() => onActivateCartItem(item.product.id)}
               quantityInputRef={(element) => registerQuantityInput(item.product.id, element)}
+              onBarcodeScan={onBarcodeScan}
+              onQuantityEditingComplete={onQuantityEditingComplete}
             />
           ))}
           {cart.length === 0 && (

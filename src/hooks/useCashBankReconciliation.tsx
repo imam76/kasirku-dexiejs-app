@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { db } from '@/lib/db';
 import {
@@ -8,13 +9,18 @@ import {
   voidCashBankReconciliation,
   type CreateCashBankReconciliationInput,
 } from '@/services/cashBankReconciliationService';
+import type { DateIdCursor } from '@/services/shared/dateIdCursor';
 
 export const useCashBankReconciliation = ({
   cashAccountId,
   statementDate,
+  historyStartDate = '0000-01-01T00:00:00.000Z',
+  historyEndDate = '\uffff',
 }: {
   cashAccountId?: string;
   statementDate?: string;
+  historyStartDate?: string;
+  historyEndDate?: string;
 } = {}) => {
   const queryClient = useQueryClient();
   const { message, modal } = App.useApp();
@@ -22,10 +28,10 @@ export const useCashBankReconciliation = ({
   const cashBankAccountsQuery = useQuery({
     queryKey: ['cashBankReconciliationAccounts'],
     queryFn: async () => {
-      const transactions = await db.financeTransactions
-        .filter((transaction) => !transaction.deleted_at && Boolean(transaction.cash_account_id))
-        .toArray();
-      const usedCashAccountIds = new Set(transactions.map((transaction) => transaction.cash_account_id as string));
+      const usedCashAccountIds = new Set(
+        (await db.financeTransactions.orderBy('cash_account_id').uniqueKeys())
+          .filter((key): key is string => typeof key === 'string' && key.length > 0),
+      );
 
       return db.chartOfAccounts
         .orderBy('code')
@@ -57,10 +63,30 @@ export const useCashBankReconciliation = ({
     enabled: Boolean(cashAccountId && statementDate),
   });
 
-  const reconciliationsQuery = useQuery({
-    queryKey: ['cashBankReconciliations', cashAccountId ?? 'ALL'],
-    queryFn: () => listCashBankReconciliations(cashAccountId),
+  const reconciliationsQuery = useInfiniteQuery({
+    queryKey: [
+      'cashBankReconciliations',
+      cashAccountId ?? 'ALL',
+      historyStartDate,
+      historyEndDate,
+    ],
+    queryFn: ({ pageParam }) => listCashBankReconciliations({
+      cashAccountId,
+      startDate: historyStartDate,
+      endDate: historyEndDate,
+      cursor: pageParam,
+      limit: 20,
+    }),
+    initialPageParam: undefined as DateIdCursor | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
+  const reconciliations = useMemo(() => {
+    const uniqueRows = new Map(
+      (reconciliationsQuery.data?.pages ?? []).flatMap((page) => page.rows)
+        .map((row) => [row.id, row] as const),
+    );
+    return [...uniqueRows.values()];
+  }, [reconciliationsQuery.data?.pages]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['cashBankReconciliationAccounts'] });
@@ -113,8 +139,11 @@ export const useCashBankReconciliation = ({
     isLoadingAdjustmentAccounts: adjustmentAccountsQuery.isLoading,
     candidates: candidatesQuery.data,
     isLoadingCandidates: candidatesQuery.isLoading,
-    reconciliations: reconciliationsQuery.data ?? [],
+    reconciliations,
     isLoadingReconciliations: reconciliationsQuery.isLoading,
+    isLoadingMoreReconciliations: reconciliationsQuery.isFetchingNextPage,
+    hasMoreReconciliations: Boolean(reconciliationsQuery.hasNextPage),
+    loadMoreReconciliations: reconciliationsQuery.fetchNextPage,
     createReconciliation: createMutation.mutateAsync,
     isCreatingReconciliation: createMutation.isPending,
     voidReconciliation: voidMutation.mutateAsync,

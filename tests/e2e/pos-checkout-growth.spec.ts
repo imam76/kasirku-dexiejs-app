@@ -132,13 +132,16 @@ test('catalog paging and barcode lookup stay current without rescanning catalog 
       id: `p-${String(i).padStart(2, '0')}`, name: `Product ${String(i).padStart(2, '0')}`,
       sku: ` SKU-${i} `, stock: 10, category: i < 20 ? 'food' : 'drink', is_visible_in_pos: i !== 0,
     })));
-    const page2 = await readPosCatalogPage(2, 12);
-    const food = await readPosCatalogPage(99, 12, '', 'food');
-    const search = await readPosCatalogPage(1, 12, 'product 1');
-    const broadSearch = await readPosCatalogPage(2, 12, 'product');
+    const page1 = await readPosCatalogPage({ limit: 12 });
+    const page2 = await readPosCatalogPage({ cursor: page1.nextCursor, limit: 12 });
+    const food1 = await readPosCatalogPage({ limit: 12, category: 'food' });
+    const food = await readPosCatalogPage({ cursor: food1.nextCursor, limit: 12, category: 'food' });
+    const search = await readPosCatalogPage({ limit: 12, search: 'product 1' });
+    const broad1 = await readPosCatalogPage({ limit: 12, search: 'product' });
+    const broadSearch = await readPosCatalogPage({ cursor: broad1.nextCursor, limit: 12, search: 'product' });
     const hidden = await findPosProductBySku('SKU-0');
     let catalogRuns = 0;
-    const subscription = liveQuery(() => { catalogRuns++; return readPosCatalogPage(1, 12); }).subscribe(() => {});
+    const subscription = liveQuery(() => { catalogRuns++; return readPosCatalogPage({ limit: 12 }); }).subscribe(() => {});
     await new Promise((resolve) => setTimeout(resolve, 60));
     const beforeStock = catalogRuns;
     await db.products.update('p-01', { stock: 7, selling_price: 250, sync_status: 'synced' });
@@ -155,13 +158,11 @@ test('catalog paging and barcode lookup stay current without rescanning catalog 
     return { page2, food, search, broadSearch, hidden: !!hidden, beforeStock, afterStock, afterHide,
       currentStock: current.stock, hiddenAfter: !!hiddenAfter, counts };
   });
-  expect(result.page2.total).toBe(39);
   expect(result.page2.ids).toHaveLength(12);
   expect(result.page2.ids[0]).toBe('p-13');
-  expect(result.food).toMatchObject({ total: 19, currentPage: 2 });
   expect(result.food.ids).toHaveLength(7);
-  expect(result.search.total).toBe(10);
-  expect(result.broadSearch).toEqual(result.page2);
+  expect(result.broadSearch.ids).toEqual(result.page2.ids);
+  expect(result.search.ids).toHaveLength(10);
   expect(result.hidden).toBe(false);
   expect(result.beforeStock).toBeGreaterThan(0);
   expect(result.afterStock).toBe(result.beforeStock);
@@ -585,17 +586,20 @@ test('indexed catalog search returns exactly what a full scan returns, at bounde
     const mismatches = [];
     for (const term of terms) {
       for (const category of [undefined, 'food']) {
-        const actual = await readPosCatalogPage(1, 12, term, category);
+        const actual = await readPosCatalogPage({ limit: 12, search: term, category });
         const want = expected(visible, term, category);
         const sameIds = JSON.stringify(actual.ids) === JSON.stringify(want.slice(0, 12).map((row) => row.id));
-        if (!sameIds || actual.total !== want.length) {
-          mismatches.push({ term, category: category ?? 'all', actual: actual.ids, total: actual.total, wantTotal: want.length });
+        if (!sameIds) {
+          mismatches.push({ term, category: category ?? 'all', actual: actual.ids, want: want.slice(0, 12).map((row) => row.id) });
         }
       }
     }
 
-    // Deep page of a broad term must still agree with the scan.
-    const deep = await readPosCatalogPage(7, 12, 'indo');
+    // Deep cursor traversal of a broad term must still agree with the scan.
+    let deep = await readPosCatalogPage({ limit: 12, search: 'indo' });
+    for (let pageNumber = 2; pageNumber <= 7; pageNumber++) {
+      deep = await readPosCatalogPage({ cursor: deep.nextCursor, limit: 12, search: 'indo' });
+    }
     const deepWant = expected(visible, 'indo').slice(72, 84).map((row) => row.id);
     const quick = await findFirstPosProduct('kapal api');
     const quickWant = expected(visible, 'kapal api')[0];
@@ -606,12 +610,12 @@ test('indexed catalog search returns exactly what a full scan returns, at bounde
     db.posProductCatalog.hook('reading', countRow);
 
     rowsRead = 0;
-    await readPosCatalogPage(1, 12, 'indomie goreng spesial');
+    await readPosCatalogPage({ limit: 12, search: 'indomie goreng spesial' });
     const largeReads = rowsRead;
 
-    const smallVisible = await seedCatalog(500);
+    await seedCatalog(500);
     rowsRead = 0;
-    await readPosCatalogPage(1, 12, 'indomie goreng spesial');
+    await readPosCatalogPage({ limit: 12, search: 'indomie goreng spesial' });
     const smallReads = rowsRead;
     db.posProductCatalog.hook('reading').unsubscribe(countRow);
 
@@ -621,8 +625,6 @@ test('indexed catalog search returns exactly what a full scan returns, at bounde
       quick: { id: quick?.id, want: quickWant?.id },
       largeReads,
       smallReads,
-      largeMatches: expected(visible, 'indomie goreng spesial').length,
-      smallMatches: expected(smallVisible, 'indomie goreng spesial').length,
       visibleInLargeCatalog: visible.length,
     };
   });
@@ -630,11 +632,82 @@ test('indexed catalog search returns exactly what a full scan returns, at bounde
   expect(result.mismatches).toEqual([]);
   expect(result.deep.ids).toEqual(result.deep.want);
   expect(result.quick.id).toBe(result.quick.want);
-  // Cost follows the matched set, not the table: the query deserialises exactly the
-  // rows it returns, where a full scan would have read every visible catalog row.
-  expect(result.largeReads).toBe(result.largeMatches);
-  expect(result.smallReads).toBe(result.smallMatches);
+  // A cursor page stays bounded even when the source catalog grows sixfold.
+  expect(result.largeReads).toBe(result.smallReads);
   expect(result.largeReads).toBeLessThan(result.visibleInLargeCatalog / 4);
+});
+
+test('master product list filters and advances through bounded cursor pages', async ({ page }) => {
+  await openDatabase(page);
+  const result = await page.evaluate(async () => {
+    const { db } = await import('/src/lib/db.ts');
+    const {
+      EMPTY_PRODUCT_LIST_FILTERS,
+      readProductListPage,
+    } = await import('/src/services/productListReadService.ts');
+
+    const products = Array.from({ length: 160 }, (_, index) => ({
+      id: `master-${String(index).padStart(3, '0')}`,
+      name: `Produk Master ${String(index).padStart(3, '0')}`,
+      sku: `MASTER-${String(index).padStart(3, '0')}`,
+      category: index % 2 === 0 ? 'food' : 'drink',
+      purchase_unit: 'pcs', selling_unit: 'pcs',
+      purchase_price: 1_000 + index, selling_price: 2_000 + index,
+      stock: index % 11 === 0 ? 0 : index,
+      min_stock: 5,
+      wholesale_prices: index % 3 === 0 ? [{ min_quantity: 10, price: 1_500 }] : [],
+      product_type: index % 4 === 0 ? 'RAW_MATERIAL' : 'FINISHED_GOOD',
+      is_visible_in_pos: index % 5 !== 0,
+      created_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+      updated_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+    }));
+    await db.products.bulkPut(products);
+
+    let listRowsRead = 0;
+    let productRowsRead = 0;
+    const countListRow = (row) => { listRowsRead++; return row; };
+    const countProductRow = (row) => { productRowsRead++; return row; };
+    db.productListCatalog.hook('reading', countListRow);
+    db.products.hook('reading', countProductRow);
+    const first = await readProductListPage({ limit: 20 });
+    const firstReads = { listRowsRead, productRowsRead };
+    const second = await readProductListPage({ cursor: first.nextCursor, limit: 20 });
+    db.productListCatalog.hook('reading').unsubscribe(countListRow);
+    db.products.hook('reading').unsubscribe(countProductRow);
+
+    const filtered = await readProductListPage({
+      limit: 20,
+      filters: {
+        ...EMPTY_PRODUCT_LIST_FILTERS,
+        search: 'oduk master 0',
+        categories: ['food'],
+        stockStatus: 'out',
+      },
+    });
+
+    const searchProjectionBefore = await db.productSearchCatalog.get('master-012');
+    await db.products.update('master-012', { stock: 0 });
+    const searchProjectionAfter = await db.productSearchCatalog.get('master-012');
+    const listProjectionAfter = await db.productListCatalog.get('master-012');
+
+    return {
+      firstIds: first.rows.map((row) => row.id),
+      secondIds: second.rows.map((row) => row.id),
+      firstReads,
+      filteredIds: filtered.rows.map((row) => row.id),
+      searchProjectionStable: JSON.stringify(searchProjectionBefore) === JSON.stringify(searchProjectionAfter),
+      updatedStockStatus: listProjectionAfter.stock_status,
+    };
+  });
+
+  expect(result.firstIds).toEqual(Array.from({ length: 20 }, (_, index) => `master-${159 - index}`));
+  expect(result.secondIds[0]).toBe('master-139');
+  expect(result.firstReads.listRowsRead).toBeLessThanOrEqual(21);
+  expect(result.firstReads.productRowsRead).toBe(20);
+  expect(result.filteredIds).toHaveLength(5);
+  expect(result.filteredIds.every((id) => Number(id.slice(-3)) % 22 === 0)).toBe(true);
+  expect(result.searchProjectionStable).toBe(true);
+  expect(result.updatedStockStatus).toBe('habis');
 });
 
 test('v135 backfills search tokens for a catalog built before the index existed', async ({ page }) => {

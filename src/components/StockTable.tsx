@@ -10,7 +10,7 @@ import { formatCurrency } from '@/utils/formatters';
 import { getStockStatus, getStockStatusClass, resolveProductMinStock } from '@/utils/stockStatus';
 import { getProductDisplayPricing } from '@/utils/pricing';
 import { BadgeCheck, CheckSquare, Edit2, EyeOff, Package, Plus, ShoppingCart, SlidersHorizontal, Trash2 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ManagementTable from './ManagementTable';
 import {
   MobileCrudBottomSheet,
@@ -18,6 +18,7 @@ import {
   type MobileCrudAction,
   type MobileCrudFloatingAction,
 } from './mobile-crud';
+import type { ProductListFilters } from '@/services/productListReadService';
 
 export interface StockBulkAction {
   key: string;
@@ -33,6 +34,10 @@ interface StockTableProps {
   onAdd?: () => void;
   loading?: boolean;
   bulkActions?: { label: string; items: StockBulkAction[] };
+  onFiltersChange?: (filters: ProductListFilters) => void;
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void | Promise<void>;
 }
 
 type StockStatusFilter = 'all' | 'out' | 'low' | 'safe';
@@ -49,6 +54,10 @@ export default function StockTable({
   onAdd,
   loading = false,
   bulkActions,
+  onFiltersChange,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }: StockTableProps) {
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,6 +78,9 @@ export default function StockTable({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkSheetOpen, setIsBulkSheetOpen] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedProductById, setSelectedProductById] = useState<Map<string, Product>>(
+    () => new Map(),
+  );
   const categoryOptions = useMemo(() => getProductCategoryOptions(t), [t]);
   const stockStatusOptions = useMemo(() => [
     { value: 'all', label: t('stock.allStock') },
@@ -99,6 +111,40 @@ export default function StockTable({
     posVisibility !== 'all',
   ].filter(Boolean).length;
   const activeSearchAndFilterCount = activeFilterCount + (searchQuery.trim() ? 1 : 0);
+
+  const listFilters = useMemo<ProductListFilters>(() => ({
+    search: searchQuery,
+    categories: selectedCategories,
+    stockStatus,
+    minStock,
+    maxStock,
+    skuStatus,
+    minSellingPrice,
+    maxSellingPrice,
+    minPurchasePrice,
+    maxPurchasePrice,
+    wholesaleStatus,
+    productType,
+    posVisibility,
+  }), [
+    searchQuery,
+    selectedCategories,
+    stockStatus,
+    minStock,
+    maxStock,
+    skuStatus,
+    minSellingPrice,
+    maxSellingPrice,
+    minPurchasePrice,
+    maxPurchasePrice,
+    wholesaleStatus,
+    productType,
+    posVisibility,
+  ]);
+
+  useEffect(() => {
+    onFiltersChange?.(listFilters);
+  }, [listFilters, onFiltersChange]);
 
   const isStockStatusMatch = useCallback((product: Product) => {
     if (stockStatus === 'all') return true;
@@ -217,25 +263,29 @@ export default function StockTable({
   const closeDetailSheet = () => setSelectedProductId(null);
 
   const selectionEnabled = Boolean(bulkActions?.items.length);
-  const productById = useMemo(
-    () => (selectionEnabled ? new Map(products.map((product) => [product.id, product])) : null),
-    [products, selectionEnabled],
-  );
   /** Pilihan sengaja bertahan lintas filter supaya user bisa memungut dari beberapa saringan. */
-  const selectedProducts = useMemo(() => (productById
+  const selectedProducts = useMemo(() => (selectionEnabled
     ? selectedIds.flatMap((id) => {
-      const product = productById.get(id);
+      const product = selectedProductById.get(id);
       return product ? [product] : [];
     })
-    : []), [productById, selectedIds]);
+    : []), [selectedIds, selectedProductById, selectionEnabled]);
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const rowSelection = useMemo(() => (selectionEnabled ? {
     selectedRowKeys: selectedIds,
     preserveSelectedRowKeys: true,
-    onChange: (keys: Key[]) => setSelectedIds(keys as string[]),
+    onChange: (keys: Key[], rows: Product[]) => {
+      setSelectedProductById((current) => {
+        const next = new Map(current);
+        rows.forEach((product) => next.set(product.id, product));
+        return next;
+      });
+      setSelectedIds(keys as string[]);
+    },
   } : undefined), [selectedIds, selectionEnabled]);
   /** Mode pilih berakhir sendiri saat centang terakhir dilepas. */
   const toggleSelected = useCallback((product: Product) => {
+    setSelectedProductById((current) => new Map(current).set(product.id, product));
     const nextIds = selectedIdSet.has(product.id)
       ? selectedIds.filter((id) => id !== product.id)
       : [...selectedIds, product.id];
@@ -244,6 +294,7 @@ export default function StockTable({
     if (!nextIds.length) setIsSelectionMode(false);
   }, [selectedIdSet, selectedIds]);
   const startSelection = useCallback((product: Product) => {
+    setSelectedProductById((current) => new Map(current).set(product.id, product));
     setIsSelectionMode(true);
     setSelectedIds((current) => (current.includes(product.id) ? current : [...current, product.id]));
   }, []);
@@ -258,9 +309,15 @@ export default function StockTable({
   const clearSelection = useCallback(() => {
     setSelectedIds([]);
     setIsSelectionMode(false);
+    setSelectedProductById(new Map());
   }, []);
   /** Menambahkan seluruh hasil filter tanpa membuang pilihan dari filter sebelumnya. */
   const selectAllFiltered = useCallback(() => {
+    setSelectedProductById((current) => {
+      const next = new Map(current);
+      filteredProducts.forEach((product) => next.set(product.id, product));
+      return next;
+    });
     setSelectedIds((current) => [
       ...current,
       ...filteredProducts.filter((product) => !current.includes(product.id)).map((product) => product.id),
@@ -587,7 +644,7 @@ export default function StockTable({
                     {t('stock.filterTitle')}
                   </div>
                   <p className="mt-1 text-xs text-gray-500">
-                    {t('stock.filterSummary', { shown: filteredProducts.length, total: products.length })}
+                    {t('stock.loadedSummary', { count: filteredProducts.length })}
                   </p>
                 </div>
                 {(searchQuery || activeFilterCount > 0) ? (
@@ -639,7 +696,7 @@ export default function StockTable({
               rowSelection={rowSelection}
               scrollX={1300}
               pageSizeOptions={['5', '10', '20', '50']}
-              showTotal={(total, range) => t('stock.showingRange', {
+              showTotal={(total, range) => t('stock.showingLoadedRange', {
                 start: range[0],
                 end: range[1],
                 total,
@@ -648,6 +705,13 @@ export default function StockTable({
                 ? t('stock.noFilteredProducts')
                 : t('stock.noProducts')}
             />
+            {hasMore ? (
+              <div className="flex justify-center rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                <Button loading={loadingMore} onClick={() => void onLoadMore?.()}>
+                  {t('stock.loadMore')}
+                </Button>
+              </div>
+            ) : null}
           </>
         )}
         mobileFilter={{
@@ -766,7 +830,7 @@ export default function StockTable({
                 {t('stock.clearSelection')}
               </Button>
             </span>
-          ) : t('stock.filterSummary', { shown: filteredProducts.length, total: products.length }),
+          ) : t('stock.loadedSummary', { count: filteredProducts.length }),
           emptyText: searchQuery || activeFilterCount > 0
             ? t('stock.noFilteredProducts')
             : t('stock.noProducts'),
@@ -776,6 +840,9 @@ export default function StockTable({
             </Button>
           ) : undefined,
           loadMoreLabel: (remaining) => t('stock.mobile.loadMore', { count: remaining }),
+          hasMore,
+          loadingMore,
+          onLoadMore,
           getItemAriaLabel: (product) => t('stock.mobile.detailAria', { name: product.name }),
           getActionsAriaLabel: (product) => t('stock.mobile.actionsAria', { name: product.name }),
           getActionSheetTitle: (product) => product.name,

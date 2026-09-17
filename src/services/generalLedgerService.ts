@@ -164,6 +164,8 @@ export interface GeneralLedgerReportFilters {
   startDate?: string;
   endDate?: string;
   accountId?: string;
+  /** Internal bulk variant used by ledger account-range reports. */
+  accountIds?: string[];
   departmentId?: string;
   contactId?: string;
   currencyCode?: string;
@@ -779,6 +781,7 @@ const createPostedJournalEntry = async ({
   const entryLines: JournalEntryLine[] = lines.map((line) => ({
     id: crypto.randomUUID(),
     journal_entry_id: entryId,
+    entry_date,
     ...line,
     created_at: now,
   }));
@@ -2940,6 +2943,96 @@ const entryMatchesFilters = (entry: JournalEntry, filters: GeneralLedgerReportFi
   return matchesDate && matchesSourceType && matchesSourceEvent && matchesClosing;
 };
 
+const getDateMatchedJournalEntries = async (filters: GeneralLedgerReportFilters) => {
+  const start = normalizeFilterDate(filters.startDate);
+  const end = normalizeFilterDate(filters.endDate, true);
+  let collection = db.journalEntries.orderBy('entry_date').reverse();
+
+  if (start && end) {
+    collection = db.journalEntries.where('entry_date').between(start, end, true, true).reverse();
+  } else if (start) {
+    collection = db.journalEntries.where('entry_date').aboveOrEqual(start).reverse();
+  } else if (end) {
+    collection = db.journalEntries.where('entry_date').belowOrEqual(end).reverse();
+  }
+
+  return (await collection.toArray()).filter((entry) => entryMatchesFilters(entry, filters));
+};
+
+const lineDateMatchesFilters = (
+  line: JournalEntryLine,
+  filters: GeneralLedgerReportFilters,
+) => {
+  const value = line.entry_date ?? line.created_at;
+  const start = normalizeFilterDate(filters.startDate);
+  const end = normalizeFilterDate(filters.endDate, true);
+  return (!start || value >= start) && (!end || value <= end);
+};
+
+const readLinesByEntryIds = async (entryIds: string[]) => {
+  const lines: JournalEntryLine[] = [];
+  const batchSize = 500;
+  for (let offset = 0; offset < entryIds.length; offset += batchSize) {
+    lines.push(...await db.journalEntryLines
+      .where('journal_entry_id')
+      .anyOf(entryIds.slice(offset, offset + batchSize))
+      .toArray());
+  }
+  return lines;
+};
+
+const getJournalLinesForEntries = async (
+  entries: JournalEntry[],
+  filters: GeneralLedgerReportFilters,
+) => {
+  if (entries.length === 0) return [];
+
+  const entryIds = new Set(entries.map((entry) => entry.id));
+  const requestedAccountIds = filters.accountId
+    ? [filters.accountId]
+    : filters.accountIds;
+  if (requestedAccountIds?.length === 0) return [];
+
+  const start = normalizeFilterDate(filters.startDate);
+  const end = normalizeFilterDate(filters.endDate, true);
+  let lines: JournalEntryLine[];
+
+  if (requestedAccountIds?.length === 1) {
+    const accountId = requestedAccountIds[0];
+    lines = start || end
+      ? await db.journalEntryLines
+        .where('[account_id+entry_date+id]')
+        .between(
+          [accountId, start ?? '', ''],
+          [accountId, end ?? '\uffff', '\uffff'],
+          true,
+          true,
+        )
+        .toArray()
+      : await db.journalEntryLines.where('account_id').equals(accountId).toArray();
+  } else if (requestedAccountIds) {
+    lines = await db.journalEntryLines.where('account_id').anyOf(requestedAccountIds).toArray();
+  } else if (start || end) {
+    const collection = db.journalEntryLines.where('entry_date');
+    lines = start && end
+      ? await collection.between(start, end, true, true).toArray()
+      : start
+        ? await collection.aboveOrEqual(start).toArray()
+        : await collection.belowOrEqual(end as string).toArray();
+  } else {
+    lines = await readLinesByEntryIds([...entryIds]);
+  }
+
+  const requestedAccountIdSet = requestedAccountIds
+    ? new Set(requestedAccountIds)
+    : undefined;
+  return lines
+    .filter((line) => entryIds.has(line.journal_entry_id))
+    .filter((line) => !requestedAccountIdSet || requestedAccountIdSet.has(line.account_id))
+    .filter((line) => lineDateMatchesFilters(line, filters))
+    .filter((line) => !filters.departmentId || line.department_id === filters.departmentId);
+};
+
 interface JournalEntryFilterMetadata {
   contactIds: Set<string>;
   currencyCodes: Set<string>;
@@ -3097,18 +3190,13 @@ const entryMetadataMatchesFilters = (
 export const getJournalEntriesWithLines = async (
   filters: GeneralLedgerReportFilters = {},
 ): Promise<JournalEntryWithLines[]> => {
-  const dateMatchedEntries = (await db.journalEntries.orderBy('entry_date').reverse().toArray())
-    .filter((entry) => entryMatchesFilters(entry, filters));
+  const dateMatchedEntries = await getDateMatchedJournalEntries(filters);
   const metadataByEntryId = filters.contactId || filters.currencyCode
     ? await getEntrySourceMetadataMap(dateMatchedEntries)
     : undefined;
   const entries = dateMatchedEntries
     .filter((entry) => entryMetadataMatchesFilters(metadataByEntryId?.get(entry.id), filters));
-  const entryIds = new Set(entries.map((entry) => entry.id));
-  const lines = (await db.journalEntryLines.toArray())
-    .filter((line) => entryIds.has(line.journal_entry_id))
-    .filter((line) => !filters.accountId || line.account_id === filters.accountId)
-    .filter((line) => !filters.departmentId || line.department_id === filters.departmentId);
+  const lines = await getJournalLinesForEntries(entries, filters);
   const lineByEntryId = lines.reduce<Record<string, JournalEntryLine[]>>((acc, line) => {
     acc[line.journal_entry_id] = acc[line.journal_entry_id] ?? [];
     acc[line.journal_entry_id].push(line);

@@ -111,9 +111,11 @@ const mapRemoteJournalEntryToLocal = (
 
 const mapRemoteJournalEntryLineToLocal = (
   remoteLine: RemoteJournalEntryLineDto,
+  entryDate: string,
 ): JournalEntryLine => ({
   id: remoteLine.id,
   journal_entry_id: remoteLine.journal_entry_id,
+  entry_date: entryDate,
   account_id: remoteLine.account_id,
   account_code: remoteLine.account_code,
   account_name: remoteLine.account_name,
@@ -201,7 +203,9 @@ export const mergeRemoteJournalEntryBundlesIntoDexie = async (
 
       await db.journalEntries.put(mapRemoteJournalEntryToLocal(remoteBundle.entry, syncedAt));
       await db.journalEntryLines.where('journal_entry_id').equals(remoteBundle.entry.id).delete();
-      const localLines = remoteBundle.lines.map(mapRemoteJournalEntryLineToLocal);
+      const localLines = remoteBundle.lines.map((line) => (
+        mapRemoteJournalEntryLineToLocal(line, remoteBundle.entry.entry_date)
+      ));
       if (localLines.length > 0) {
         await db.journalEntryLines.bulkPut(localLines);
       }

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useCallback, useLayoutEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { App, Input } from 'antd';
 import { db } from '@/lib/db';
@@ -26,15 +26,17 @@ import {
   withSelectedMemberFirst,
 } from '@/services/posMemberReadService';
 import { normalizeProductSearchTerm } from '@/utils/productSearch';
-import { findFirstPosProduct, findPosProductBySku, readPosCatalogPage } from '@/services/posCatalogReadService';
+import {
+  findFirstPosProduct,
+  findPosProductBySku,
+  readAvailablePosProductCategories,
+  readPosCatalogPage,
+  type PosCatalogCursor,
+} from '@/services/posCatalogReadService';
 import { createPosPerformanceTrace } from '@/utils/posPerformance';
 
 const TRANSACTION_PRODUCT_PAGE_SIZE = 12;
-const EMPTY_TRANSACTION_PRODUCT_PAGE = {
-  ids: [] as string[],
-  total: 0,
-  currentPage: 1,
-};
+const PRODUCT_SEARCH_DEBOUNCE_MS = 120;
 const FALLBACK_MEMBERSHIP_SETTING: MembershipSetting = {
   ...DEFAULT_MEMBERSHIP_SETTING,
   created_at: '',
@@ -82,8 +84,17 @@ export const useTransaction = (draftScope?: string) => {
   } = useTransactionStore();
   const { options: paymentMethods, validMethods } = usePosPaymentMethods();
   const [selectedProductCategory, setSelectedProductCategoryState] = useState<string>();
-  const productSearchTerm = normalizeProductSearchTerm(searchTerm);
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState(searchTerm);
+  const productSearchTerm = normalizeProductSearchTerm(debouncedProductSearch);
   const isPosProcessReady = activeDraftScope === draftScope;
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedProductSearch(searchTerm);
+    }, PRODUCT_SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchTerm]);
 
   useLayoutEffect(() => {
     switchDraftScope(draftScope);
@@ -112,20 +123,47 @@ export const useTransaction = (draftScope?: string) => {
     setSelectedProductCategoryState(category);
   }, [setProductPage]);
 
-  const productPageResult = useLiveQuery(
-    () => readPosCatalogPage(productPage, TRANSACTION_PRODUCT_PAGE_SIZE, productSearchTerm, selectedProductCategory),
-    [productPage, productSearchTerm, selectedProductCategory],
-    EMPTY_TRANSACTION_PRODUCT_PAGE,
-  );
-  const productTotal = productPageResult.total;
+  const productCatalogQuery = useInfiniteQuery({
+    queryKey: ['pos-product-catalog', productSearchTerm, selectedProductCategory],
+    queryFn: ({ pageParam }) => readPosCatalogPage({
+      cursor: pageParam,
+      limit: TRANSACTION_PRODUCT_PAGE_SIZE,
+      search: productSearchTerm,
+      category: selectedProductCategory,
+    }),
+    initialPageParam: undefined as PosCatalogCursor | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+  });
+  const productCatalogIds = useMemo(() => [
+    ...new Set((productCatalogQuery.data?.pages ?? []).flatMap((page) => page.ids)),
+  ], [productCatalogQuery.data?.pages]);
+  const productCatalogRevision = useLiveQuery(async () => {
+    await Promise.all([
+      db.posProductCatalog.limit(1).primaryKeys(),
+      db.productSearchCatalog.limit(1).primaryKeys(),
+    ]);
+    return crypto.randomUUID();
+  }, [], '');
+  const previousProductCatalogRevision = useRef(productCatalogRevision);
+
+  useEffect(() => {
+    if (!productCatalogRevision || previousProductCatalogRevision.current === productCatalogRevision) return;
+    const hadPreviousRevision = Boolean(previousProductCatalogRevision.current);
+    previousProductCatalogRevision.current = productCatalogRevision;
+    if (hadPreviousRevision) {
+      void queryClient.invalidateQueries({ queryKey: ['pos-product-catalog'] });
+    }
+  }, [productCatalogRevision, queryClient]);
+
   // Reading current stock/prices is separate from searching/paging catalog metadata.
   const pageProducts = useLiveQuery(async () => (
-    await db.products.bulkGet(productPageResult.ids)
-  ).filter((product): product is Product => !!product), [productPageResult.ids], [] as Product[]);
-  const availableProductCategories = useLiveQuery(async () => (
-    await db.posCatalogCounts.toArray()
-  ).filter((row) => row.count > 0).map((row) => row.category)
-    .sort((left, right) => left.localeCompare(right, 'id')), [], [] as string[]);
+    await db.products.bulkGet(productCatalogIds)
+  ).filter((product): product is Product => !!product), [productCatalogIds], [] as Product[]);
+  const availableProductCategories = useLiveQuery(
+    readAvailablePosProductCategories,
+    [],
+    [] as string[],
+  );
 
   useEffect(() => {
     setProducts(pageProducts);
@@ -167,10 +205,13 @@ export const useTransaction = (draftScope?: string) => {
 
   const filteredProducts = products;
   const productPagination = {
-    currentPage: productPageResult.currentPage,
-    pageSize: TRANSACTION_PRODUCT_PAGE_SIZE,
-    total: productTotal,
-    onChange: setProductPage,
+    loadedCount: productCatalogIds.length,
+    hasMore: Boolean(productCatalogQuery.hasNextPage),
+    isLoadingMore: productCatalogQuery.isFetchingNextPage,
+    onLoadMore: async () => {
+      await productCatalogQuery.fetchNextPage();
+      setProductPage(productPage + 1);
+    },
   };
 
   const calculateSubtotal = useCallback(() => {

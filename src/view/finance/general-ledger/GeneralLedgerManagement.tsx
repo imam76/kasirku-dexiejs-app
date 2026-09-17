@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BookOpen, FilePlus2, RefreshCw } from 'lucide-react';
 import { db } from '@/lib/db';
+import dayjs from '@/lib/dayjs';
 import ManualJournalForm from '@/components/general-ledger/ManualJournalForm';
 import {
   getBalanceSheetReport,
@@ -53,7 +54,10 @@ export default function GeneralLedgerManagement() {
   const navigate = useNavigate();
   const { baseCurrencySymbol } = useBaseCurrency();
   const { currentUser } = useAuth();
-  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null);
+  const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(() => [
+    dayjs.tz().startOf('month'),
+    dayjs.tz().endOf('day'),
+  ]);
   const [accountFilter, setAccountFilter] = useState<string>();
   const [isManualJournalOpen, setIsManualJournalOpen] = useState(false);
   const generalLedgerModule = useLiveQuery(

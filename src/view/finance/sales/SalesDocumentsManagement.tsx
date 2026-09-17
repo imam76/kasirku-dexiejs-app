@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button, DatePicker, Input, Select, Table, Tag } from 'antd';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import {
@@ -22,7 +22,7 @@ import {
 import type { TranslationKey } from '@/i18n/messages';
 import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { useSalesDocuments } from '@/hooks/useSalesDocuments';
+import { useSalesDocumentList } from '@/hooks/useSalesDocuments';
 import type { SalesDocument, SalesDocumentStatus, SalesDocumentType } from '@/types';
 import {
   formatBaseCurrencyAmount,
@@ -236,11 +236,26 @@ export default function SalesDocumentsManagement() {
 
 export function SalesDocumentTypeManagement({ documentType }: { documentType: SalesDocumentType }) {
   const { t } = useI18n();
-  const { documents } = useSalesDocuments();
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<SalesDocumentStatus | 'ALL'>('ALL');
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>(() => [
+    dayjs.tz().startOf('month'),
+    dayjs.tz().endOf('day'),
+  ]);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const {
+    documents,
+    isLoading,
+    isLoadingMore,
+    hasMore,
+    loadMore,
+  } = useSalesDocumentList({
+    type: documentType,
+    startDate: dateRange[0].format('YYYY-MM-DD'),
+    endDate: dateRange[1].format('YYYY-MM-DD'),
+    status: statusFilter === 'ALL' ? undefined : statusFilter,
+    search: searchText,
+  });
   const isMobile = useIsMobile();
   const location = useLocation();
   const navigate = useNavigate();
@@ -248,31 +263,7 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
   const menuItem = salesDocumentMenuItems.find((item) => item.type === documentType);
   const documentPathSegment = getSalesDocumentTypePathSegment(documentType);
 
-  const documentsOfType = useMemo(
-    () => documents.filter((document) => document.type === documentType),
-    [documents, documentType],
-  );
-
-  const filteredDocuments = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
-    return documents.filter((document) => {
-      const matchesType = document.type === documentType;
-      const matchesStatus = statusFilter === 'ALL' || document.status === statusFilter;
-      const matchesSearch = !query || [
-        document.document_number,
-        document.customer_name,
-        document.project_name,
-        document.department_name,
-      ].some((value) => value?.toLowerCase().includes(query));
-      const documentDate = dayjs(document.document_date);
-      const matchesDate = !dateRange || (
-        !documentDate.isBefore(dateRange[0], 'day')
-        && !documentDate.isAfter(dateRange[1], 'day')
-      );
-
-      return matchesType && matchesStatus && matchesSearch && matchesDate;
-    });
-  }, [dateRange, documents, documentType, searchText, statusFilter]);
+  const filteredDocuments = documents;
 
   const showPaymentColumn = filteredDocuments.some(hasPaymentStatus) || config.behavior.hasPaymentStatus;
   const showTotalColumn = filteredDocuments.some(hasPricing) || config.behavior.hasPricing;
@@ -352,10 +343,10 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
   const resetFilters = () => {
     setSearchText('');
     setStatusFilter('ALL');
-    setDateRange(null);
+    setDateRange([dayjs.tz().startOf('month'), dayjs.tz().endOf('day')]);
   };
 
-  const activeFilterCount = (statusFilter !== 'ALL' ? 1 : 0) + (dateRange ? 1 : 0);
+  const activeFilterCount = (statusFilter !== 'ALL' ? 1 : 0) + 1;
   const activeSearchAndFilterCount = activeFilterCount + (searchText.trim() ? 1 : 0);
 
   return (
@@ -409,14 +400,13 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
                 />
                 <DatePicker.RangePicker
                   value={dateRange}
-                  allowClear
+                  allowClear={false}
                   format="DD MMM YYYY"
                   onChange={(value) => {
                     if (value?.[0] && value[1]) {
                       setDateRange([value[0], value[1]]);
                       return;
                     }
-                    setDateRange(null);
                   }}
                 />
                 <Button
@@ -428,13 +418,23 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
               </div>
             )}
           >
-            <Table
-              rowKey="id"
-              columns={columns}
-              dataSource={filteredDocuments}
-              scroll={{ x: 1000 }}
-              pagination={{ pageSize: 20, showSizeChanger: true }}
-            />
+            <>
+              <Table
+                rowKey="id"
+                columns={columns}
+                dataSource={filteredDocuments}
+                loading={isLoading}
+                scroll={{ x: 1000 }}
+                pagination={false}
+              />
+              {hasMore && (
+                <div className="mt-4 flex justify-center">
+                  <Button loading={isLoadingMore} onClick={() => void loadMore()}>
+                    {t('salesDocuments.mobile.loadMoreDocuments', { count: 40 })}
+                  </Button>
+                </div>
+              )}
+            </>
           </ManagementListCard>
         )}
         mobileFilter={{
@@ -467,21 +467,24 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
                 size="large"
                 className="w-full"
                 value={dateRange}
-                allowClear
+                allowClear={false}
                 format="DD MMM YYYY"
                 onChange={(value) => {
                   if (value?.[0] && value[1]) {
                     setDateRange([value[0], value[1]]);
                     return;
                   }
-                  setDateRange(null);
-                }}
+                  }}
               />
             </>
           ),
         }}
         mobileList={{
           items: filteredDocuments,
+          loading: isLoading,
+          hasMore,
+          loadingMore: isLoadingMore,
+          onLoadMore: loadMore,
           getKey: (document) => document.id,
           resetKey: JSON.stringify([
             searchText,
@@ -491,7 +494,6 @@ export function SalesDocumentTypeManagement({ documentType }: { documentType: Sa
           ]),
           resultSummary: t('salesDocuments.mobile.resultSummary', {
             shown: filteredDocuments.length,
-            total: documentsOfType.length,
           }),
           emptyText: searchText.trim() || activeFilterCount > 0
             ? t('salesDocuments.mobile.noFilteredDocuments')

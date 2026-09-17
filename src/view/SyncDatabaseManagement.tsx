@@ -28,6 +28,7 @@ import {
 } from '@/store/postgresConnectionStore';
 import type { SyncQueueItem, SyncQueueStatus } from '@/types';
 import { HostDatabaseSetup } from '@/view/auth/HostDatabaseSetup';
+import { DocumentSyncReconciliationPanel } from '@/components/DocumentSyncReconciliationPanel';
 
 type ActiveQueueStatusFilter = 'all' | Extract<SyncQueueStatus, 'pending' | 'processing' | 'failed'>;
 
@@ -426,6 +427,8 @@ export default function SyncDatabaseManagement() {
           </div>
         ))}
       </div>
+
+      <DocumentSyncReconciliationPanel />
 
       {queueDetails.entitySummaries.length > 0 && (
         <div className={panelClassName}>

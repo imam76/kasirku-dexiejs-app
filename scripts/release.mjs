@@ -32,7 +32,7 @@ Examples:
 
 Options:
   -m, --message <text>  Pesan commit. Default: "chore: release v<version>"
-  --no-push            Commit saja, tanpa push.
+  --no-push            Commit dan buat tag lokal, tanpa push.
   --version-only       Commit hanya file versi, bukan semua perubahan kerja.
   -h, --help           Tampilkan bantuan ini.
 `);
@@ -242,22 +242,23 @@ function stageChanges(stageMode) {
   run("git", ["add", "-A"]);
 }
 
-function pushCurrentBranch() {
+function pushCurrentBranchAndTag(tag) {
   const upstream = output("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"], {
     allowFailure: true,
   });
 
   if (upstream) {
     run("git", ["push"]);
-    return;
+  } else {
+    const branch = output("git", ["branch", "--show-current"]);
+    if (!branch) {
+      fail("Tidak bisa push karena HEAD sedang detached.");
+    }
+
+    run("git", ["push", "-u", "origin", branch]);
   }
 
-  const branch = output("git", ["branch", "--show-current"]);
-  if (!branch) {
-    fail("Tidak bisa push karena HEAD sedang detached.");
-  }
-
-  run("git", ["push", "-u", "origin", branch]);
+  run("git", ["push", "origin", tag]);
 }
 
 function main() {
@@ -265,9 +266,15 @@ function main() {
   const currentFiles = readVersions();
   const currentVersion = ensureVersionsMatch(currentFiles.versions);
   const nextVersion = getNextVersion(currentVersion, config.bump);
+  const releaseTag = `app-v${nextVersion}`;
 
   if (nextVersion === currentVersion) {
     fail(`Versi sudah ${currentVersion}. Pilih versi yang lebih baru.`);
+  }
+
+  const existingTag = output("git", ["tag", "--list", releaseTag]);
+  if (existingTag) {
+    fail(`Tag ${releaseTag} sudah ada. Pilih versi yang lebih baru.`);
   }
 
   const commitMessage = config.commitMessage || `chore: release v${nextVersion}`;
@@ -282,11 +289,12 @@ function main() {
   }
 
   run("git", ["commit", "-m", commitMessage]);
+  run("git", ["tag", "-a", releaseTag, "-m", `Release v${nextVersion}`]);
 
   if (config.push) {
-    pushCurrentBranch();
+    pushCurrentBranchAndTag(releaseTag);
   } else {
-    console.log("Skip push karena --no-push dipakai.");
+    console.log(`Skip push karena --no-push dipakai. Tag lokal dibuat: ${releaseTag}`);
   }
 }
 

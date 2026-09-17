@@ -287,17 +287,15 @@ export const getLedgerReportData = async (
   filters: LedgerReportFilters = {},
 ): Promise<LedgerReportData> => {
   await requireUserPermission(await getCurrentSessionUser(), 'REPORT_LEDGER_VIEW');
-  const [accounts, journalEntries] = await Promise.all([
-    db.chartOfAccounts.orderBy('code').toArray(),
-    getJournalEntriesWithLines({
-      endDate: filters.endDate,
-    }),
-  ]);
-
+  const accounts = await db.chartOfAccounts.orderBy('code').toArray();
   const selectedAccountIds = getSelectedIdsByCodeRange(accounts, filters.fromAccountId, filters.toAccountId);
   const selectedAccounts = accounts
     .filter((account) => !selectedAccountIds || selectedAccountIds.has(account.id))
     .sort(compareByCode);
+  const journalEntries = await getJournalEntriesWithLines({
+    endDate: filters.endDate,
+    accountIds: selectedAccountIds ? [...selectedAccountIds] : undefined,
+  });
   const filteredPairs = getPostedOrReversedLinePairs(journalEntries);
   const groups = selectedAccounts
     .map((account) => buildAccountGroup(account, filteredPairs, filters))
