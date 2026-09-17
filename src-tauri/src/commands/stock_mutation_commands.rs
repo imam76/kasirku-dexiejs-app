@@ -8,11 +8,20 @@ use tauri::State;
 #[tauri::command]
 pub async fn postgres_list_stock_mutations(
     state: State<'_, PostgresState>,
-    created_after: Option<String>,
+    server_created_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> PostgresCommandResult<Vec<StockMutationDto>> {
     let pool = state.pool()?;
-    Ok(stock_mutation_repository::list_stock_mutations(&pool, created_after, limit).await?)
+    Ok(
+        stock_mutation_repository::list_stock_mutations(
+            &pool,
+            server_created_after,
+            cursor_id,
+            limit,
+        )
+        .await?,
+    )
 }
 
 #[tauri::command]

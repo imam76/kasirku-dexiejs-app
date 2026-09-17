@@ -24,4 +24,8 @@ pub struct StockMutationDto {
     pub actor_user_name: Option<String>,
     pub occurred_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
+    /// Server-owned ingestion time used only for pull cursoring. Push payloads from older and
+    /// current clients omit it; PostgreSQL assigns the value on INSERT.
+    #[serde(default)]
+    pub server_created_at: Option<DateTime<Utc>>,
 }

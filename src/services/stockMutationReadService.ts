@@ -4,8 +4,9 @@ import {
   stockMutationPostgresAdapter,
   type RemoteStockMutationDto,
 } from '@/services/postgresAdapter';
-import { getLaterUpdatedAt } from '@/services/shared/remoteRefreshCursor';
-import type { StockMutation } from '@/types';
+import { pullStoredUpdatedAtIdPages } from '@/services/shared/syncCursorStore';
+import { getStockAfterMutation } from '@/services/shared/stockMutationMaterialization';
+import type { Product, StockMutation } from '@/types';
 import { toCanonicalIsoTimestamp } from '@/utils/timestamps';
 
 export interface StockMutationReadSyncResult {
@@ -54,9 +55,9 @@ const mapRemoteStockMutationToLocal = (remote: RemoteStockMutationDto): StockMut
 });
 
 /**
- * The ledger is append-only and rows are immutable once created (see
- * stock_mutation_repository.rs upsert_stock_mutation_in_tx), so merging never needs conflict
- * checks against local edits - a plain id-keyed bulkPut is safe and idempotent.
+ * The ledger is append-only and rows are immutable once created. A remote row materializes its
+ * stock effect only when its id is not present locally yet. Keeping the product update and ledger
+ * insert in one transaction makes retries idempotent: either both writes commit, or neither does.
  */
 export const mergeRemoteStockMutationsIntoDexie = async (
   remoteMutations: RemoteStockMutationDto[],
@@ -64,31 +65,37 @@ export const mergeRemoteStockMutationsIntoDexie = async (
   const result = { ...EMPTY_STOCK_MUTATION_READ_SYNC_RESULT, fetched: remoteMutations.length };
   if (remoteMutations.length === 0) return result;
 
-  const existingIds = new Set(
-    await db.stockMutations.where('id').anyOf(remoteMutations.map((mutation) => mutation.id)).primaryKeys(),
-  );
-  const toPut = remoteMutations.map(mapRemoteStockMutationToLocal);
-  result.inserted = toPut.filter((mutation) => !existingIds.has(mutation.id)).length;
+  // Defensive de-duplication also prevents a malformed/repeated page from applying a delta twice.
+  const toPut = [...new Map(
+    remoteMutations
+      .map(mapRemoteStockMutationToLocal)
+      .map((mutation) => [mutation.id, mutation]),
+  ).values()];
 
-  await db.stockMutations.bulkPut(toPut);
+  await db.transaction('rw', db.stockMutations, db.products, async () => {
+    const existingIds = new Set(
+      await db.stockMutations.where('id').anyOf(toPut.map((mutation) => mutation.id)).primaryKeys(),
+    );
+    const newMutations = toPut.filter((mutation) => !existingIds.has(mutation.id));
+    result.inserted = newMutations.length;
+
+    const productCache = new Map<string, Product | undefined>();
+    for (const mutation of newMutations) {
+      const product = productCache.has(mutation.product_id)
+        ? productCache.get(mutation.product_id)
+        : await db.products.get(mutation.product_id);
+      if (!product) continue;
+
+      const stock = getStockAfterMutation(Number(product.stock || 0), mutation);
+      await db.products.update(product.id, { stock });
+      productCache.set(product.id, { ...product, stock });
+    }
+
+    await db.stockMutations.bulkPut(toPut);
+  });
 
   return result;
 };
-
-const getLatestLocalStockMutationCreatedAt = async () => {
-  const mutations = await db.stockMutations.toArray();
-  return mutations.reduce<string | undefined>(
-    (latest, mutation) => getLaterUpdatedAt(latest, mutation.created_at),
-    undefined,
-  );
-};
-
-const getLatestRemoteStockMutationCreatedAt = (remoteMutations: RemoteStockMutationDto[]) => (
-  remoteMutations.reduce<string | undefined>(
-    (latest, mutation) => getLaterUpdatedAt(latest, mutation.created_at),
-    undefined,
-  )
-);
 
 export const refreshStockMutationsFromPostgres = async (): Promise<StockMutationReadSyncResult> => {
   if (isRefreshingStockMutationsFromPostgres || !canReadFromPostgres()) {
@@ -98,23 +105,22 @@ export const refreshStockMutationsFromPostgres = async (): Promise<StockMutation
   isRefreshingStockMutationsFromPostgres = true;
   try {
     const aggregate = { ...EMPTY_STOCK_MUTATION_READ_SYNC_RESULT };
-    let createdAfter = await getLatestLocalStockMutationCreatedAt();
-
-    while (true) {
-      const remoteMutations = await stockMutationPostgresAdapter.list({
-        createdAfter,
+    await pullStoredUpdatedAtIdPages({
+      entity: 'stockMutations',
+      pageSize: STOCK_MUTATION_REFRESH_LIMIT,
+      loadPage: (cursor) => stockMutationPostgresAdapter.list({
+        serverCreatedAfter: cursor?.updatedAt,
+        cursorId: cursor?.id,
         limit: STOCK_MUTATION_REFRESH_LIMIT,
-      });
-      const result = await mergeRemoteStockMutationsIntoDexie(remoteMutations);
-      aggregate.fetched += result.fetched;
-      aggregate.inserted += result.inserted;
-
-      if (remoteMutations.length < STOCK_MUTATION_REFRESH_LIMIT) break;
-
-      const nextCreatedAfter = getLatestRemoteStockMutationCreatedAt(remoteMutations);
-      if (!nextCreatedAfter || nextCreatedAfter === createdAfter) break;
-      createdAfter = nextCreatedAfter;
-    }
+      }),
+      mergePage: async (remoteMutations) => {
+        const result = await mergeRemoteStockMutationsIntoDexie(remoteMutations);
+        aggregate.fetched += result.fetched;
+        aggregate.inserted += result.inserted;
+      },
+      getUpdatedAt: (mutation) => mutation.server_created_at ?? mutation.created_at,
+      getId: (mutation) => mutation.id,
+    });
 
     return aggregate;
   } finally {

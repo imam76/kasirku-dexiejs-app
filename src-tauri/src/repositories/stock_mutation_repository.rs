@@ -1,13 +1,13 @@
 use crate::models::stock_mutation::StockMutationDto;
 use sqlx::{PgPool, Postgres, Transaction};
 
-/// Delta fetch for the stock_mutations ledger. Unlike other entities this cursors on
-/// `created_at`, not `updated_at` - the table is append-only (rows are inserted once via
-/// `ON CONFLICT DO NOTHING` in `upsert_stock_mutation_in_tx` and never updated), so `created_at`
-/// is the only monotonic column available.
+/// Delta fetch for the append-only stock ledger. `created_at` is client-supplied business time,
+/// so delayed offline pushes cursor on `(server_created_at, id)` instead. The id tie-breaker
+/// prevents a page boundary from skipping mutations that share one server timestamp.
 pub async fn list_stock_mutations(
     pool: &PgPool,
-    created_after: Option<String>,
+    server_created_after: Option<String>,
+    cursor_id: Option<String>,
     limit: Option<i64>,
 ) -> Result<Vec<StockMutationDto>, sqlx::Error> {
     sqlx::query_as::<_, StockMutationDto>(
@@ -33,14 +33,16 @@ pub async fn list_stock_mutations(
             actor_user_id,
             actor_user_name,
             occurred_at,
-            created_at
+            created_at,
+            server_created_at
         FROM stock_mutations
-        WHERE ($1::TIMESTAMPTZ IS NULL OR created_at > $1::TIMESTAMPTZ)
-        ORDER BY created_at, id
-        LIMIT $2
+        WHERE ($1::TIMESTAMPTZ IS NULL OR (server_created_at, id) > ($1::TIMESTAMPTZ, COALESCE($2::TEXT, '')))
+        ORDER BY server_created_at, id
+        LIMIT $3
         "#,
     )
-    .bind(created_after)
+    .bind(server_created_after)
+    .bind(cursor_id)
     .bind(limit.unwrap_or(500).clamp(1, 1000))
     .fetch_all(pool)
     .await
@@ -73,7 +75,8 @@ pub async fn get_stock_mutation(
             actor_user_id,
             actor_user_name,
             occurred_at,
-            created_at
+            created_at,
+            server_created_at
         FROM stock_mutations
         WHERE id = $1
         "#,
@@ -251,7 +254,8 @@ pub(crate) async fn upsert_stock_mutation_in_tx(
             actor_user_id,
             actor_user_name,
             occurred_at,
-            created_at
+            created_at,
+            server_created_at
         "#,
         )
         .bind(input.id)
@@ -288,7 +292,11 @@ pub(crate) async fn upsert_stock_mutation_in_tx(
                     WHEN $1 = 'OPENING_BALANCE' THEN COALESCE($2, stock + $3)
                     ELSE stock + $3
                 END,
-                updated_at = GREATEST(updated_at, $4::TIMESTAMPTZ)
+                -- A stock event must always create a strictly newer product version. Using the
+                -- previous value in GREATEST also remains safe when an offline device clock is
+                -- ahead of the PostgreSQL host clock.
+                updated_at = GREATEST(updated_at, $4::TIMESTAMPTZ, clock_timestamp())
+                    + INTERVAL '1 microsecond'
             WHERE id = $5
             "#,
         )
@@ -331,7 +339,8 @@ pub(crate) async fn upsert_stock_mutation_in_tx(
             actor_user_id,
             actor_user_name,
             occurred_at,
-            created_at
+            created_at,
+            server_created_at
         FROM stock_mutations
         WHERE id = $1
         "#,

@@ -47,7 +47,6 @@ import { refreshOpeningBalancesFromPostgres } from '@/services/openingBalanceRea
 import { refreshPaymentMethodsFromPostgres } from '@/services/paymentMethodReadService';
 import { refreshPosStockDiscrepanciesFromPostgres } from '@/services/posStockDiscrepancyReadService';
 import { refreshEmployeeCashAdvancesFromPostgres, refreshPayrollRunsFromPostgres } from '@/services/payrollReadService';
-import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProductionOrdersFromPostgres } from '@/services/productionReadService';
 import { refreshProjectsFromPostgres } from '@/services/projectReadService';
 import { refreshPromosFromPostgres } from '@/services/promoReadService';
@@ -56,7 +55,7 @@ import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumen
 import { refreshPurchaseCostReconciliationsFromPostgres } from '@/services/purchaseCostReconciliationReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
 import { reconcileSetupConfigWithRemote } from '@/services/setupKeyService';
-import { refreshStockMutationsFromPostgres } from '@/services/stockMutationReadService';
+import { refreshStockStateFromPostgres } from '@/services/stockStateReadService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
 import { refreshTaxesFromPostgres } from '@/services/taxReadService';
 import { refreshTransactionsFromPostgres } from '@/services/transactionReadService';
@@ -330,7 +329,7 @@ export const REALTIME_TABLE_TO_ENTITY: Record<string, RealtimeEntityMapping> = {
   taxes: { refreshFns: [refreshTaxesFromPostgres], queryKeys: ['taxes'] },
   warehouses: { refreshFns: [refreshWarehousesFromPostgres], queryKeys: ['warehouses'] },
   payment_methods: { refreshFns: [refreshPaymentMethodsFromPostgres], queryKeys: noQueryKeys },
-  products: { refreshFns: [refreshProductsFromPostgres], queryKeys: ['products'] },
+  products: { refreshFns: [refreshStockStateFromPostgres], queryKeys: ['products', 'stockCard'] },
   // No pull-side sync yet - see module doc comment above.
   product_recipes: { refreshFns: noRefresh, queryKeys: noQueryKeys },
   product_recipe_items: { refreshFns: noRefresh, queryKeys: noQueryKeys },
@@ -356,8 +355,10 @@ export const REALTIME_TABLE_TO_ENTITY: Record<string, RealtimeEntityMapping> = {
   },
   stock_opnames: { refreshFns: [refreshStockOpnamesFromPostgres], queryKeys: STOCK_OPNAME_QUERY_KEYS },
   stock_opname_items: { refreshFns: [refreshStockOpnamesFromPostgres], queryKeys: STOCK_OPNAME_QUERY_KEYS },
-  // No pull-side sync yet - see module doc comment above.
-  stock_mutations: { refreshFns: [refreshStockMutationsFromPostgres], queryKeys: noQueryKeys },
+  stock_mutations: {
+    refreshFns: [refreshStockStateFromPostgres],
+    queryKeys: ['products', 'stockCard'],
+  },
   inventory_lots: { refreshFns: [refreshInventoryLotsFromPostgres], queryKeys: ['stockCard'] },
   inventory_lot_consumptions: {
     refreshFns: [refreshInventoryLotConsumptionsFromPostgres],

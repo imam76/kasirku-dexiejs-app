@@ -908,6 +908,7 @@ export interface RemoteStockMutationDto {
   actor_user_name?: string | null;
   occurred_at: string;
   created_at: string;
+  server_created_at?: string | null;
 }
 
 export interface RemotePosStockDiscrepancyDto {
@@ -3020,10 +3021,11 @@ export const productPostgresAdapter = {
 };
 
 export const stockMutationPostgresAdapter = {
-  async list(options: { createdAfter?: string; limit?: number } = {}) {
+  async list(options: { serverCreatedAfter?: string; cursorId?: string; limit?: number } = {}) {
     if (!isTauriRuntime()) return [];
     return invoke<RemoteStockMutationDto[]>('postgres_list_stock_mutations', {
-      createdAfter: options.createdAfter,
+      serverCreatedAfter: options.serverCreatedAfter,
+      cursorId: options.cursorId,
       limit: options.limit,
     });
   },

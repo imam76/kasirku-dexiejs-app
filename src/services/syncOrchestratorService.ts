@@ -33,7 +33,6 @@ import { refreshOpeningBalancesFromPostgres } from '@/services/openingBalanceRea
 import { refreshPaymentMethodsFromPostgres } from '@/services/paymentMethodReadService';
 import { refreshEmployeeCashAdvancesFromPostgres, refreshPayrollRunsFromPostgres } from '@/services/payrollReadService';
 import { postgresAdapter } from '@/services/postgresAdapter';
-import { refreshProductsFromPostgres } from '@/services/productReadService';
 import { refreshProductionOrdersFromPostgres } from '@/services/productionReadService';
 import { refreshPurchaseDocumentsFromPostgres } from '@/services/purchaseDocumentReadService';
 import { refreshPurchaseCostReconciliationsFromPostgres } from '@/services/purchaseCostReconciliationReadService';
@@ -47,7 +46,7 @@ import {
 import { refreshPromosFromPostgres } from '@/services/promoReadService';
 import { refreshLotteriesFromPostgres } from '@/services/lotteryReadService';
 import { refreshSalesDocumentsFromPostgres } from '@/services/salesDocumentReadService';
-import { refreshStockMutationsFromPostgres } from '@/services/stockMutationReadService';
+import { refreshStockStateFromPostgres } from '@/services/stockStateReadService';
 import { refreshTransactionsFromPostgres } from '@/services/transactionReadService';
 import { reconcileSetupConfigWithRemote } from '@/services/setupKeyService';
 import { refreshStockOpnamesFromPostgres } from '@/services/stockOpnameReadService';
@@ -156,6 +155,7 @@ export const refreshAllDataFromPostgres = async () => {
   }
 
   await bindHostIdentityIfUnbound();
+  const stockState = await refreshStockStateFromPostgres();
 
   const refreshResults = {
     roles: await refreshRolesFromPostgres(),
@@ -185,7 +185,7 @@ export const refreshAllDataFromPostgres = async () => {
     workforce: await refreshWorkforceStateFromPostgres(),
     currencies: await refreshCurrenciesFromPostgres(),
     currencyRates: await refreshCurrencyRatesFromPostgres(),
-    products: await refreshProductsFromPostgres(),
+    products: stockState.products,
     payrollRuns: await refreshPayrollRunsFromPostgres(),
     employeeCashAdvances: await refreshEmployeeCashAdvancesFromPostgres(),
     cashierSessions: await refreshCashierSessionsFromPostgres(),
@@ -208,7 +208,7 @@ export const refreshAllDataFromPostgres = async () => {
     lotteries: await refreshLotteriesFromPostgres(),
     stockOpnames: await refreshStockOpnamesFromPostgres(),
     posStockDiscrepancies: await refreshPosStockDiscrepanciesFromPostgres(),
-    stockMutations: await refreshStockMutationsFromPostgres(),
+    stockMutations: stockState.stockMutations,
     inventoryLots: await refreshInventoryLotsFromPostgres(),
     inventoryLotConsumptions: await refreshInventoryLotConsumptionsFromPostgres(),
   };
