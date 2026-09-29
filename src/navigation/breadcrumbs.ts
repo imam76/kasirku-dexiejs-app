@@ -128,6 +128,8 @@ const STATIC_LABEL_KEYS: Record<string, TranslationKey> = {
   '/report/buku-besar': 'nav.report.ledger',
   '/report/aging-report': 'nav.report.aging',
   '/report/stock-card': 'breadcrumb.report.stockCard',
+  '/report/inventory-report': 'inventoryReport.title',
+  '/report/slow-moving-report': 'slowMoving.title',
 };
 
 const SEGMENT_LABEL_KEYS: Record<string, TranslationKey> = {

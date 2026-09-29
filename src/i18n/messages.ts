@@ -6,6 +6,8 @@ import { budgetMessages } from './budgetMessages';
 import { membershipMessages } from './membershipMessages';
 import { stockMessages } from './stockMessages';
 import { stockInMessages } from './stockInMessages';
+import { inventoryReportMessages } from './inventoryReportMessages';
+import { slowMovingMessages } from './slowMovingMessages';
 import { stockOpnameMessages } from './stockOpnameMessages';
 import { fixedAssetMessages } from './fixedAssetMessages';
 import { openingInventoryMessages } from './openingInventoryMessages';
@@ -21,6 +23,8 @@ export const messages = {
     ...membershipMessages.id,
     ...stockMessages.id,
     ...stockInMessages.id,
+    ...inventoryReportMessages.id,
+    ...slowMovingMessages.id,
     ...stockOpnameMessages.id,
     ...cooperativeMessages.id,
     ...fixedAssetMessages.id,
@@ -2214,6 +2218,8 @@ export const messages = {
     ...membershipMessages.en,
     ...stockMessages.en,
     ...stockInMessages.en,
+    ...inventoryReportMessages.en,
+    ...slowMovingMessages.en,
     ...stockOpnameMessages.en,
     ...cooperativeMessages.en,
     ...fixedAssetMessages.en,

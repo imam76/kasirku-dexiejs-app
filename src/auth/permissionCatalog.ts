@@ -448,6 +448,19 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     moduleCodes: ['REPORT_STOCK_CARD'],
   },
   {
+    code: 'REPORT_SLOW_MOVING_VIEW',
+    label: 'Lihat Laporan Produk Slow Moving',
+    group: 'Laporan',
+    moduleCodes: ['PRODUCT', 'REPORT_POS_SALES'],
+  },
+  {
+    code: 'REPORT_INVENTORY_VIEW',
+    label: 'Lihat Laporan Persediaan dan Nilai Stok',
+    group: 'Laporan',
+    moduleCodes: ['PRODUCT', 'REPORT_STOCK_CARD'],
+    isSensitive: true,
+  },
+  {
     code: 'FINANCE_ACCESS',
     label: 'Akses Keuangan Umum',
     group: 'Keuangan',
