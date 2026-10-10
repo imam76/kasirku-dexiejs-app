@@ -29,6 +29,15 @@ describe('sales/purchase reconciliation decisions', () => {
     expect(classifyDocumentSync(bundle, { ...bundle, document: { ...document, version: 3 } }, false)).toBe('pull');
   });
 
+  test('allows a stale queue revision to be resolved when restored local data matches the server', () => {
+    const restoredBundle = {
+      ...bundle,
+      document: { ...document, version: 3, updated_at: '2026-09-17T03:00:00.000Z' },
+    };
+    expect(classifyDocumentSync(bundle, restoredBundle, false)).toBe('pull');
+    expect(classifyDocumentSync(restoredBundle, restoredBundle, false)).toBe('equal');
+  });
+
   test('normalizes timestamp offsets, optional fields, key order and item order', () => {
     const remote = { document: { ...document, notes: null, updated_at: '2026-09-16T10:00:00+07:00' }, items: [line] };
     expect(classifyDocumentSync(bundle, remote, false)).toBe('equal');

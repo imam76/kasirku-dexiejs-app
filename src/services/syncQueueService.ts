@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { sameDocumentRevision } from '@/services/shared/documentSyncComparison';
+import { classifyDocumentSync, sameDocumentRevision } from '@/services/shared/documentSyncComparison';
 import { assertCurrentHostIdentity } from '@/services/hostIdentityService';
 import { readPendingSyncQueueBatch } from './pendingSyncQueueReadService';
 import { pruneSyncedSyncQueueItems } from './syncQueueRetentionService';
@@ -5372,6 +5372,18 @@ const processPurchaseDocumentQueueItem = async (queueItem: SyncQueueItem) => {
 
   const remote = await purchaseDocumentPostgresAdapter.upsert(queueItem.payload);
   if (remote && !sameDocumentRevision(queueItem.payload.document, remote.document)) {
+    const currentDocument = await db.purchaseDocuments.get(queueItem.entity_id);
+    if (currentDocument) {
+      const currentItems = await db.purchaseDocumentItems
+        .where('document_id').equals(queueItem.entity_id).toArray();
+      const currentBundle = mapPurchaseDocumentBundleToRemoteDto(currentDocument, currentItems);
+      const localRemoteSync = classifyDocumentSync(
+        { document: currentBundle.document, items: currentBundle.items },
+        { document: remote.document, items: remote.items },
+        false,
+      );
+      if (localRemoteSync === 'equal') return remote;
+    }
     throw new Error('CONFLICT: Revisi dokumen pembelian ditolak server. Periksa sinkronisasi dokumen di Sync DB.');
   }
   return remote;
@@ -9848,6 +9860,7 @@ export const enqueuePendingFixedAssetRunsForSync = async () => {
 };
 
 export const retryFailedSyncQueueItems = async () => {
+  await resolveAlreadySyncedFailedPurchaseDocuments();
   const failedQueueItems = await db.syncQueue.where('status').equals('failed').toArray();
   const now = new Date().toISOString();
 
@@ -9860,4 +9873,53 @@ export const retryFailedSyncQueueItems = async () => {
   )));
 
   void processPendingSyncQueue();
+};
+
+const resolveAlreadySyncedFailedPurchaseDocuments = async () => {
+  const health = await postgresAdapter.healthCheck();
+  if (!health.available) return { checked: 0, resolved: 0 };
+  const hostId = await assertCurrentHostIdentity();
+
+  const failedQueueItems = await db.syncQueue.where('entity').equals(PURCHASE_DOCUMENT_ENTITY)
+    .filter((item) => item.status === 'failed').toArray();
+  let resolved = 0;
+
+  for (const queueItem of failedQueueItems) {
+    await assertCurrentHostIdentity(hostId);
+    let remote;
+    try {
+      remote = await purchaseDocumentPostgresAdapter.get(queueItem.entity_id);
+    } catch {
+      continue;
+    }
+    await assertCurrentHostIdentity(hostId);
+    if (!remote) continue;
+
+    await db.transaction('rw', [db.syncQueue, db.purchaseDocuments, db.purchaseDocumentItems], async () => {
+      const currentQueueItem = await db.syncQueue.get(queueItem.id);
+      const currentDocument = await db.purchaseDocuments.get(queueItem.entity_id);
+      if (currentQueueItem?.status !== 'failed' || !currentDocument) return;
+
+      const currentItems = await db.purchaseDocumentItems
+        .where('document_id').equals(queueItem.entity_id).toArray();
+      const currentBundle = mapPurchaseDocumentBundleToRemoteDto(currentDocument, currentItems);
+      if (classifyDocumentSync(
+        { document: currentBundle.document, items: currentBundle.items },
+        { document: remote.document, items: remote.items },
+        false,
+      ) !== 'equal') return;
+
+      const syncedAt = new Date().toISOString();
+      await db.syncQueue.update(currentQueueItem.id, {
+        status: 'synced', error_message: undefined, updated_at: syncedAt,
+      });
+      await db.purchaseDocuments.update(currentDocument.id, {
+        sync_status: 'synced', sync_error: undefined,
+        last_synced_at: syncedAt, remote_updated_at: remote.document.updated_at,
+      });
+      resolved += 1;
+    });
+  }
+
+  return { checked: failedQueueItems.length, resolved };
 };
