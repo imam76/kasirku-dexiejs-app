@@ -78,6 +78,7 @@ export const ROUTE_MODULE_MAP: Record<string, string[]> = {
   '/finance/closing': ['GENERAL_LEDGER'],
   // Reports
   '/report': [
+    'PRODUCT',
     'REPORT_POS_SALES',
     'REPORT_DEPOSIT',
     'REPORT_TRANSACTION_DETAIL',

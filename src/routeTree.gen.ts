@@ -41,6 +41,9 @@ const ReportTransactionDetailReportLazyRouteImport = createFileRoute(
   '/report/transaction-detail-report',
 )()
 const ReportStockCardLazyRouteImport = createFileRoute('/report/stock-card')()
+const ReportSlowMovingReportLazyRouteImport = createFileRoute(
+  '/report/slow-moving-report',
+)()
 const ReportSalesReportLazyRouteImport = createFileRoute(
   '/report/sales-report',
 )()
@@ -55,6 +58,9 @@ const ReportPosSalesReportLazyRouteImport = createFileRoute(
 )()
 const ReportPayrollReportLazyRouteImport = createFileRoute(
   '/report/payroll-report',
+)()
+const ReportInventoryReportLazyRouteImport = createFileRoute(
+  '/report/inventory-report',
 )()
 const ReportIncomeReportLazyRouteImport = createFileRoute(
   '/report/income-report',
@@ -416,6 +422,14 @@ const ReportStockCardLazyRoute = ReportStockCardLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/report/stock-card.lazy').then((d) => d.Route),
 )
+const ReportSlowMovingReportLazyRoute =
+  ReportSlowMovingReportLazyRouteImport.update({
+    id: '/report/slow-moving-report',
+    path: '/report/slow-moving-report',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/report/slow-moving-report.lazy').then((d) => d.Route),
+  )
 const ReportSalesReportLazyRoute = ReportSalesReportLazyRouteImport.update({
   id: '/report/sales-report',
   path: '/report/sales-report',
@@ -454,6 +468,14 @@ const ReportPayrollReportLazyRoute = ReportPayrollReportLazyRouteImport.update({
 } as any).lazy(() =>
   import('./routes/report/payroll-report.lazy').then((d) => d.Route),
 )
+const ReportInventoryReportLazyRoute =
+  ReportInventoryReportLazyRouteImport.update({
+    id: '/report/inventory-report',
+    path: '/report/inventory-report',
+    getParentRoute: () => rootRouteImport,
+  } as any).lazy(() =>
+    import('./routes/report/inventory-report.lazy').then((d) => d.Route),
+  )
 const ReportIncomeReportLazyRoute = ReportIncomeReportLazyRouteImport.update({
   id: '/report/income-report',
   path: '/report/income-report',
@@ -1429,11 +1451,13 @@ export interface FileRoutesByFullPath {
   '/report/deposit-report': typeof ReportDepositReportLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/income-report': typeof ReportIncomeReportLazyRoute
+  '/report/inventory-report': typeof ReportInventoryReportLazyRoute
   '/report/payroll-report': typeof ReportPayrollReportLazyRoute
   '/report/pos-sales-report': typeof ReportPosSalesReportLazyRoute
   '/report/profit-loss-report': typeof ReportProfitLossReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
+  '/report/slow-moving-report': typeof ReportSlowMovingReportLazyRoute
   '/report/stock-card': typeof ReportStockCardLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/finance/': typeof FinanceIndexRoute
@@ -1568,11 +1592,13 @@ export interface FileRoutesByTo {
   '/report/deposit-report': typeof ReportDepositReportLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/income-report': typeof ReportIncomeReportLazyRoute
+  '/report/inventory-report': typeof ReportInventoryReportLazyRoute
   '/report/payroll-report': typeof ReportPayrollReportLazyRoute
   '/report/pos-sales-report': typeof ReportPosSalesReportLazyRoute
   '/report/profit-loss-report': typeof ReportProfitLossReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
+  '/report/slow-moving-report': typeof ReportSlowMovingReportLazyRoute
   '/report/stock-card': typeof ReportStockCardLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/finance': typeof FinanceIndexRoute
@@ -1708,11 +1734,13 @@ export interface FileRoutesById {
   '/report/deposit-report': typeof ReportDepositReportLazyRoute
   '/report/expense-report': typeof ReportExpenseReportLazyRoute
   '/report/income-report': typeof ReportIncomeReportLazyRoute
+  '/report/inventory-report': typeof ReportInventoryReportLazyRoute
   '/report/payroll-report': typeof ReportPayrollReportLazyRoute
   '/report/pos-sales-report': typeof ReportPosSalesReportLazyRoute
   '/report/profit-loss-report': typeof ReportProfitLossReportLazyRoute
   '/report/purchase-report': typeof ReportPurchaseReportLazyRoute
   '/report/sales-report': typeof ReportSalesReportLazyRoute
+  '/report/slow-moving-report': typeof ReportSlowMovingReportLazyRoute
   '/report/stock-card': typeof ReportStockCardLazyRoute
   '/report/transaction-detail-report': typeof ReportTransactionDetailReportLazyRoute
   '/finance/': typeof FinanceIndexRoute
@@ -1849,11 +1877,13 @@ export interface FileRouteTypes {
     | '/report/deposit-report'
     | '/report/expense-report'
     | '/report/income-report'
+    | '/report/inventory-report'
     | '/report/payroll-report'
     | '/report/pos-sales-report'
     | '/report/profit-loss-report'
     | '/report/purchase-report'
     | '/report/sales-report'
+    | '/report/slow-moving-report'
     | '/report/stock-card'
     | '/report/transaction-detail-report'
     | '/finance/'
@@ -1988,11 +2018,13 @@ export interface FileRouteTypes {
     | '/report/deposit-report'
     | '/report/expense-report'
     | '/report/income-report'
+    | '/report/inventory-report'
     | '/report/payroll-report'
     | '/report/pos-sales-report'
     | '/report/profit-loss-report'
     | '/report/purchase-report'
     | '/report/sales-report'
+    | '/report/slow-moving-report'
     | '/report/stock-card'
     | '/report/transaction-detail-report'
     | '/finance'
@@ -2127,11 +2159,13 @@ export interface FileRouteTypes {
     | '/report/deposit-report'
     | '/report/expense-report'
     | '/report/income-report'
+    | '/report/inventory-report'
     | '/report/payroll-report'
     | '/report/pos-sales-report'
     | '/report/profit-loss-report'
     | '/report/purchase-report'
     | '/report/sales-report'
+    | '/report/slow-moving-report'
     | '/report/stock-card'
     | '/report/transaction-detail-report'
     | '/finance/'
@@ -2267,11 +2301,13 @@ export interface RootRouteChildren {
   ReportDepositReportLazyRoute: typeof ReportDepositReportLazyRoute
   ReportExpenseReportLazyRoute: typeof ReportExpenseReportLazyRoute
   ReportIncomeReportLazyRoute: typeof ReportIncomeReportLazyRoute
+  ReportInventoryReportLazyRoute: typeof ReportInventoryReportLazyRoute
   ReportPayrollReportLazyRoute: typeof ReportPayrollReportLazyRoute
   ReportPosSalesReportLazyRoute: typeof ReportPosSalesReportLazyRoute
   ReportProfitLossReportLazyRoute: typeof ReportProfitLossReportLazyRoute
   ReportPurchaseReportLazyRoute: typeof ReportPurchaseReportLazyRoute
   ReportSalesReportLazyRoute: typeof ReportSalesReportLazyRoute
+  ReportSlowMovingReportLazyRoute: typeof ReportSlowMovingReportLazyRoute
   ReportStockCardLazyRoute: typeof ReportStockCardLazyRoute
   ReportTransactionDetailReportLazyRoute: typeof ReportTransactionDetailReportLazyRoute
   FinanceIndexRoute: typeof FinanceIndexRoute
@@ -2456,6 +2492,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportStockCardLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/report/slow-moving-report': {
+      id: '/report/slow-moving-report'
+      path: '/report/slow-moving-report'
+      fullPath: '/report/slow-moving-report'
+      preLoaderRoute: typeof ReportSlowMovingReportLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/report/sales-report': {
       id: '/report/sales-report'
       path: '/report/sales-report'
@@ -2489,6 +2532,13 @@ declare module '@tanstack/react-router' {
       path: '/report/payroll-report'
       fullPath: '/report/payroll-report'
       preLoaderRoute: typeof ReportPayrollReportLazyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report/inventory-report': {
+      id: '/report/inventory-report'
+      path: '/report/inventory-report'
+      fullPath: '/report/inventory-report'
+      preLoaderRoute: typeof ReportInventoryReportLazyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/report/income-report': {
@@ -3452,11 +3502,13 @@ const rootRouteChildren: RootRouteChildren = {
   ReportDepositReportLazyRoute: ReportDepositReportLazyRoute,
   ReportExpenseReportLazyRoute: ReportExpenseReportLazyRoute,
   ReportIncomeReportLazyRoute: ReportIncomeReportLazyRoute,
+  ReportInventoryReportLazyRoute: ReportInventoryReportLazyRoute,
   ReportPayrollReportLazyRoute: ReportPayrollReportLazyRoute,
   ReportPosSalesReportLazyRoute: ReportPosSalesReportLazyRoute,
   ReportProfitLossReportLazyRoute: ReportProfitLossReportLazyRoute,
   ReportPurchaseReportLazyRoute: ReportPurchaseReportLazyRoute,
   ReportSalesReportLazyRoute: ReportSalesReportLazyRoute,
+  ReportSlowMovingReportLazyRoute: ReportSlowMovingReportLazyRoute,
   ReportStockCardLazyRoute: ReportStockCardLazyRoute,
   ReportTransactionDetailReportLazyRoute:
     ReportTransactionDetailReportLazyRoute,

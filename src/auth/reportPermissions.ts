@@ -6,6 +6,10 @@ export interface ReportAccessDefinition {
 }
 
 export const GENERAL_REPORT_ACCESS: Record<string, ReportAccessDefinition> = {
+  '/report/slow-moving-report': {
+    permission: 'REPORT_SLOW_MOVING_VIEW',
+    moduleCode: ['PRODUCT', 'REPORT_POS_SALES'],
+  },
   '/report/pos-sales-report': {
     permission: 'REPORT_POS_SALES_VIEW',
     moduleCode: 'REPORT_POS_SALES',
@@ -61,6 +65,10 @@ export const GENERAL_REPORT_ACCESS: Record<string, ReportAccessDefinition> = {
   '/report/stock-card': {
     permission: 'REPORT_STOCK_CARD_VIEW',
     moduleCode: 'REPORT_STOCK_CARD',
+  },
+  '/report/inventory-report': {
+    permission: 'REPORT_INVENTORY_VIEW',
+    moduleCode: ['PRODUCT', 'REPORT_STOCK_CARD'],
   },
 };
 

@@ -33,6 +33,8 @@ function Laporan() {
     { to: '/report/buku-besar', label: t('report.index.ledgerShort'), icon: BookOutlined, color: 'text-slate-700', desc: t('report.index.ledgerDesc') },
     { to: '/report/aging-report', label: t('report.index.agingShort'), icon: ReconciliationOutlined, color: 'text-emerald-600', desc: t('report.index.agingDesc') },
     { to: '/report/stock-card', label: 'Kartu Stok', icon: FileSearchOutlined, color: 'text-cyan-700', desc: 'Lihat mutasi dan saldo stok per produk' },
+    { to: '/report/inventory-report', label: t('inventoryReport.title'), icon: ReconciliationOutlined, color: 'text-teal-700', desc: t('inventoryReport.description') },
+    { to: '/report/slow-moving-report', label: t('slowMoving.title'), icon: LineChartOutlined, color: 'text-orange-700', desc: t('slowMoving.description') },
   ].filter((item) => canAccessPath(currentUser ?? undefined, item.to, { currentRole, permissionSet }))
 
   return (

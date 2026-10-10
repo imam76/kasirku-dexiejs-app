@@ -9,7 +9,7 @@ import type { Product } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
 import { getStockStatus, getStockStatusClass, resolveProductMinStock } from '@/utils/stockStatus';
 import { getProductDisplayPricing } from '@/utils/pricing';
-import { BadgeCheck, CheckSquare, Edit2, EyeOff, Package, Plus, ShoppingCart, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { BadgeCheck, Barcode, CheckSquare, Edit2, EyeOff, Package, Plus, ShoppingCart, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import ManagementTable from './ManagementTable';
 import {
@@ -34,6 +34,7 @@ interface StockTableProps {
   onAdd?: () => void;
   loading?: boolean;
   bulkActions?: { label: string; items: StockBulkAction[] };
+  onPrintBarcodes?: (products: Product[]) => void | Promise<void>;
   onFiltersChange?: (filters: ProductListFilters) => void;
   hasMore?: boolean;
   loadingMore?: boolean;
@@ -54,6 +55,7 @@ export default function StockTable({
   onAdd,
   loading = false,
   bulkActions,
+  onPrintBarcodes,
   onFiltersChange,
   hasMore = false,
   loadingMore = false,
@@ -262,7 +264,7 @@ export default function StockTable({
     : null;
   const closeDetailSheet = () => setSelectedProductId(null);
 
-  const selectionEnabled = Boolean(bulkActions?.items.length);
+  const selectionEnabled = Boolean(bulkActions?.items.length || onPrintBarcodes);
   /** Pilihan sengaja bertahan lintas filter supaya user bisa memungut dari beberapa saringan. */
   const selectedProducts = useMemo(() => (selectionEnabled
     ? selectedIds.flatMap((id) => {
@@ -621,6 +623,14 @@ export default function StockTable({
       },
     ] : []),
     // FAB kontekstual ditumpuk paling atas supaya tombol lama tidak berpindah.
+    ...(onPrintBarcodes && selectedProducts.length > 0 ? [{
+      key: 'print-barcode',
+      icon: <Barcode size={22} />,
+      label: t('stock.printBarcode'),
+      badge: { count: selectedProducts.length, color: '#0F766E' },
+      testId: 'stock-print-barcode-fab',
+      onClick: () => void onPrintBarcodes(selectedProducts),
+    }] : []),
     ...(bulkActions && selectedProducts.length > 0 ? [{
       key: 'bulk',
       type: 'primary' as const,
@@ -665,7 +675,7 @@ export default function StockTable({
               </div>
             </div>
 
-            {bulkActions && selectedProducts.length > 0 ? (
+            {selectionEnabled && selectedProducts.length > 0 ? (
               <div className="flex flex-wrap items-center gap-3 rounded-xl border border-teal-100 bg-teal-50 px-4 py-3">
                 <span className="text-sm font-semibold text-teal-900">
                   {t('stock.selectedCount', { count: selectedProducts.length })}
@@ -676,15 +686,22 @@ export default function StockTable({
                 <Button size="small" onClick={clearSelection}>
                   {t('stock.clearSelection')}
                 </Button>
-                <span className="ml-auto">
-                  <Dropdown
-                    trigger={['click']}
-                    menu={{ items: bulkMenuItems, onClick: ({ key }) => runBulkAction(key) }}
-                  >
-                    <Button type="primary" icon={<ShoppingCart size={16} />}>
-                      {bulkActions.label}
+                <span className="ml-auto flex flex-wrap gap-2">
+                  {onPrintBarcodes ? (
+                    <Button icon={<Barcode size={16} />} onClick={() => void onPrintBarcodes(selectedProducts)}>
+                      {t('stock.printBarcode')}
                     </Button>
-                  </Dropdown>
+                  ) : null}
+                  {bulkActions ? (
+                    <Dropdown
+                      trigger={['click']}
+                      menu={{ items: bulkMenuItems, onClick: ({ key }) => runBulkAction(key) }}
+                    >
+                      <Button type="primary" icon={<ShoppingCart size={16} />}>
+                        {bulkActions.label}
+                      </Button>
+                    </Dropdown>
+                  ) : null}
                 </span>
               </div>
             ) : null}

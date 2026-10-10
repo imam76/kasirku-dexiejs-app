@@ -23,7 +23,8 @@ import {
   readWorkbookRows,
 } from '@/utils/productsWorkbook';
 import { buildProductMasterImportPlan } from '@/utils/productMasterImport';
-import { exportCsv, exportXlsx, type ExportTarget } from '@/utils/export';
+import { exportCsv, exportPdf, exportXlsx, type ExportTarget } from '@/utils/export';
+import { buildBarcodeLabelItems, drawBarcodeLabels } from '@/utils/productBarcodeLabels';
 import { useI18n } from '@/hooks/useI18n';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { GlobalBreadcrumb } from '@/components/GlobalBreadcrumb';
@@ -107,6 +108,28 @@ export default function StockManagement() {
       message.success(t('stock.verifySuccess', { name: verified.name }));
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('stock.verifyFailed'));
+    }
+  };
+
+  /** Barcode dibuat dari SKU, jadi produk tanpa SKU dilewati dan diberi tahu. */
+  const handlePrintBarcodes = async (selected: Product[]) => {
+    const { items, skipped } = buildBarcodeLabelItems(selected);
+    if (!items.length) {
+      message.warning(t('stock.printBarcodeNoSku'));
+      return;
+    }
+
+    try {
+      const exported = await exportPdf({
+        filename: `barcode-produk-${buildFileTimestamp()}.pdf`,
+        build: (doc) => drawBarcodeLabels(doc, items),
+      });
+      if (!exported) return;
+      message.success(t('stock.printBarcodeSuccess', { count: items.length }));
+      if (skipped.length) message.warning(t('stock.printBarcodeSkipped', { count: skipped.length }));
+    } catch (error) {
+      console.error('Failed to print product barcodes:', error);
+      message.error(t('stock.printBarcodeFailed'));
     }
   };
 
@@ -618,6 +641,7 @@ export default function StockManagement() {
         hasMore={hasMoreProducts}
         loadingMore={isLoadingMoreProducts}
         onLoadMore={async () => { await loadMoreProducts(); }}
+        onPrintBarcodes={handlePrintBarcodes}
         bulkActions={purchaseActions.length
           ? { label: t('purchaseDocuments.addSelectedProducts'), items: purchaseActions }
           : undefined}

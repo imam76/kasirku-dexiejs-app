@@ -14,6 +14,10 @@ export interface PosSalesReportFilters {
   paymentMode?: PosPaymentModeFilter;
   categories?: string[];
   topProductsLimit?: number;
+  /** Dashboard charts do not need line-item or product hydration. */
+  includeLineItems?: boolean;
+  /** Dashboard totals do not expose per-transaction payment details. */
+  includePaymentDetails?: boolean;
 }
 
 const getTransactionsForDateRange = async (startDate?: string, endDate?: string) => {
@@ -50,6 +54,8 @@ export const getPosSalesReportData = async ({
   paymentMode,
   categories,
   topProductsLimit,
+  includeLineItems = true,
+  includePaymentDetails = true,
 }: PosSalesReportFilters = {}): Promise<PosSalesReportData> => {
   const transactions = await getTransactionsForDateRange(startDate, endDate);
   const activeTransactionIds = filterActiveSaleTransactions(transactions).map((transaction) => transaction.id);
@@ -66,11 +72,21 @@ export const getPosSalesReportData = async ({
     });
   }
 
-  const [payments, items, products] = await Promise.all([
-    db.posTransactionPayments.where('transaction_id').anyOf(activeTransactionIds).toArray(),
-    db.transactionItems.where('transaction_id').anyOf(activeTransactionIds).toArray(),
-    db.products.toArray(),
+  const shouldReadPayments = includePaymentDetails || Boolean(paymentMethodCode) || (
+    Boolean(paymentMode) && paymentMode !== 'SEMUA'
+  );
+  const [payments, items] = await Promise.all([
+    shouldReadPayments
+      ? db.posTransactionPayments.where('transaction_id').anyOf(activeTransactionIds).toArray()
+      : Promise.resolve([]),
+    includeLineItems
+      ? db.transactionItems.where('transaction_id').anyOf(activeTransactionIds).toArray()
+      : Promise.resolve([]),
   ]);
+  const productIds = [...new Set(items.map((item) => item.product_id))];
+  const products = productIds.length > 0
+    ? (await db.products.bulkGet(productIds)).filter((product) => product !== undefined)
+    : [];
 
   return buildPosSalesReportData({
     transactions,

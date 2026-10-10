@@ -1,7 +1,7 @@
 {
   "name": "frayukti",
   "private": true,
-  "version": "1.0.90",
+  "version": "1.0.93",
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts",
@@ -49,6 +49,7 @@
     "dexie-react-hooks": "^4.2.0",
     "echarts": "^6.1.0",
     "echarts-for-react": "^3.0.6",
+    "jsbarcode": "^3.12.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.344.0",

@@ -6,6 +6,8 @@ import { budgetMessages } from './budgetMessages';
 import { membershipMessages } from './membershipMessages';
 import { stockMessages } from './stockMessages';
 import { stockInMessages } from './stockInMessages';
+import { inventoryReportMessages } from './inventoryReportMessages';
+import { slowMovingMessages } from './slowMovingMessages';
 import { stockOpnameMessages } from './stockOpnameMessages';
 import { fixedAssetMessages } from './fixedAssetMessages';
 import { openingInventoryMessages } from './openingInventoryMessages';
@@ -21,6 +23,8 @@ export const messages = {
     ...membershipMessages.id,
     ...stockMessages.id,
     ...stockInMessages.id,
+    ...inventoryReportMessages.id,
+    ...slowMovingMessages.id,
     ...stockOpnameMessages.id,
     ...cooperativeMessages.id,
     ...fixedAssetMessages.id,
@@ -1521,11 +1525,12 @@ export const messages = {
     'dashboard.layoutResetFailed': 'Gagal reset layout dashboard.',
     'dashboard.noAllowedWidgets': 'Tidak ada widget dashboard yang tersedia untuk role ini.',
     'dashboard.noVisibleWidgets': 'Tidak ada widget yang ditampilkan. Aktifkan widget dari mode edit.',
+    'dashboard.period.today': 'Hari ini',
+    'dashboard.period.thisWeek': 'Minggu ini',
+    'dashboard.period.lastWeek': 'Minggu lalu',
     'dashboard.period.thisMonth': 'Bulan ini',
     'dashboard.period.lastMonth': 'Bulan lalu',
-    'dashboard.period.thisYear': 'Tahun ini',
-    'dashboard.period.lastYear': 'Tahun lalu',
-    'dashboard.period.customMonth': 'Custom bulan',
+    'dashboard.period.custom': 'Custom',
     'dashboard.widget.netIncome': 'Laba Bersih',
     'dashboard.widget.revenue': 'Penerimaan',
     'dashboard.widget.expense': 'Pengeluaran',
@@ -2216,6 +2221,8 @@ export const messages = {
     ...membershipMessages.en,
     ...stockMessages.en,
     ...stockInMessages.en,
+    ...inventoryReportMessages.en,
+    ...slowMovingMessages.en,
     ...stockOpnameMessages.en,
     ...cooperativeMessages.en,
     ...fixedAssetMessages.en,
@@ -3716,11 +3723,12 @@ export const messages = {
     'dashboard.layoutResetFailed': 'Failed to reset dashboard layout.',
     'dashboard.noAllowedWidgets': 'No dashboard widgets are available for this role.',
     'dashboard.noVisibleWidgets': 'No widgets are visible. Enable widgets from edit mode.',
+    'dashboard.period.today': 'Today',
+    'dashboard.period.thisWeek': 'This week',
+    'dashboard.period.lastWeek': 'Last week',
     'dashboard.period.thisMonth': 'This month',
     'dashboard.period.lastMonth': 'Last month',
-    'dashboard.period.thisYear': 'This year',
-    'dashboard.period.lastYear': 'Last year',
-    'dashboard.period.customMonth': 'Custom month',
+    'dashboard.period.custom': 'Custom',
     'dashboard.widget.netIncome': 'Net Income',
     'dashboard.widget.revenue': 'Revenue',
     'dashboard.widget.expense': 'Expense',
