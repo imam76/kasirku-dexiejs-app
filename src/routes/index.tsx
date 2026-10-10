@@ -23,8 +23,8 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import { useDashboardPreference } from '@/hooks/useDashboardPreference';
 import {
   useDashboardCashOutTotal,
+  useDashboardOperationalMetricsReports,
   useDashboardPosSalesReports,
-  useDashboardProfitLossReports,
 } from '@/hooks/useDashboardReports';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useMobileHomeData } from '@/hooks/useMobileHomeData';
@@ -76,7 +76,6 @@ type HomeMenuItem = MobileHomeServiceItem & {
   tour?: string;
 };
 
-const PROFIT_LOSS_WIDGET_IDS = new Set<DashboardWidgetId>(['net-income', 'revenue', 'expense']);
 const PROFIT_LOSS_WIDGET_ID_LIST = ['net-income', 'revenue', 'expense'] as const;
 const MOBILE_DASHBOARD_QUERY = '(max-width: 767.98px)';
 
@@ -505,18 +504,17 @@ function Index() {
     activePreference?.visible_widget_ids.filter((widgetId) => allowedWidgetSet.has(widgetId)) ?? []
   ), [activePreference?.visible_widget_ids, allowedWidgetSet]);
   const visibleWidgetSet = useMemo(() => new Set(visibleWidgetIds), [visibleWidgetIds]);
-  const hasProfitLossWidget = visibleWidgetIds.some((widgetId) => PROFIT_LOSS_WIDGET_IDS.has(widgetId));
   const isCashOutVisible = visibleWidgetSet.has('cash-out');
   const isSalesChartVisible = visibleWidgetSet.has('sales-chart');
   const isTopProductsVisible = visibleWidgetSet.has('top-products');
   const isWidgetHydrated = (widgetId: DashboardWidgetId) => (
     isEditing || hydratedWidgetIds.has(widgetId)
   );
-  const profitLossReports = useDashboardProfitLossReports({
+  const operationalMetricsReports = useDashboardOperationalMetricsReports({
     requests: PROFIT_LOSS_WIDGET_ID_LIST.map((id) => ({
       id,
       ...widgetRanges[id],
-      enabled: !isMobileViewport && hasProfitLossWidget && visibleWidgetSet.has(id) && isWidgetHydrated(id),
+      enabled: !isMobileViewport && visibleWidgetSet.has(id) && isWidgetHydrated(id),
     })),
     refreshKey,
   });
@@ -680,8 +678,8 @@ function Index() {
           title={t('dashboard.widget.netIncome')}
           hint={t('dashboard.widgetHint.netIncome')}
           subtitle={periodSubtitle}
-          amount={profitLossReports.data?.[widgetId]?.net_income ?? 0}
-          loading={!isHydrated || profitLossReports.isLoading}
+          amount={operationalMetricsReports.data?.[widgetId]?.estimatedNetIncome ?? 0}
+          loading={!isHydrated || operationalMetricsReports.isLoading}
           isEditing={isEditing}
           tone="primary"
           action={dateAction}
@@ -695,8 +693,8 @@ function Index() {
           title={t('dashboard.widget.revenue')}
           hint={t('dashboard.widgetHint.income')}
           subtitle={periodSubtitle}
-          amount={profitLossReports.data?.[widgetId]?.revenue ?? 0}
-          loading={!isHydrated || profitLossReports.isLoading}
+          amount={operationalMetricsReports.data?.[widgetId]?.income ?? 0}
+          loading={!isHydrated || operationalMetricsReports.isLoading}
           isEditing={isEditing}
           tone="success"
           action={dateAction}
@@ -710,8 +708,8 @@ function Index() {
           title={t('dashboard.widget.expense')}
           hint={t('dashboard.widgetHint.expense')}
           subtitle={periodSubtitle}
-          amount={profitLossReports.data?.[widgetId]?.expense ?? 0}
-          loading={!isHydrated || profitLossReports.isLoading}
+          amount={operationalMetricsReports.data?.[widgetId]?.expense ?? 0}
+          loading={!isHydrated || operationalMetricsReports.isLoading}
           isEditing={isEditing}
           tone="error"
           action={dateAction}

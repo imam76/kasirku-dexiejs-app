@@ -82,6 +82,35 @@ export const useDashboardProfitLossReports = <Id extends string>({
   };
 };
 
+export const useDashboardOperationalMetricsReports = <Id extends string>({
+  requests,
+  refreshKey,
+}: DashboardReportBatchOptions<Id>) => {
+  const requestSignature = getRequestSignature(requests);
+  const activeRequestCount = requests.filter((request) => request.enabled).length;
+  const data = useLiveQuery(
+    async (): Promise<Partial<Record<Id, DashboardOperationalMetrics>>> => {
+      const groups = groupEnabledRequestsByRange(requests);
+      const reports = await Promise.all(groups.map(({ range }) => (
+        getDashboardOperationalMetrics(range.startDate, range.endDate)
+      )));
+
+      return groups.reduce<Partial<Record<Id, DashboardOperationalMetrics>>>((result, group, index) => {
+        group.ids.forEach((id) => {
+          result[id] = reports[index];
+        });
+        return result;
+      }, {});
+    },
+    [requestSignature, refreshKey],
+  );
+
+  return {
+    data,
+    isLoading: activeRequestCount > 0 && data === undefined,
+  };
+};
+
 export const useDashboardOperationalMetrics = ({
   startDate,
   endDate,
