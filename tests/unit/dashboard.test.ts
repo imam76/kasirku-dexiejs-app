@@ -3,7 +3,8 @@ import {
   buildDailySalesBuckets,
   buildPosSalesReportData,
 } from '@/services/posSalesReportAggregator';
-import type { DashboardPreference, DashboardWidgetLayout, Product, Transaction, TransactionItem } from '@/types';
+import { buildDashboardOperationalMetrics } from '@/services/dashboardOperationalMetricsService';
+import type { DashboardPreference, DashboardWidgetLayout, FinanceTransaction, Product, Transaction, TransactionItem } from '@/types';
 import {
   DASHBOARD_COLUMNS,
   DASHBOARD_WIDGET_IDS,
@@ -107,6 +108,40 @@ describe('dashboard POS aggregation', () => {
     expect(data.topProducts).toHaveLength(5);
     expect(data.topProducts.map((product) => product.product_id)).toEqual(['p2', 'p3', 'p1', 'p4', 'p5']);
     expect(data.topProducts[0].totalQuantity).toBe('1 pcs');
+  });
+});
+
+describe('dashboard operational metrics', () => {
+  test('calculates receipts, expenses, and estimated profit without ledger entries', () => {
+    const financeTransactions: FinanceTransaction[] = [
+      { id: 'sale', type: 'INCOME', category: 'PENJUALAN', amount: 150_000, description: '', created_at: '2026-07-01T03:00:00.000Z' },
+      { id: 'capital', type: 'INCOME', category: 'TAMBAHAN_MODAL', amount: 500_000, description: '', created_at: '2026-07-01T03:00:00.000Z' },
+      { id: 'expense', type: 'EXPENSE', category: 'OPERASIONAL', amount: 20_000, description: '', created_at: '2026-07-01T03:00:00.000Z' },
+      { id: 'transfer', type: 'EXPENSE', category: 'TRANSFER_KAS_BANK', amount: 10_000, description: '', created_at: '2026-07-01T03:00:00.000Z' },
+      { id: 'outside-range', type: 'INCOME', category: 'LAYANAN', amount: 90_000, description: '', created_at: '2026-08-01T03:00:00.000Z' },
+    ];
+    const transactions = [
+      buildTransaction({ id: 'pos-sale', total_amount: 150_000 }),
+      buildTransaction({ id: 'voided', status: 'VOIDED', total_amount: 200_000 }),
+      buildTransaction({ id: 'internal-expense', business_type: 'EXPENSE', total_amount: 30_000 }),
+    ];
+    const transactionItems = [
+      buildItem(buildProduct('sale-product', 'Sale'), 150_000, { transaction_id: 'pos-sale', profit: 60_000 }),
+      buildItem(buildProduct('voided-product', 'Voided'), 200_000, { transaction_id: 'voided', profit: 80_000 }),
+      buildItem(buildProduct('expense-product', 'Expense'), 30_000, { transaction_id: 'internal-expense', profit: -15_000 }),
+    ];
+
+    expect(buildDashboardOperationalMetrics({
+      financeTransactions,
+      transactions,
+      transactionItems,
+      startDate: '2026-07-01',
+      endDate: '2026-07-01',
+    })).toEqual({
+      income: 150_000,
+      expense: 50_000,
+      estimatedNetIncome: 25_000,
+    });
   });
 });
 

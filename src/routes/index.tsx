@@ -6,6 +6,7 @@ import {
   EditOutlined,
   FileTextOutlined,
   HistoryOutlined,
+  InfoCircleOutlined,
   ProductOutlined,
   ReloadOutlined,
   SettingOutlined,
@@ -28,8 +29,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { useDashboardPreference } from '@/hooks/useDashboardPreference';
 import {
   useDashboardCashFlowReport,
+  useDashboardOperationalMetrics,
   useDashboardPosSalesReport,
-  useDashboardProfitLossReport,
 } from '@/hooks/useDashboardReports';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useMobileHomeData } from '@/hooks/useMobileHomeData';
@@ -290,6 +291,7 @@ const getWidgetLabelKey = (widgetId: DashboardWidgetId) => {
 
 function DashboardWidgetShell({
   title,
+  titleHint,
   subtitle,
   icon,
   iconStyle,
@@ -298,6 +300,7 @@ function DashboardWidgetShell({
   children,
 }: {
   title: string;
+  titleHint?: string;
   subtitle?: string;
   icon: ReactNode;
   iconStyle?: CSSProperties;
@@ -317,8 +320,20 @@ function DashboardWidgetShell({
             </span>
           </Tooltip>
           <div className="min-w-0">
-            <h2 className="truncate text-[13px] font-semibold leading-tight text-gray-900 sm:text-sm">
-              {title}
+            <h2 className="flex min-w-0 items-center gap-1 text-[13px] font-semibold leading-tight text-gray-900 sm:text-sm">
+              <span className="truncate">{title}</span>
+              {titleHint && (
+                <Tooltip title={titleHint}>
+                  <span
+                    aria-label={titleHint}
+                    className="shrink-0 text-[11px] text-gray-400"
+                    role="img"
+                    tabIndex={0}
+                  >
+                    <InfoCircleOutlined />
+                  </span>
+                </Tooltip>
+              )}
             </h2>
             {subtitle && (
               <p className="mt-0.5 truncate text-[11px] leading-tight text-gray-500">
@@ -342,6 +357,7 @@ function DashboardWidgetShell({
 
 function MetricWidget({
   title,
+  hint,
   subtitle,
   amount,
   loading,
@@ -349,6 +365,7 @@ function MetricWidget({
   tone,
 }: {
   title: string;
+  hint?: string;
   subtitle: string;
   amount: number;
   loading: boolean;
@@ -382,6 +399,7 @@ function MetricWidget({
   return (
     <DashboardWidgetShell
       title={title}
+      titleHint={hint}
       subtitle={subtitle}
       icon={<DollarOutlined style={{ color: toneToken.iconColor }} />}
       isEditing={isEditing}
@@ -697,7 +715,7 @@ function Index() {
   const isCashOutVisible = visibleWidgetSet.has('cash-out');
   const isSalesChartVisible = visibleWidgetSet.has('sales-chart');
   const isTopProductsVisible = visibleWidgetSet.has('top-products');
-  const profitLossReport = useDashboardProfitLossReport({
+  const operationalMetrics = useDashboardOperationalMetrics({
     startDate: profitRange.startDate,
     endDate: profitRange.endDate,
     enabled: !isMobileViewport && hasProfitLossWidget && canViewProfitLoss,
@@ -830,9 +848,10 @@ function Index() {
       return (
         <MetricWidget
           title={t('dashboard.widget.netIncome')}
+          hint={t('dashboard.widgetHint.netIncome')}
           subtitle={periodSubtitle}
-          amount={profitLossReport.data?.net_income ?? 0}
-          loading={profitLossReport.isLoading}
+          amount={operationalMetrics.data?.estimatedNetIncome ?? 0}
+          loading={operationalMetrics.isLoading}
           isEditing={isEditing}
           tone="primary"
         />
@@ -843,9 +862,10 @@ function Index() {
       return (
         <MetricWidget
           title={t('dashboard.widget.revenue')}
+          hint={t('dashboard.widgetHint.income')}
           subtitle={periodSubtitle}
-          amount={profitLossReport.data?.revenue ?? 0}
-          loading={profitLossReport.isLoading}
+          amount={operationalMetrics.data?.income ?? 0}
+          loading={operationalMetrics.isLoading}
           isEditing={isEditing}
           tone="success"
         />
@@ -856,9 +876,10 @@ function Index() {
       return (
         <MetricWidget
           title={t('dashboard.widget.expense')}
+          hint={t('dashboard.widgetHint.expense')}
           subtitle={periodSubtitle}
-          amount={profitLossReport.data?.expense ?? 0}
-          loading={profitLossReport.isLoading}
+          amount={operationalMetrics.data?.expense ?? 0}
+          loading={operationalMetrics.isLoading}
           isEditing={isEditing}
           tone="error"
         />

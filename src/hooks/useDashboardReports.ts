@@ -6,10 +6,9 @@ import {
   type CashFlowReportFilters,
 } from '@/services/cashFlowReportService';
 import {
-  getIncomeStatementReport,
-  type GeneralLedgerReportFilters,
-  type IncomeStatementReport,
-} from '@/services/generalLedgerService';
+  getDashboardOperationalMetrics,
+  type DashboardOperationalMetrics,
+} from '@/services/dashboardOperationalMetricsService';
 import { getPosSalesReportData } from '@/services/posSalesReportService';
 import type { PosSalesReportData } from '@/services/posSalesReportAggregator';
 
@@ -25,24 +24,20 @@ const toIsoDayRange = (startDate?: string, endDate?: string) => ({
   endDate: endDate ? dayjs.tz(endDate).endOf('day').toISOString() : undefined,
 });
 
-const toLedgerFilters = (startDate?: string, endDate?: string): GeneralLedgerReportFilters => (
-  toIsoDayRange(startDate, endDate)
-);
-
 const toCashFlowFilters = (startDate?: string, endDate?: string): CashFlowReportFilters => (
   toIsoDayRange(startDate, endDate)
 );
 
-export const useDashboardProfitLossReport = ({
+export const useDashboardOperationalMetrics = ({
   startDate,
   endDate,
   enabled,
   refreshKey,
 }: DashboardReportRange) => {
   const data = useLiveQuery(
-    async (): Promise<IncomeStatementReport | undefined> => {
+    async (): Promise<DashboardOperationalMetrics | undefined> => {
       if (!enabled) return undefined;
-      return getIncomeStatementReport(toLedgerFilters(startDate, endDate));
+      return getDashboardOperationalMetrics(startDate, endDate);
     },
     [enabled, startDate, endDate, refreshKey],
   );
