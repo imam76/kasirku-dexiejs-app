@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import type { Membership } from '@/types';
+import { isMembershipActive, normalizeMembershipPhone } from '@/utils/membership';
 
 /**
  * The POS member picker used to materialise every active member on each render,
@@ -14,9 +15,7 @@ export const POS_MEMBER_OPTION_LIMIT = 50;
 
 // `is_active` is a boolean, which IndexedDB cannot index, and `status` is absent
 // on rows created before it existed. Both are therefore checked in the callback.
-const isSelectableMember = (member: Membership) => Boolean(
-  member.is_active && (member.status ?? 'ACTIVE') === 'ACTIVE',
-);
+const isSelectableMember = (member: Membership) => isMembershipActive(member);
 
 const NAME_SEARCH_MIN_LENGTH = 2;
 
@@ -30,10 +29,12 @@ export const readPosMemberOptions = async (
     return db.memberships.orderBy('member_number').filter(isSelectableMember).limit(limit).toArray();
   }
 
+  // Phones are stored normalized, so "0812 3456" and "+62812..." find the same member.
+  const phoneTerm = normalizeMembershipPhone(term) || term;
   const [byNumber, byPhone] = await Promise.all([
     db.memberships.where('member_number').startsWithIgnoreCase(term)
       .filter(isSelectableMember).limit(limit).toArray(),
-    db.memberships.where('phone').startsWith(term)
+    db.memberships.where('phone').startsWith(phoneTerm)
       .filter(isSelectableMember).limit(limit).toArray(),
   ]);
 

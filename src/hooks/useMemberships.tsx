@@ -10,6 +10,7 @@ import {
   type MembershipUpsertInput,
 } from '@/services/membershipManagementService';
 import type { Membership } from '@/types';
+import { isMembershipActive } from '@/utils/membership';
 
 export type MembershipStatusFilter = 'active' | 'inactive' | 'all';
 
@@ -35,9 +36,10 @@ export const useMemberships = () => {
         membership.member_number,
         membership.email,
       ].some((value) => value?.toLowerCase().includes(query));
+      const isActive = isMembershipActive(membership);
       const matchesStatus =
         statusFilter === 'all' ||
-        (statusFilter === 'active' ? membership.is_active : !membership.is_active);
+        (statusFilter === 'active' ? isActive : !isActive);
 
       return matchesSearch && matchesStatus;
     });

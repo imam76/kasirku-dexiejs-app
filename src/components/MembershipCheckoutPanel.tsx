@@ -1,11 +1,16 @@
-import { AutoComplete, Button, Form, Input, InputNumber, Modal, Select, Tag, Tooltip } from 'antd';
+import { App, AutoComplete, Button, Form, Input, InputNumber, Modal, Select, Tag, Tooltip } from 'antd';
 import { ChevronDown, ChevronUp, Sparkles, TicketPercent, UserCheck, UserPlus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import type { Membership, MembershipSetting, Promo } from '@/types';
-import type { MembershipCheckoutEvaluation, QuickCreateMemberInput } from '@/services/membershipService';
+import {
+  DuplicateMembershipPhoneError,
+  type MembershipCheckoutEvaluation,
+  type QuickCreateMemberInput,
+} from '@/services/membershipService';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import { formatCurrency } from '@/utils/formatters';
+import { getRedeemablePoints, isMembershipActive } from '@/utils/membership';
 import { buildPosVoucherOptions, isAppliedPosVoucher } from '@/utils/posVoucher';
 
 const MEMBERSHIP_PANEL_STORAGE_KEY = 'frayukti-pos-membership-panel-open';
@@ -46,6 +51,7 @@ export default function MembershipCheckoutPanel({
   isCreatingMember,
 }: MembershipCheckoutPanelProps) {
   const { t } = useI18n();
+  const { message } = App.useApp();
   const [form] = Form.useForm<QuickCreateMemberInput>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(() => {
@@ -59,7 +65,9 @@ export default function MembershipCheckoutPanel({
   const voucherValue = voucherCode.trim();
   const shouldForceExpanded = Boolean(memberId || voucherValue);
   const isPanelExpanded = isExpanded || shouldForceExpanded;
-  const pointBalance = Math.max(0, Math.floor(Number(selectedMember?.points_balance || 0)));
+  // Shown as stored, so a debt left by a void is visible; only positive points can be spent.
+  const pointBalance = Math.floor(Number(selectedMember?.points_balance || 0));
+  const redeemablePoints = getRedeemablePoints(selectedMember?.points_balance);
   const selectedMemberSummary = selectedMember
     ? `${selectedMember.member_number} - ${selectedMember.name ?? selectedMember.phone}`
     : undefined;
@@ -84,8 +92,20 @@ export default function MembershipCheckoutPanel({
   };
 
   const handleCreateMember = async (values: QuickCreateMemberInput) => {
-    await onCreateMember(values);
-    closeModal();
+    try {
+      await onCreateMember(values);
+      closeModal();
+    } catch (error) {
+      if (error instanceof DuplicateMembershipPhoneError && isMembershipActive(error.member)) {
+        // The customer is already a member: use that record instead of creating a second one.
+        onMemberChange(error.member.id);
+        closeModal();
+        message.info(`${error.message} Member tersebut dipilih.`);
+        return;
+      }
+
+      message.error(error instanceof Error ? error.message : 'Gagal menambah member.');
+    }
   };
 
   return (
@@ -177,19 +197,25 @@ export default function MembershipCheckoutPanel({
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-md border border-gray-100 bg-gray-50 px-2 py-1.5">
                     <div className="text-gray-500">Saldo poin</div>
-                    <div className="font-semibold text-gray-900">{pointBalance}</div>
+                    <div className={`font-semibold ${pointBalance < 0 ? 'text-red-600' : 'text-gray-900'}`}>{pointBalance}</div>
                   </div>
                   <div className="rounded-md border border-green-100 bg-green-50 px-2 py-1.5">
                     <div className="text-gray-500">Poin didapat</div>
                     <div className="font-semibold text-green-700">{membershipPreview.earned_points}</div>
                   </div>
                 </div>
+                {pointBalance < 0 && (
+                  <p className="m-0 rounded-md border border-red-100 bg-red-50 px-2 py-1.5 text-red-700">
+                    Saldo minus karena transaksi yang poinnya sudah dipakai lalu dibatalkan. Poin dari belanja ini menutup minus lebih dulu.
+                  </p>
+                )}
                 {membershipSetting.redeem_enabled && (
                   <div>
                     <div className="mb-1 text-gray-500">Pakai poin</div>
                     <InputNumber<number>
                       min={0}
-                      max={pointBalance}
+                      max={redeemablePoints}
+                      disabled={redeemablePoints === 0}
                       value={redeemPoints ? Number(redeemPoints) : 0}
                       className="w-full"
                       onChange={(value) => onRedeemPointsChange(value ? String(Math.floor(value)) : '')}

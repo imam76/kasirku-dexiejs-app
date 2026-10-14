@@ -19,6 +19,10 @@ import { refreshBudgetsFromPostgres } from '@/services/budgetReadService';
 import { refreshBudgetCommitmentsFromPostgres } from '@/services/budgetCommitmentReadService';
 import { getCompanyProfileSetting } from '@/services/companyProfileSettingService';
 import { refreshContactsFromPostgres } from '@/services/contactReadService';
+import {
+  refreshMembershipPointTransactionsFromPostgres,
+  refreshMembershipsFromPostgres,
+} from '@/services/membershipReadService';
 import { refreshCooperativeAreasFromPostgres } from '@/services/cooperativeAreaReadService';
 import { refreshCooperativeCollectionEventsFromPostgres } from '@/services/cooperativeCollectionEventService';
 import {
@@ -318,6 +322,12 @@ export const REALTIME_TABLE_TO_ENTITY: Record<string, RealtimeEntityMapping> = {
 
   // Master data
   contacts: { refreshFns: [refreshContactsFromPostgres], queryKeys: ['contacts'] },
+  // Unregistered, every member checkout on any terminal forced a full refresh on all others.
+  memberships: { refreshFns: [refreshMembershipsFromPostgres], queryKeys: ['memberships'] },
+  membership_point_transactions: {
+    refreshFns: [refreshMembershipPointTransactionsFromPostgres],
+    queryKeys: noQueryKeys,
+  },
   promos: { refreshFns: [refreshPromosFromPostgres], queryKeys: noQueryKeys },
   lotteries: { refreshFns: [refreshLotteriesFromPostgres], queryKeys: noQueryKeys },
   currencies: { refreshFns: [refreshCurrenciesFromPostgres], queryKeys: ['currencies'] },

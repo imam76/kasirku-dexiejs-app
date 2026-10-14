@@ -1,6 +1,6 @@
 import { FINANCE_CATEGORIES } from '@/constants/finance';
 import { db } from '@/lib/db';
-import type { CartItem, CashierSession, Membership, FinanceTransaction, PosStockDiscrepancy, PosTransactionPayment, Product, RestaurantSession, StockMutation, Transaction, TransactionItem, AuthUser, SyncQueueItem } from '@/types';
+import type { CartItem, CashierSession, Membership, MembershipPointTransaction, FinanceTransaction, PosStockDiscrepancy, PosTransactionPayment, Product, RestaurantSession, StockMutation, Transaction, TransactionItem, AuthUser, SyncQueueItem } from '@/types';
 import { getFinanceAccountSnapshotForCategory } from '@/utils/chartOfAccounts/getFinanceAccountSnapshotForCategory';
 import { getCartItemPrice, konversiSatuanProduk, normalisasiHargaProduk } from '@/utils/pricing';
 import { createSalesUnitSnapshot } from '@/utils/salesUnits';
@@ -38,6 +38,7 @@ import {
   buildInventoryLotConsumptionOutboxItem,
   buildInventoryLotOutboxItem,
   buildMembershipOutboxItem,
+  buildMembershipPointTransactionOutboxItem,
   buildProductSyncQueueItem,
   buildTransactionBundleOutboxItem,
   enqueueStockAffectedProductsForSync,
@@ -627,6 +628,7 @@ export const checkout = async ({
   let touchedProductIds = new Set<string>();
   let financeTransactions: FinanceTransaction[] = [];
   let updatedMemberForSync: Membership | undefined;
+  const memberPointEntries: MembershipPointTransaction[] = [];
   let checkoutDiscrepancies: PosStockDiscrepancy[] = [];
 
   const result = await db.transaction(
@@ -690,8 +692,10 @@ export const checkout = async ({
       const paymentRecords = buildPosTransactionPaymentRecords(transactionId, createdAt, resolvedPayments);
       const finalPayment = paymentRecords.reduce((sum, payment) => sum + payment.tendered_amount, 0);
       const change = paymentRecords.reduce((sum, payment) => sum + payment.change_amount, 0);
+      // Not clamped: a negative balance left by a void is a debt the new points pay off
+      // first. Clamping here forgave it locally while PostgreSQL, summing the events, kept it.
       const memberStartingBalance = membershipEvaluation.member
-        ? Math.max(0, Math.floor(Number(membershipEvaluation.member.points_balance || 0)))
+        ? Math.floor(Number(membershipEvaluation.member.points_balance || 0))
         : 0;
       const memberBalanceAfter = membershipEvaluation.member
         ? memberStartingBalance - membershipEvaluation.redeem_points + membershipEvaluation.earned_points
@@ -784,7 +788,7 @@ export const checkout = async ({
 
         if (membershipEvaluation.redeem_points > 0) {
           runningBalance -= membershipEvaluation.redeem_points;
-          await recordMembershipPointTransaction({
+          memberPointEntries.push(await recordMembershipPointTransaction({
             member: membershipEvaluation.member,
             transactionId,
             transactionNumber,
@@ -795,12 +799,12 @@ export const checkout = async ({
             reason: `Redeem poin transaksi ${transactionNumber}`,
             actor: currentUser,
             createdAt,
-          });
+          }));
         }
 
         if (membershipEvaluation.earned_points > 0) {
           runningBalance += membershipEvaluation.earned_points;
-          await recordMembershipPointTransaction({
+          memberPointEntries.push(await recordMembershipPointTransaction({
             member: membershipEvaluation.member,
             transactionId,
             transactionNumber,
@@ -811,7 +815,7 @@ export const checkout = async ({
             reason: `Poin dari transaksi ${transactionNumber}`,
             actor: currentUser,
             createdAt,
-          });
+          }));
         }
 
         updatedMemberForSync = {
@@ -873,6 +877,7 @@ export const checkout = async ({
           .map((product) => buildProductSyncQueueItem(product, 'update', { preserveStock: true, createdAt })),
         ...financeTransactions.map((entry) => buildFinanceTransactionOutboxItem(entry, 'create', createdAt)),
         ...(updatedMemberForSync ? [buildMembershipOutboxItem(updatedMemberForSync, 'update', createdAt)] : []),
+        ...memberPointEntries.map((entry) => buildMembershipPointTransactionOutboxItem(entry, createdAt)),
       ]);
       performanceTrace.checkpoint('outbox');
 

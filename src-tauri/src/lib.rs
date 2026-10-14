@@ -125,6 +125,8 @@ pub fn run() {
             commands::membership_commands::postgres_get_membership,
             commands::membership_commands::postgres_upsert_membership,
             commands::membership_commands::postgres_delete_membership,
+            commands::membership_commands::postgres_list_membership_point_transactions,
+            commands::membership_commands::postgres_upsert_membership_point_transaction,
             commands::warehouse_commands::postgres_list_warehouses,
             commands::warehouse_commands::postgres_get_warehouse,
             commands::warehouse_commands::postgres_upsert_warehouse,

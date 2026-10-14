@@ -6,7 +6,9 @@ import { db } from '@/lib/db';
 import { useMemberships, type MembershipStatusFilter } from '@/hooks/useMemberships';
 import { useI18n } from '@/hooks/useI18n';
 import type { Membership } from '@/types';
+import { isMembershipActive } from '@/utils/membership';
 import MembershipFormModal, { type MembershipFormValues } from './MembershipFormModal';
+import MembershipPointHistoryDrawer from './MembershipPointHistoryDrawer';
 import MembershipTable from './MembershipTable';
 
 export default function MembershipManagement() {
@@ -14,6 +16,7 @@ export default function MembershipManagement() {
   const { t } = useI18n();
   const [form] = Form.useForm<MembershipFormValues>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [historyMembership, setHistoryMembership] = useState<Membership | null>(null);
   const {
     filteredMemberships,
     isLoading,
@@ -43,7 +46,7 @@ export default function MembershipManagement() {
   const openAddModal = () => {
     resetForm();
     form.resetFields();
-    form.setFieldsValue({ status: 'ACTIVE', is_active: true });
+    form.setFieldsValue({ is_active: true });
     setIsModalOpen(true);
   };
 
@@ -55,8 +58,7 @@ export default function MembershipManagement() {
       name: membership.name,
       email: membership.email,
       contact_id: membership.contact_id,
-      status: membership.status,
-      is_active: membership.is_active,
+      is_active: isMembershipActive(membership),
     });
     setIsModalOpen(true);
   };
@@ -139,6 +141,11 @@ export default function MembershipManagement() {
         onEdit={openEditModal}
         onArchive={handleArchive}
         onRestore={handleRestore}
+        onShowHistory={setHistoryMembership}
+      />
+      <MembershipPointHistoryDrawer
+        membership={historyMembership}
+        onClose={() => setHistoryMembership(null)}
       />
       <MembershipFormModal
         form={form}

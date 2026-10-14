@@ -557,6 +557,13 @@ export interface MembershipPointTransaction {
   created_at: string;
   created_by?: string;
   created_by_name?: string;
+  /**
+   * Absent on rows written before the ledger synced. Those changes already reached
+   * PostgreSQL inside the member's balance snapshot, so they must never be pushed again.
+   */
+  sync_status?: EntitySyncStatus;
+  sync_error?: string;
+  last_synced_at?: string;
 }
 
 export interface Membership {

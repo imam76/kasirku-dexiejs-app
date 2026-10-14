@@ -1,5 +1,13 @@
 import { db } from '@/lib/db';
-import type { FinanceTransaction, Membership, Product, StockMutation, TransactionItem } from '@/types';
+import type {
+  FinanceTransaction,
+  Membership,
+  MembershipPointTransaction,
+  Product,
+  StockMutation,
+  Transaction,
+  TransactionItem,
+} from '@/types';
 import { getCurrentSessionUser, requireRolePermission, writeActivityLog } from '@/auth/authService';
 import { konversiSatuanProduk } from '@/utils/pricing';
 import { resolveTransactionItemUnit } from '@/utils/salesUnits';
@@ -10,12 +18,66 @@ import { enqueueFinanceTransactionsSync, withDeletedFinanceTransactionSync } fro
 import { addInventoryLot } from '@/utils/inventory/addInventoryLot';
 import { normalisasiHargaProduk } from '@/utils/pricing';
 import { recordMembershipPointTransaction } from '@/services/membershipService';
-import { enqueueMembershipSync, enqueueStockAffectedProductsForSync, enqueueTransactionBundleSync } from '@/services/syncQueueService';
+import {
+  enqueueMembershipPointTransactionsSync,
+  enqueueMembershipSync,
+  enqueueStockAffectedProductsForSync,
+  enqueueTransactionBundleSync,
+} from '@/services/syncQueueService';
 
 interface VoidTransactionInput {
   transactionId: string;
   reason: string;
 }
+
+export interface VoidMembershipPointImpact {
+  memberName: string;
+  earnedPoints: number;
+  redeemedPoints: number;
+  balanceBefore: number;
+  balanceAfter: number;
+}
+
+const toWholePoints = (value: unknown) => Math.max(0, Math.floor(Number(value || 0)));
+
+/**
+ * A void takes back the points the sale granted and returns the points it spent. The result
+ * may be negative when the granted points were already redeemed elsewhere; that debt is
+ * kept, as PostgreSQL keeps it, and later earnings pay it off.
+ */
+export const calculateVoidMembershipPointImpact = (
+  transaction: Pick<Transaction, 'membership_points_earned' | 'membership_points_redeemed'>,
+  balanceBefore: number,
+) => {
+  const earnedPoints = toWholePoints(transaction.membership_points_earned);
+  const redeemedPoints = toWholePoints(transaction.membership_points_redeemed);
+  return {
+    earnedPoints,
+    redeemedPoints,
+    balanceAfter: balanceBefore - earnedPoints + redeemedPoints,
+  };
+};
+
+/** What the void dialog shows before the cashier confirms. */
+export const previewVoidMembershipPoints = async (
+  transaction: Transaction,
+): Promise<VoidMembershipPointImpact | null> => {
+  const memberId = transaction.member_id ?? transaction.member_contact_id;
+  if (!memberId) return null;
+
+  const member = await db.memberships.get(memberId);
+  if (!member) return null;
+
+  const balanceBefore = Number(member.points_balance || 0);
+  const impact = calculateVoidMembershipPointImpact(transaction, balanceBefore);
+  if (impact.earnedPoints === 0 && impact.redeemedPoints === 0) return null;
+
+  return {
+    memberName: member.name ?? member.phone,
+    balanceBefore,
+    ...impact,
+  };
+};
 
 const numberOrFallback = (value: unknown, fallback: number) => {
   const numeric = Number(value);
@@ -47,6 +109,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   const touchedProductIds = new Set<string>();
   const deletedFinanceTransactions: FinanceTransaction[] = [];
   let updatedMemberForSync: Membership | undefined;
+  const memberPointEntries: MembershipPointTransaction[] = [];
 
   await db.transaction(
     'rw',
@@ -147,18 +210,15 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
         sync_error: undefined,
       });
 
-      if (member && (
-        Number(transaction.membership_points_earned || 0) > 0 ||
-        Number(transaction.membership_points_redeemed || 0) > 0
-      )) {
-        const earnedPoints = Math.max(0, Math.floor(Number(transaction.membership_points_earned || 0)));
-        const redeemedPoints = Math.max(0, Math.floor(Number(transaction.membership_points_redeemed || 0)));
+      const pointImpact = calculateVoidMembershipPointImpact(transaction, Number(member?.points_balance || 0));
+      if (member && (pointImpact.earnedPoints > 0 || pointImpact.redeemedPoints > 0)) {
+        const { earnedPoints, redeemedPoints } = pointImpact;
         const redeemedAmount = Number(transaction.membership_point_discount_amount || 0);
         let runningBalance = Number(member.points_balance || 0);
 
         if (earnedPoints > 0) {
           runningBalance -= earnedPoints;
-          await recordMembershipPointTransaction({
+          memberPointEntries.push(await recordMembershipPointTransaction({
             member,
             transactionId: transaction.id,
             transactionNumber: transaction.transaction_number,
@@ -169,12 +229,12 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
             reason: `Pembatalan poin transaksi ${transaction.transaction_number}: ${normalizedReason}`,
             actor: currentUser,
             createdAt: now,
-          });
+          }));
         }
 
         if (redeemedPoints > 0) {
           runningBalance += redeemedPoints;
-          await recordMembershipPointTransaction({
+          memberPointEntries.push(await recordMembershipPointTransaction({
             member,
             transactionId: transaction.id,
             transactionNumber: transaction.transaction_number,
@@ -185,7 +245,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
             reason: `Pengembalian poin redeem transaksi ${transaction.transaction_number}: ${normalizedReason}`,
             actor: currentUser,
             createdAt: now,
-          });
+          }));
         }
 
         updatedMemberForSync = {
@@ -261,6 +321,7 @@ export const voidTransaction = async ({ transactionId, reason }: VoidTransaction
   if (updatedMemberForSync) {
     await enqueueMembershipSync(updatedMemberForSync, 'update');
   }
+  await enqueueMembershipPointTransactionsSync(memberPointEntries);
 
   const voidedTransaction = await db.transactions.get(transactionId);
   if (voidedTransaction) {

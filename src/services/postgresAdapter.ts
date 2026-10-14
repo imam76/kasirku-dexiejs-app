@@ -53,6 +53,7 @@ import type {
   CurrencyRateSource,
   PurchaseDocumentStatus,
   PurchaseDocumentType,
+  MembershipPointTransactionType,
   RetailMembershipStatus,
   InventoryLotConsumptionSourceType,
   InventoryLotSourceType,
@@ -675,6 +676,26 @@ export interface RemoteMembershipDto {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+  /** Push-only: the point ledger owns the balance, so the snapshot must not overwrite it. */
+  preserve_points_balance?: boolean;
+}
+
+export interface RemoteMembershipPointTransactionDto {
+  id: string;
+  membership_id: string;
+  membership_number?: string | null;
+  member_name: string;
+  transaction_id?: string | null;
+  transaction_number?: string | null;
+  type: MembershipPointTransactionType;
+  points_delta: number;
+  amount_value: number;
+  balance_after: number;
+  reason: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  created_at: string;
+  server_created_at?: string | null;
 }
 
 export interface RemotePromoDto {
@@ -2842,6 +2863,22 @@ export const membershipPostgresAdapter = {
   async delete(id: string) {
     if (!isTauriRuntime()) return null;
     return invoke<RemoteMembershipDto | null>('postgres_delete_membership', { id });
+  },
+};
+
+export const membershipPointTransactionPostgresAdapter = {
+  async list(options: { serverCreatedAfter?: string; cursorId?: string; limit?: number } = {}) {
+    if (!isTauriRuntime()) return [];
+    return invoke<RemoteMembershipPointTransactionDto[]>('postgres_list_membership_point_transactions', {
+      serverCreatedAfter: options.serverCreatedAfter,
+      cursorId: options.cursorId,
+      limit: options.limit,
+    });
+  },
+
+  async upsert(input: RemoteMembershipPointTransactionDto) {
+    if (!isTauriRuntime()) return null;
+    return invoke<RemoteMembershipPointTransactionDto>('postgres_upsert_membership_point_transaction', { input });
   },
 };
 

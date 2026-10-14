@@ -1,14 +1,13 @@
 import { Form, Input, Modal, Select, Switch } from 'antd';
 import type { FormInstance } from 'antd';
 import { useI18n } from '@/hooks/useI18n';
-import type { Contact, RetailMembershipStatus } from '@/types';
+import type { Contact } from '@/types';
 
 export interface MembershipFormValues {
   phone: string;
   name?: string;
   email?: string;
   contact_id?: string;
-  status?: RetailMembershipStatus;
   is_active?: boolean;
 }
 
@@ -81,19 +80,14 @@ export default function MembershipFormModal({
           />
         </Form.Item>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Form.Item name="status" label={t('members.form.status')} initialValue="ACTIVE">
-            <Select
-              options={[
-                { value: 'ACTIVE', label: t('members.status.active') },
-                { value: 'INACTIVE', label: t('members.status.inactive') },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="is_active" label={t('members.table.status')} valuePropName="checked">
-            <Switch checkedChildren={t('members.status.active')} unCheckedChildren={t('members.status.inactive')} />
-          </Form.Item>
-        </div>
+        <Form.Item
+          name="is_active"
+          label={t('members.form.status')}
+          valuePropName="checked"
+          extra={t('members.form.statusHelp')}
+        >
+          <Switch checkedChildren={t('members.status.active')} unCheckedChildren={t('members.status.inactive')} />
+        </Form.Item>
       </Form>
     </Modal>
   );

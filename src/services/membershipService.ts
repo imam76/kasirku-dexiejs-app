@@ -4,6 +4,13 @@ import { membershipQuickCreateSchema } from '@/lib/validations/membership';
 import type { PromoEvaluationResult } from '@/services/promoService';
 import { enqueueMembershipSync } from '@/services/syncQueueService';
 import { toBusinessDatePrefix } from '@/utils/businessDate';
+import {
+  createMembershipNumberSuffix,
+  formatMembershipNumber,
+  getRedeemablePoints,
+  isMembershipActive,
+  normalizeMembershipPhone,
+} from '@/utils/membership';
 import type {
   AuthUser,
   CartItem,
@@ -129,17 +136,19 @@ export const saveMembershipSetting = async (input: MembershipSettingInput): Prom
 export const generateMembershipNumber = async (now = new Date()) => {
   const dateKey = toBusinessDatePrefix(now);
 
-  for (let sequence = 1; sequence <= 9999; sequence += 1) {
-    const candidate = `MBR-${dateKey}-${String(sequence).padStart(4, '0')}`;
+  // The local check only guards this terminal; the random suffix is what keeps two
+  // terminals apart, so a handful of attempts is plenty.
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const candidate = formatMembershipNumber(dateKey, createMembershipNumberSuffix());
     const existing = await db.memberships.where('member_number').equals(candidate).first();
     if (!existing) return candidate;
   }
 
-  return `MBR-${dateKey}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  return formatMembershipNumber(dateKey, crypto.randomUUID().slice(0, 8).toUpperCase());
 };
 
 export const isActiveRetailMember = (member?: Membership | null): member is Membership => (
-  Boolean(member?.is_active && (member.status ?? 'ACTIVE') === 'ACTIVE')
+  isMembershipActive(member)
 );
 
 const withPendingSync = (member: Membership): Membership => ({
@@ -148,10 +157,44 @@ const withPendingSync = (member: Membership): Membership => ({
   sync_error: undefined,
 });
 
-export const findMembershipByPhone = async (phone: string): Promise<Membership | undefined> => {
-  const trimmed = phone.trim();
-  if (!trimmed) return undefined;
-  return db.memberships.where('phone').equals(trimmed).first();
+/** Thrown when a phone number already belongs to a member, so the caller can offer that member. */
+export class DuplicateMembershipPhoneError extends Error {
+  readonly member: Membership;
+
+  constructor(member: Membership) {
+    super(
+      `Nomor HP ${member.phone} sudah terdaftar sebagai member ${member.member_number}`
+      + `${member.name ? ` (${member.name})` : ''}`
+      + `${isMembershipActive(member) ? '' : ' yang sedang nonaktif'}.`,
+    );
+    this.name = 'DuplicateMembershipPhoneError';
+    this.member = member;
+  }
+}
+
+export const findMembershipByPhone = async (
+  phone: string,
+  options: { excludeId?: string } = {},
+): Promise<Membership | undefined> => {
+  const normalized = normalizeMembershipPhone(phone);
+  if (!normalized) return undefined;
+
+  // Rows saved before numbers were normalized keep the spelling they were typed with.
+  const candidates = [...new Set([normalized, phone.trim()])].filter(Boolean);
+  const matches = await db.memberships.where('phone').anyOf(candidates).toArray();
+  return matches
+    .filter((member) => member.id !== options.excludeId)
+    .sort((left, right) => Number(isMembershipActive(right)) - Number(isMembershipActive(left)))[0];
+};
+
+/**
+ * Local check only. Two offline terminals can still register one number before either
+ * syncs; PostgreSQL deliberately has no unique constraint, because rejecting the second
+ * terminal's member would also strand the points it already recorded for them.
+ */
+export const assertMembershipPhoneAvailable = async (phone: string, excludeId?: string) => {
+  const existing = await findMembershipByPhone(phone, { excludeId });
+  if (existing) throw new DuplicateMembershipPhoneError(existing);
 };
 
 export const createRetailMemberFromPos = async (input: QuickCreateMemberInput): Promise<Membership> => {
@@ -159,6 +202,7 @@ export const createRetailMemberFromPos = async (input: QuickCreateMemberInput): 
   await requireUserPermission(currentUser, 'CASHIER_ACCESS');
 
   const parsed = membershipQuickCreateSchema.parse(input);
+  await assertMembershipPhoneAvailable(parsed.phone);
   const now = new Date().toISOString();
   const member: Membership = withPendingSync({
     id: crypto.randomUUID(),
@@ -266,7 +310,7 @@ export const evaluateMembershipCheckoutSync = ({
     };
   }
 
-  const currentBalance = Math.max(0, Math.floor(Number(activeMember.points_balance || 0)));
+  const currentBalance = getRedeemablePoints(activeMember.points_balance);
   const maxRedeemByTotal = resolvedSetting.redeem_enabled && resolvedSetting.point_value > 0
     ? Math.floor(promoEvaluation.total_amount / resolvedSetting.point_value)
     : 0;
@@ -318,6 +362,9 @@ export const recordMembershipPointTransaction = async ({
     created_at: createdAt,
     created_by: actor?.id,
     created_by_name: actor?.name,
+    // The caller queues the event in the same unit of work; PostgreSQL sums it into the balance.
+    sync_status: 'pending',
+    sync_error: undefined,
   };
 
   await db.membershipPointTransactions.add(ledger);

@@ -123,14 +123,18 @@ test('checkout commits all outbox rows together and rolls everything back on enq
       queuedStock: queue.find((row) => row.entity === 'products')?.payload.stock,
       memberPoints: (await db.memberships.get('test-member')).points_balance,
       queuedMemberPoints: queue.find((row) => row.entity === 'memberships')?.payload.points_balance,
+      preservePoints: queue.find((row) => row.entity === 'memberships')?.payload.preserve_points_balance,
+      queuedPointDeltas: queue
+        .filter((row) => row.entity === 'membershipPointTransactions')
+        .map((row) => row.payload.points_delta),
     };
   });
   expect(result.failure).toContain('Injected outbox failure');
   expect(result.afterFailure).toEqual(result.before);
   expect(result.stock).toBe(9);
   expect(result.entities).toEqual([
-    'financeTransactions', 'inventoryLotConsumptions', 'journalEntries', 'memberships',
-    'products', 'stockMutations', 'transactions',
+    'financeTransactions', 'inventoryLotConsumptions', 'journalEntries', 'membershipPointTransactions',
+    'memberships', 'products', 'stockMutations', 'transactions',
   ]);
   expect(result.journalCount).toBe(1);
   expect(result.queuedJournalId).toBe(result.journalId);
@@ -138,6 +142,9 @@ test('checkout commits all outbox rows together and rolls everything back on enq
   expect(result.preserveStock).toBe(true);
   expect(result.queuedStock).toBe(9);
   expect(result.queuedMemberPoints).toBe(result.memberPoints);
+  // The balance travels as a point event; the member snapshot must not overwrite it remotely.
+  expect(result.preservePoints).toBe(true);
+  expect(result.queuedPointDeltas).toEqual([10]);
   expect(result.stages).toEqual([
     'preflight', 'transaction_wait', 'pricing_and_payments', 'stock_validation',
     'fifo', 'sale_records', 'journal_and_outbox', 'stock_mutations', 'outbox', 'commit',

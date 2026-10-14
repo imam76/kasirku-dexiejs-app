@@ -159,6 +159,8 @@ export const getSyncQueuePriority = (item: Pick<SyncQueueItem, 'entity'>): numbe
   switch (item.entity) {
     case 'products': return 0;
     case 'inventoryOpeningBalancePostings': return 2;
+    // After its member, like lots before their consumptions.
+    case 'membershipPointTransactions': return 2;
     case 'generalLedgerSetting': return 3;
     case 'inventoryLotConsumptions': return 4;
     default: return 1;

@@ -79,6 +79,7 @@ import {
   chartOfAccountPostgresAdapter,
   contactPostgresAdapter,
   membershipPostgresAdapter,
+  membershipPointTransactionPostgresAdapter,
   enabledModulePostgresAdapter,
   financeAccountMappingPostgresAdapter,
   fiscalYearClosingRunPostgresAdapter,
@@ -143,6 +144,7 @@ import {
   type RemoteCashierSessionDto,
   type RemoteContactDto,
   type RemoteMembershipDto,
+  type RemoteMembershipPointTransactionDto,
   type RemoteCooperativeAreaDto,
   type RemoteCooperativeLoanCollectionEventDto,
   type RemoteCooperativeLoanDto,
@@ -227,7 +229,7 @@ import {
   mergeRemoteAccountingFiscalYearsIntoDexie,
   mergeRemoteFiscalYearClosingRunsIntoDexie,
 } from '@/services/fiscalYearReadService';
-import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, Budget, BudgetCommitment, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, Membership, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, PosStockDiscrepancy, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, Promo, Lottery, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Transaction, TransactionItem, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
+import type { AccountingFiscalYear, AccountingPeriod, AccountingInitialSetupSetting, AccountingProfileSetting, ActivityLog, AuthUser, Budget, BudgetCommitment, CashBankReconciliation, CashierSession, ClosingRun, ChartOfAccount, Contact, Membership, MembershipPointTransaction, CooperativeArea, EnabledModule, FinanceAccountMapping, FiscalYearClosingRun, GeneralLedgerSetting, CooperativeLoan, CooperativeLoanCollectionEvent, CooperativeLoanInstallment, CooperativeLoanPayment, CooperativeMember, CooperativeMemberSavingBalance, CooperativeSavingTransaction, Currency, CurrencyRate, Department, Employee, EmployeeArea, EmployeeCashAdvance, EmployeeCashAdvanceRepayment, EmployeeCollectionSchedule, FinanceTransaction, JournalEntry, JournalEntryLine, OpeningBalanceBatch, OpeningBalanceLine, PaymentMethodMaster, PayrollRun, PayrollRunItem, PosStockDiscrepancy, Product, ProductionOrder, ProductionOrderCost, ProductionOrderItem, Project, Promo, Lottery, PurchaseDocument, PurchaseDocumentItem, Role, RolePermission, SalesDocument, SalesDocumentItem, StockMutation, StockOpname, StockOpnameItem, SyncQueueItem, SyncQueueOperation, Tax, Transaction, TransactionItem, Warehouse, FixedAsset, FixedAssetDepreciationRun, FixedAssetDepreciationRunLine } from '@/types';
 import type { EmployeeSalaryComponent, EmploymentContract, HrPosition, SalaryComponent } from '@/types';
 import type { InventoryLot, InventoryLotConsumption, PurchaseCostReconciliation, PurchaseCostReconciliationItem } from '@/types';
 import type { LeaveRequest } from '@/types';
@@ -249,6 +251,7 @@ const ACCOUNTING_FISCAL_YEAR_ENTITY = 'accountingFiscalYears';
 const FISCAL_YEAR_CLOSING_RUN_ENTITY = 'fiscalYearClosingRuns';
 const CONTACT_ENTITY = 'contacts';
 const MEMBERSHIP_ENTITY = 'memberships';
+const MEMBERSHIP_POINT_TRANSACTION_ENTITY = 'membershipPointTransactions';
 const COOPERATIVE_AREA_ENTITY = 'cooperativeAreas';
 const COOPERATIVE_LOAN_COLLECTION_EVENT_ENTITY = 'cooperativeLoanCollectionEvents';
 const COOPERATIVE_LOAN_ENTITY = 'cooperativeLoans';
@@ -461,6 +464,27 @@ const mapMembershipToRemoteDto = (membership: Membership): RemoteMembershipDto =
   is_active: membership.is_active,
   created_at: membership.created_at,
   updated_at: membership.updated_at,
+  // Every balance change travels as its own point event; this snapshot is profile-only.
+  preserve_points_balance: true,
+});
+
+const mapMembershipPointTransactionToRemoteDto = (
+  entry: MembershipPointTransaction,
+): RemoteMembershipPointTransactionDto => ({
+  id: entry.id,
+  membership_id: entry.membership_id,
+  membership_number: entry.membership_number,
+  member_name: entry.member_name,
+  transaction_id: entry.transaction_id,
+  transaction_number: entry.transaction_number,
+  type: entry.type,
+  points_delta: normalizeRemoteNumber(entry.points_delta),
+  amount_value: normalizeRemoteNumber(entry.amount_value),
+  balance_after: normalizeRemoteNumber(entry.balance_after),
+  reason: entry.reason,
+  created_by: entry.created_by,
+  created_by_name: entry.created_by_name,
+  created_at: entry.created_at,
 });
 
 const mapPromoToRemoteDto = (promo: Promo): RemotePromoDto => ({
@@ -2319,6 +2343,25 @@ const isRemoteMembershipDto = (payload: unknown): payload is RemoteMembershipDto
   );
 };
 
+const isRemoteMembershipPointTransactionDto = (
+  payload: unknown,
+): payload is RemoteMembershipPointTransactionDto => {
+  if (!payload || typeof payload !== 'object') return false;
+
+  const candidate = payload as Partial<RemoteMembershipPointTransactionDto>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.membership_id === 'string' &&
+    typeof candidate.member_name === 'string' &&
+    typeof candidate.type === 'string' &&
+    typeof candidate.points_delta === 'number' &&
+    typeof candidate.amount_value === 'number' &&
+    typeof candidate.balance_after === 'number' &&
+    typeof candidate.reason === 'string' &&
+    typeof candidate.created_at === 'string'
+  );
+};
+
 const isRemotePromoDto = (payload: unknown): payload is RemotePromoDto => {
   if (!payload || typeof payload !== 'object') return false;
 
@@ -3698,6 +3741,14 @@ const updateMembershipSyncMetadata = async (
   await db.memberships.update(membershipId, syncMetadata);
 };
 
+const updateMembershipPointTransactionSyncMetadata = async (
+  entryId: string,
+  syncMetadata: Partial<Pick<MembershipPointTransaction, 'sync_status' | 'sync_error' | 'last_synced_at'>>,
+) => {
+  // Point events are immutable, so there is no newer local version to protect.
+  await db.membershipPointTransactions.update(entryId, syncMetadata);
+};
+
 const updatePromoSyncMetadata = async (
   promoId: string,
   sourceUpdatedAt: string,
@@ -4365,6 +4416,16 @@ const markQueueItemFailed = async (queueItem: SyncQueueItem, error: unknown) => 
     });
   }
 
+  if (
+    queueItem.entity === MEMBERSHIP_POINT_TRANSACTION_ENTITY
+    && isRemoteMembershipPointTransactionDto(queueItem.payload)
+  ) {
+    await updateMembershipPointTransactionSyncMetadata(queueItem.entity_id, {
+      sync_status: 'failed',
+      sync_error: errorMessage,
+    });
+  }
+
   if (queueItem.entity === PROMO_ENTITY && isRemotePromoDto(queueItem.payload)) {
     await updatePromoSyncMetadata(queueItem.entity_id, queueItem.payload.updated_at, {
       sync_status: 'failed',
@@ -4889,6 +4950,30 @@ const processMembershipQueueItem = async (queueItem: SyncQueueItem) => {
   }
 
   return membershipPostgresAdapter.upsert(queueItem.payload);
+};
+
+const processMembershipPointTransactionQueueItem = async (queueItem: SyncQueueItem) => {
+  if (queueItem.operation === 'delete') {
+    throw new Error('Riwayat poin member tidak mendukung operasi delete.');
+  }
+
+  if (!isRemoteMembershipPointTransactionDto(queueItem.payload)) {
+    throw new Error('Payload riwayat poin member tidak valid.');
+  }
+
+  const localMembership = await db.memberships.get(queueItem.payload.membership_id);
+  if (!localMembership) {
+    throw new Error(
+      `Member ${queueItem.payload.membership_id} untuk riwayat poin tidak ditemukan di database lokal.`,
+    );
+  }
+
+  // Self-healing like inventory lot consumptions: a member whose own queue row never
+  // reached PostgreSQL is created first. The snapshot is balance-neutral, so this never
+  // changes points; the event below applies them exactly once.
+  await membershipPostgresAdapter.upsert(mapMembershipToRemoteDto(localMembership));
+
+  return membershipPointTransactionPostgresAdapter.upsert(queueItem.payload);
 };
 
 const processPromoQueueItem = async (queueItem: SyncQueueItem) => {
@@ -5611,6 +5696,7 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
     let remoteAuthUser: RemoteAuthUserDto | null = null;
     let remoteContact: RemoteContactDto | null = null;
     let remoteMembership: RemoteMembershipDto | null = null;
+    let remoteMembershipPointTransaction: RemoteMembershipPointTransactionDto | null = null;
     let remoteCooperativeArea: RemoteCooperativeAreaDto | null = null;
     let remoteCooperativeLoanCollectionEventResult: RemoteRecordCooperativeLoanCollectionEventResult | null = null;
     let remoteCooperativeLoan: RemoteCooperativeLoanDto | null = null;
@@ -5684,6 +5770,8 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
       remoteContact = await processContactQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === MEMBERSHIP_ENTITY) {
       remoteMembership = await processMembershipQueueItem(currentQueueItem);
+    } else if (currentQueueItem.entity === MEMBERSHIP_POINT_TRANSACTION_ENTITY) {
+      remoteMembershipPointTransaction = await processMembershipPointTransactionQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === COOPERATIVE_AREA_ENTITY) {
       remoteCooperativeArea = await processCooperativeAreaQueueItem(currentQueueItem);
     } else if (currentQueueItem.entity === COOPERATIVE_LOAN_ENTITY) {
@@ -6128,6 +6216,19 @@ const processSyncQueueItem = async (queueItem: SyncQueueItem) => {
         remote_updated_at: remoteMembership.updated_at,
       });
       await mergeRemoteMembershipsIntoDexie([remoteMembership], syncedAt);
+      return;
+    }
+
+    if (
+      remoteMembershipPointTransaction
+      && isRemoteMembershipPointTransactionDto(currentQueueItem.payload)
+    ) {
+      await markQueueItemSynced(currentQueueItem.id, syncedAt);
+      await updateMembershipPointTransactionSyncMetadata(currentQueueItem.entity_id, {
+        sync_status: 'synced',
+        sync_error: undefined,
+        last_synced_at: syncedAt,
+      });
       return;
     }
 
@@ -7196,6 +7297,48 @@ export const enqueuePendingMembershipsForSync = async () => {
       await enqueueMembershipSync(membership, 'update');
     }
   }
+};
+
+export const buildMembershipPointTransactionOutboxItem = (
+  entry: MembershipPointTransaction,
+  now = new Date().toISOString(),
+): SyncQueueItem => ({
+    id: crypto.randomUUID(),
+    entity: MEMBERSHIP_POINT_TRANSACTION_ENTITY,
+    entity_id: entry.id,
+    operation: 'create',
+    payload: mapMembershipPointTransactionToRemoteDto(entry),
+    status: 'pending',
+    attempts: 0,
+    created_at: now,
+    updated_at: now,
+  });
+
+export const enqueueMembershipPointTransactionsSync = async (entries: MembershipPointTransaction[]) => {
+  if (entries.length === 0) return;
+
+  const now = new Date().toISOString();
+  await db.syncQueue.bulkAdd(entries.map((entry) => buildMembershipPointTransactionOutboxItem(entry, now)));
+  void processPendingSyncQueue();
+};
+
+export const enqueuePendingMembershipPointTransactionsForSync = async () => {
+  // Rows without a status predate the synced ledger and are deliberately never pushed.
+  const entries = await db.membershipPointTransactions
+    .where('sync_status')
+    .anyOf(['pending', 'failed'])
+    .toArray();
+  if (entries.length === 0) return;
+
+  const queuedEntryIds = new Set(
+    (await db.syncQueue.where('entity').equals(MEMBERSHIP_POINT_TRANSACTION_ENTITY).toArray())
+      .filter((queueItem) => queueItem.status !== 'synced')
+      .map((queueItem) => queueItem.entity_id),
+  );
+
+  await enqueueMembershipPointTransactionsSync(
+    entries.filter((entry) => !queuedEntryIds.has(entry.id)),
+  );
 };
 
 export const enqueuePromoSync = async (

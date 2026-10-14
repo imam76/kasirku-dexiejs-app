@@ -1,9 +1,10 @@
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { Edit2, PowerOff, RotateCcw } from 'lucide-react';
+import { Edit2, History, PowerOff, RotateCcw } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import type { Contact, Membership } from '@/types';
 import { formatCurrency } from '@/utils/formatters';
+import { isMembershipActive } from '@/utils/membership';
 
 const { Text } = Typography;
 
@@ -14,6 +15,7 @@ interface MembershipTableProps {
   onEdit: (membership: Membership) => void;
   onArchive: (membership: Membership) => void;
   onRestore: (membership: Membership) => void;
+  onShowHistory: (membership: Membership) => void;
 }
 
 export default function MembershipTable({
@@ -23,6 +25,7 @@ export default function MembershipTable({
   onEdit,
   onArchive,
   onRestore,
+  onShowHistory,
 }: MembershipTableProps) {
   const { t } = useI18n();
 
@@ -53,7 +56,9 @@ export default function MembershipTable({
       dataIndex: 'points_balance',
       key: 'points_balance',
       align: 'right',
-      render: (points: number) => formatCurrency(points ?? 0),
+      render: (points: number) => (
+        <Text type={(points ?? 0) < 0 ? 'danger' : undefined}>{formatCurrency(points ?? 0)}</Text>
+      ),
     },
     {
       title: t('members.table.linkedContact'),
@@ -63,13 +68,15 @@ export default function MembershipTable({
     },
     {
       title: t('members.table.status'),
-      dataIndex: 'is_active',
-      key: 'is_active',
-      render: (isActive: boolean) => (
-        <Tag color={isActive ? 'green' : 'default'}>
-          {isActive ? t('members.status.active') : t('members.status.inactive')}
-        </Tag>
-      ),
+      key: 'status',
+      render: (_value: unknown, membership) => {
+        const isActive = isMembershipActive(membership);
+        return (
+          <Tag color={isActive ? 'green' : 'default'}>
+            {isActive ? t('members.status.active') : t('members.status.inactive')}
+          </Tag>
+        );
+      },
     },
     {
       title: t('members.table.action'),
@@ -79,7 +86,10 @@ export default function MembershipTable({
           <Button type="text" icon={<Edit2 size={16} />} onClick={() => onEdit(membership)}>
             {t('members.edit')}
           </Button>
-          {membership.is_active ? (
+          <Button type="text" icon={<History size={16} />} onClick={() => onShowHistory(membership)}>
+            {t('members.history.open')}
+          </Button>
+          {isMembershipActive(membership) ? (
             <Button danger type="text" icon={<PowerOff size={16} />} onClick={() => onArchive(membership)}>
               {t('members.archive')}
             </Button>

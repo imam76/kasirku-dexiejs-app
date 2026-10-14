@@ -1,9 +1,13 @@
 import { z } from 'zod';
+import { normalizeMembershipPhone } from '@/utils/membership';
 
-export const retailMembershipStatusValues = ['ACTIVE', 'INACTIVE'] as const;
+const membershipPhoneSchema = z
+  .string()
+  .transform(normalizeMembershipPhone)
+  .pipe(z.string().min(1, 'Nomor HP wajib diisi.'));
 
 export const membershipManagementSchema = z.object({
-  phone: z.string().trim().min(1, 'Nomor HP wajib diisi.'),
+  phone: membershipPhoneSchema,
   name: z
     .string()
     .trim()
@@ -23,14 +27,13 @@ export const membershipManagementSchema = z.object({
     .optional()
     .or(z.literal(''))
     .transform((value) => value || undefined),
-  status: z.enum(retailMembershipStatusValues).optional(),
   is_active: z.boolean().optional(),
 });
 
 export type MembershipManagementFormData = z.infer<typeof membershipManagementSchema>;
 
 export const membershipQuickCreateSchema = z.object({
-  phone: z.string().trim().min(1, 'Nomor HP wajib diisi.'),
+  phone: membershipPhoneSchema,
   name: z
     .string()
     .trim()
