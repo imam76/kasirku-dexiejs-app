@@ -1,7 +1,7 @@
 import { useCallback, useRef, useEffect, useState, useLayoutEffect } from 'react';
 import { App, Button, DatePicker, Input } from 'antd';
 import { Receipt, ChevronDown, ChevronUp, Printer, AlertCircle, CheckCircle2, Ban, ScanLine, Search } from 'lucide-react';
-import { useWindowVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useHistory } from '@/hooks/useHistory';
 import { useI18n } from '@/hooks/useI18n';
 import { useAuth } from '@/auth/useAuth';
@@ -38,6 +38,16 @@ const hasVisibleOverlay = () => Array.from(
   document.querySelectorAll<HTMLElement>('.ant-modal-wrap, .ant-drawer-open .ant-drawer-content-wrapper'),
 ).some((element) => element.getClientRects().length > 0);
 
+// The app shell scrolls its content pane, not the window, so the list must
+// follow that pane or rows below the first screen are never rendered.
+const getScrollParent = (element: HTMLElement | null): HTMLElement | null => {
+  for (let node = element?.parentElement ?? null; node; node = node.parentElement) {
+    const { overflowY } = getComputedStyle(node);
+    if (overflowY === 'auto' || overflowY === 'scroll') return node;
+  }
+  return null;
+};
+
 export default function History() {
   const { message, modal } = App.useApp();
   const { t } = useI18n();
@@ -67,6 +77,7 @@ export default function History() {
     endDate: dateRange[1].endOf('day').toISOString(),
   });
   const parentRef = useRef<HTMLDivElement>(null);
+  const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [voidingId, setVoidingId] = useState<string | null>(null);
@@ -74,13 +85,21 @@ export default function History() {
   const keyboardScannerBufferRef = useRef<KeyboardBarcodeBuffer | null>(null);
 
   useLayoutEffect(() => {
-    if (parentRef.current) {
-      setScrollMargin(parentRef.current.offsetTop);
-    }
+    const parent = parentRef.current;
+    const scrollParent = getScrollParent(parent);
+    if (!parent || !scrollParent) return;
+
+    setScrollElement(scrollParent);
+    setScrollMargin(
+      parent.getBoundingClientRect().top
+        - scrollParent.getBoundingClientRect().top
+        + scrollParent.scrollTop,
+    );
   }, []);
 
-  const rowVirtualizer = useWindowVirtualizer({
+  const rowVirtualizer = useVirtualizer({
     count: transactions.length,
+    getScrollElement: () => scrollElement,
     estimateSize: () => 120,
     overscan: 5,
     scrollMargin,

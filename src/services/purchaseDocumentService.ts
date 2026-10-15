@@ -42,6 +42,7 @@ import {
   getForeignDocumentTotals,
   isBaseCurrency,
   normalizeCurrencyCode,
+  roundCurrency,
   snapshotFromDocumentInput,
   type DocumentCurrencySnapshot,
 } from '@/utils/documentCurrency';
@@ -420,6 +421,58 @@ const addReceiptStock = async (
   return { stockMutations, touchedProductIds };
 };
 
+/**
+ * Harga beli master produk mengikuti harga beli terakhir dari receipt/invoice
+ * yang diterbitkan. Receipt hanya memakai baris berharga FINAL: harga estimasi
+ * atau pending tidak boleh menimpa master (docs/ENHANCE-PENERIMAAN-BARANG-HARGA-PENDING.md).
+ * Purchase Order belum berarti barang dibeli, jadi tidak ikut.
+ */
+const updateProductPurchasePrices = async (
+  document: PurchaseDocument,
+  items: PurchaseDocumentItem[],
+  occurredAt: string,
+) => {
+  const touchedProductIds = new Set<string>();
+  if (document.type !== 'PURCHASE_RECEIPT' && document.type !== 'PURCHASE_INVOICE') {
+    return touchedProductIds;
+  }
+
+  // The same product can appear on several lines; the last line in document order wins.
+  const lastPricedLineByProductId = new Map<string, PurchaseDocumentItem>();
+  for (const item of orderLineItemsForDisplay(items)) {
+    const costStatus = item.cost_status ?? document.cost_status ?? 'FINAL';
+    if (document.type === 'PURCHASE_RECEIPT' && costStatus !== 'FINAL') continue;
+    // A zero price is a bonus/free line, not a new purchase price.
+    if (!(Number(item.price) > 0)) continue;
+    lastPricedLineByProductId.set(item.product_id, item);
+  }
+
+  for (const item of lastPricedLineByProductId.values()) {
+    const product = await db.products.get(item.product_id);
+    if (!product) continue;
+
+    // Line price is per document unit; the master price is per purchase_unit.
+    const purchasePrice = roundCurrency(normalisasiHargaProduk(
+      Number(item.price),
+      product,
+      item.unit,
+      product.purchase_unit,
+    ));
+    if (!Number.isFinite(purchasePrice) || purchasePrice <= 0) continue;
+    if (purchasePrice === Number(product.purchase_price || 0)) continue;
+
+    await db.products.update(product.id, {
+      purchase_price: purchasePrice,
+      updated_at: occurredAt,
+      sync_status: 'pending',
+      sync_error: undefined,
+    });
+    touchedProductIds.add(product.id);
+  }
+
+  return touchedProductIds;
+};
+
 const restoreReceiptStock = async (
   document: PurchaseDocument,
   items: PurchaseDocumentItem[],
@@ -787,6 +840,7 @@ export const issuePurchaseDocument = async (id: string) => {
   const now = new Date().toISOString();
   let stockMutations: StockMutation[] = [];
   let touchedProductIds = new Set<string>();
+  let priceUpdatedProductIds = new Set<string>();
   const issuedDocument = withUpdatedPurchaseDocumentSync({
     ...document,
     status: 'ISSUED',
@@ -810,6 +864,7 @@ export const issuePurchaseDocument = async (id: string) => {
     } else if (shouldApplyPurchaseStockInImpact(issuedDocument, config)) {
       ({ stockMutations, touchedProductIds } = await addReceiptStock(issuedDocument, items, currentUser, now));
     }
+    priceUpdatedProductIds = await updateProductPurchasePrices(issuedDocument, items, now);
 
     await db.purchaseDocuments.put(issuedDocument);
     if (issuedDocument.type === 'PURCHASE_INVOICE') {
@@ -827,8 +882,9 @@ export const issuePurchaseDocument = async (id: string) => {
   });
 
   await enqueueStockMutations(stockMutations);
-  if (touchedProductIds.size > 0) {
-    await enqueueStockAffectedProductsForSync(touchedProductIds);
+  const productIdsToSync = new Set([...touchedProductIds, ...priceUpdatedProductIds]);
+  if (productIdsToSync.size > 0) {
+    await enqueueStockAffectedProductsForSync(productIdsToSync);
   }
   await enqueuePurchaseDocumentBundleSync(issuedDocument, items, 'update');
 

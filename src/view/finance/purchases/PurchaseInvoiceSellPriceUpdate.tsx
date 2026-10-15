@@ -20,8 +20,8 @@ interface SellPriceLineInput {
   purchaseDocumentItemId: string;
   productId: string;
   productName: string;
-  oldPurchasePrice: number;
-  newPurchasePrice: number;
+  purchasePrice: number;
+  purchaseUnit: string;
   oldSellingPrice: number;
   newSellingPrice: number;
 }
@@ -56,8 +56,10 @@ export default function PurchaseInvoiceSellPriceUpdate({ documentId }: PurchaseI
           purchaseDocumentItemId: item.id,
           productId: product.id,
           productName: item.product_name,
-          oldPurchasePrice: Number(product.purchase_price || 0),
-          newPurchasePrice: Number(item.price ?? 0),
+          // Master purchase_price is already updated when the invoice is issued,
+          // so the invoice line is the only meaningful purchase price to show here.
+          purchasePrice: Number(item.price ?? 0),
+          purchaseUnit: item.unit,
           oldSellingPrice: Number(product.selling_price || 0),
           newSellingPrice: Number(product.selling_price || 0),
         }];
@@ -129,18 +131,11 @@ export default function PurchaseInvoiceSellPriceUpdate({ documentId }: PurchaseI
       render: (_, line) => <div className="font-medium text-gray-900">{line.productName}</div>,
     },
     {
-      title: 'Harga Beli Lama',
-      dataIndex: 'oldPurchasePrice',
+      title: 'Harga Beli (Invoice)',
+      dataIndex: 'purchasePrice',
       align: 'right',
-      width: 160,
-      render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
-    },
-    {
-      title: 'Harga Beli Baru',
-      dataIndex: 'newPurchasePrice',
-      align: 'right',
-      width: 160,
-      render: (value: number) => `Rp ${formatCurrency(value || 0)}`,
+      width: 180,
+      render: (_, line) => `Rp ${formatCurrency(line.purchasePrice || 0)} / ${line.purchaseUnit}`,
     },
     {
       title: 'Harga Jual Saat Ini',
